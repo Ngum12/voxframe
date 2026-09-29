@@ -128,8 +128,29 @@ def model_needs(settings: Settings) -> list[ModelNeed]:
 
 
 def is_ready(need: ModelNeed) -> bool:
+    """Whether a model is fully here and can run.
+
+    Every repository must be present, not just enough bytes in total: the
+    default picture model's weights alone pass the size test, so a download
+    that stopped before the small tokenizer looked finished (D-163). And the
+    modules it needs must import -- bytes on disk are no use without them.
+    """
+    if any(_repo_bytes(repo) == 0 for repo in need.repos):
+        return False
     held = sum(_repo_bytes(repo) for repo in need.repos)
-    return held >= need.megabytes * 1_000_000 * _READY_SHARE
+    if held < need.megabytes * 1_000_000 * _READY_SHARE:
+        return False
+    return _stack_problem(need) is None
+
+
+def _stack_problem(need: ModelNeed) -> str | None:
+    """Why this copy of Voxframe cannot run a model, whatever is downloaded."""
+    kind, name = need.key.split(":", 1)
+    if kind != "clip":
+        return None
+    from voxframe.library.embeddings import stack_problem
+
+    return stack_problem(name)
 
 
 @dataclass
@@ -167,6 +188,10 @@ def _fetch(need: ModelNeed) -> None:
         download_model(name)
         return
 
+    problem = _stack_problem(need)
+    if problem is not None:
+        raise BrokenInstall(problem)
+
     import open_clip
 
     from voxframe.library.embeddings import EMBEDDING_MODELS
@@ -176,6 +201,34 @@ def _fetch(need: ModelNeed) -> None:
     open_clip.pretrained.download_pretrained(config)
     # The multilingual model's text tokenizer is a separate download.
     open_clip.get_tokenizer(model_name)
+
+
+class BrokenInstall(RuntimeError):
+    """This copy of Voxframe lacks something a model needs to run."""
+
+
+def _failure_message(exc: BaseException) -> str:
+    """What to tell a person, which depends on whose problem it is.
+
+    Only a network problem is fixed by checking the connection. Saying that
+    about a missing module (D-163) sent a person to their router for a fault
+    in the installer.
+    """
+    if isinstance(exc, BrokenInstall):
+        return (
+            f"This copy of Voxframe cannot run its picture model: {exc}. "
+            "This is not your internet connection. Reinstalling Voxframe "
+            "usually fixes it; if it does not, please report it."
+        )
+    if isinstance(exc, (OSError, TimeoutError)) or "connect" in str(exc).lower():
+        return (
+            "The download stopped. Check your internet connection and try "
+            "again; it will carry on from where it stopped."
+        )
+    return (
+        f"The download stopped: {type(exc).__name__}: {str(exc)[:200]}. "
+        "Try again; if it stops the same way, please report it."
+    )
 
 
 def _all_bytes(needs: list[ModelNeed]) -> int:
@@ -229,13 +282,12 @@ def start_download(settings: Settings, download: Download) -> Download:
                 download.seconds_left = 0
                 download.current = ""
         except Exception as exc:
-            log.warning("models.download.failed", error=type(exc).__name__)
+            log.warning(
+                "models.download.failed", error=type(exc).__name__, detail=str(exc)[:300]
+            )
             with download._lock:
                 download.state = "failed"
-                download.message = (
-                    "The download stopped. Check your internet connection and try "
-                    "again; it will carry on from where it stopped."
-                )
+                download.message = _failure_message(exc)
         finally:
             stop.set()
 

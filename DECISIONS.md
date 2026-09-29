@@ -5025,3 +5025,117 @@ source always matches what ships.
 Contact: security reports go through GitHub private vulnerability reporting,
 with the maintainer's LinkedIn as the fallback; other questions go to GitHub
 issues first, LinkedIn second.
+
+## v0.1.1 — what v0.1.0 got wrong on a real Windows install
+
+### D-163 · The picture model ships whole, and fails loudly if it cannot run
+
+**What happened.** On a fresh install, 0 of 106 scenes got an image. The
+installed app's own log showed the chain: the Getting-ready screen's download
+stopped with `ModuleNotFoundError`; every render then loaded the embedding
+model once per batch (205 times) and failed each time; ingest recorded all 374
+good downloads as "failed" ("0 added, 374 failed"); nothing entered the
+library, so matching and the atmospheric fallback had nothing to choose from;
+and the scene plan said "no image library supplied". Running the installed
+Python showed the cause: `No module named 'transformers'`. The default
+multilingual model's tokenizer and text tower are Hugging Face models, which
+open_clip imports lazily and does not declare; the `library` extra did not
+declare it either. Every development machine had it through another extra, so
+no test noticed. With only `transformers` added, the installed build itself
+embedded text and images (checked with its own Python, read-only).
+
+**Decided.**
+- `transformers` is in the `library` extra, so every installer bundles it.
+- A test reads each model's needs from open_clip's own config and fails if any
+  is missing from the `library` extra. Run against v0.1.0's `pyproject.toml`,
+  it reports `transformers` missing.
+- A model that cannot load raises `EmbedderUnavailable` with the reason, once,
+  remembered; ingest passes it up instead of failing every file; a render
+  loads the model **before transcribing** and stops with a clear message,
+  instead of producing a video of plain backgrounds 17 minutes later.
+- Getting-ready calls a model ready only if every one of its repositories is
+  there (the weights alone passed the size test while the tokenizer never
+  arrived) and its modules import; a broken install is not blamed on the
+  internet connection.
+- Both installers' tests on GitHub now embed a sentence and an image with the
+  real default model (`voxframe.selfcheck`), not just import it.
+- An empty library is described as "no image in the library yet", not "no image
+  library supplied".
+
+### D-164 · The app is always visible; a second launch opens the running one
+
+**What happened.** The installed app had `_tkinter.pyd` but not the Tcl/Tk DLLs
+or script libraries (pynsist copies only the module), so its "Voxframe is
+running" window never opened; the launcher fell back to running with nothing
+on screen. Closing the browser tab left no way back, and a second launch said
+"already open, use its window" -- of a window that did not exist. Checked
+with the installed Python: `DLL load failed while importing _tkinter`; with
+`tcl86t.dll`, `tk86t.dll`, `zlib1.dll` beside it, the libraries in `lib/`, and
+`TCL_LIBRARY`/`TK_LIBRARY` set, it opens a window.
+
+**Decided.**
+- The Windows build copies those files from the building Python into the
+  package folder; the launcher points Tcl at them (`prepare_tk`); both
+  installers' tests open a real Tk window.
+- If Tk still cannot open, a Windows message box offers **Open** and **Quit**,
+  so the app is never running unseen.
+- The running app writes a marker with its process id, a local "wake" port and
+  a random wake key. The session token is still never written to disk
+  (D-115): the key's only power is to make the running app open a browser tab
+  at its own address. A second launch uses it and exits.
+- A marker whose lock is free is stale (the operating system releases the lock
+  when the process ends, however it ends) and is cleared. A copy that holds the
+  lock but does not answer is offered to be stopped, after checking it is a
+  Python process.
+
+### D-165 · No console windows
+
+The installed app runs under `pythonw`, with no console, so Windows gave every
+FFmpeg and FFprobe call a console window of its own: they flashed throughout a
+render. Every subprocess call passes `creationflags=NO_WINDOW`
+(`voxframe.processes`); a test reads the source and fails on any call without
+it, or on any way of starting a process that cannot take it.
+
+### D-166 · A long recording's search budget is shared, spread and cached
+
+v0.1.0 searched the first 40 scenes of a long recording and left the rest
+blank, to protect the image services' hourly limits. Measured on the 106-scene
+recording, the limit was not the only problem: the first 40 scenes had already
+downloaded 386 MB of the 400 MB per-render cap, a second render downloaded the
+same 386 MB again, and files named by their position in a run
+(`pexels_0000.jpg`) were overwritten by the next render with different images
+under names the library still pointed at.
+
+**Decided.**
+- No fixed scene cap. Every scene's queries are worked out first; a query
+  shared by several scenes is searched once, with a page big enough for all of
+  them, and each scene takes its own slice. Phrases recurring in three or more
+  scenes are searched first, as themes.
+- Scenes are searched in an order that covers the whole recording early (first,
+  middle, quarters...), so a limit reached partway still leaves coverage
+  spread.
+- Each source stops for the run when its own rate-limit headers say it is
+  nearly used, when it refuses with a 429, or after two connection failures in
+  a row; the others carry on. Scenes left when every source rests are
+  recorded, and the person is told which source ran out, when to try again,
+  and that making the video again continues from there.
+- Downloads are named by their address, so the same image always has the same
+  name and a later render reuses it; Openverse responses are cached for 24
+  hours like the others'. Long recordings (over 40 empty scenes) take two
+  candidates per scene, since every download joins one pool the whole plan is
+  matched against; clips may use at most half of the download cap.
+
+**Measured** on the owner's 17-minute talk (107 scenes; same transcript; a new
+user's empty library and search cache; real Pexels, Pixabay and Openverse):
+
+| | own image | atmospheric | filled | downloaded |
+|---|---|---|---|---|
+| v0.1.0, installed | 0 | 0 | 0 of 106 | 386 MB, all rejected |
+| v0.1.0, source checkout | 36 (34%) | 71 | 107 of 107 | 421 MB |
+| v0.1.1 | 52 (49%) | 55 | 107 of 107 | 197 MB |
+
+The source checkout filled its scenes: the installed failure was entirely the
+missing module. The rest of the gain is the budget: 104 of 107 scenes searched
+(three have no searchable words) against 40, at under half the download.
+v0.1.0's warning also said "the rest show a plain background" while they were
+being given atmospheric images; the new messages say only what happened.

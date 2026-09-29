@@ -29,7 +29,7 @@ import structlog
 from PIL import Image
 
 from voxframe.library.db import AssetLibrary
-from voxframe.library.embeddings import Embedder
+from voxframe.library.embeddings import Embedder, EmbedderUnavailable
 from voxframe.models.asset import Asset, AssetKind, LicenseInfo
 from voxframe.models.provenance import read_sourced_provenance
 
@@ -295,6 +295,7 @@ def ingest_directory(
     Raises:
         IngestError: If the directory does not exist, or a file has neither a
             sidecar nor a supplied ``license_info``.
+        EmbedderUnavailable: If the model cannot be loaded at all (D-163).
     """
     if not directory.is_dir():
         raise IngestError(f"Not a directory: {directory}")
@@ -425,7 +426,12 @@ def _flush(
 
     try:
         embeddings = embedder.embed_images(paths)
+    except EmbedderUnavailable:
+        # Not these files' fault: nothing can be embedded. Recording each as
+        # failed hid exactly that (D-163), so it goes to the caller.
+        raise
     except Exception as exc:
+        log.warning("ingest.embed_failed", files=len(paths), error=str(exc))
         for path, _ in pending:
             result.failed.append((path, f"embedding failed: {exc}"))
         return
@@ -499,7 +505,10 @@ def _reembed_batch(
 
     try:
         embeddings = embedder.embed_images(paths)
+    except EmbedderUnavailable:
+        raise
     except Exception as exc:
+        log.warning("ingest.embed_failed", files=len(paths), error=str(exc))
         for asset in batch:
             result.failed.append((asset.path, f"embedding failed: {exc}"))
         return

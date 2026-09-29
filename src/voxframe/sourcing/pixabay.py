@@ -286,6 +286,9 @@ class PixabayAdapter(Adapter):
         self, path: str, parameters: dict[str, str]
     ) -> tuple[dict[str, Any], Any]:
         url = f"{API_ROOT}{path}?{urllib.parse.urlencode(parameters)}"
-        return request_json(
+        payload, limits = request_json(
             url, cache=self.cache, timeout=self.timeout, source=self.name
         )
+        if limits.remaining is not None:
+            self.rate_limit = limits
+        return payload, limits

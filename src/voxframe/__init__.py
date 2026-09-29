@@ -1,6 +1,6 @@
 """Voxframe: turn audio into captioned, visually dynamic video."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 # An installed Voxframe keeps its models in its own folder (D-156). The model
 # libraries read their cache location once, when first imported, so this runs

@@ -35,6 +35,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from voxframe.processes import NO_WINDOW
+
 __all__ = ["FFmpegError", "FFmpegResult", "run_ffmpeg"]
 
 
@@ -106,6 +108,7 @@ def run_ffmpeg(
         capture_output=True,
         text=True,
         check=False,
+        creationflags=NO_WINDOW,
         cwd=str(cwd) if cwd is not None else None,
         encoding="utf-8",
         errors="replace",

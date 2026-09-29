@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass, field
+from typing import Any
 
 import structlog
 
@@ -129,6 +130,28 @@ class Adapter(abc.ABC):
     #: Human-readable note on the source's terms, shown by ``voxframe sources``
     #: so a user can see what they are agreeing to before enabling one.
     terms: str = ""
+
+    #: Why this source is skipped for the rest of a run, or empty while it is
+    #: in use: its limit is nearly used, it refused with a 429, or it could
+    #: not be reached twice in a row. The other sources carry on (D-166).
+    resting: str = ""
+
+    #: Seconds until the source's limit resets, when it said.
+    rest_seconds: float | None = None
+
+    #: What the last response said about the remaining budget, when the source
+    #: reports one (a :class:`~voxframe.sourcing.http.RateLimit`).
+    rate_limit: Any = None
+
+    #: Connection failures in a row, in this run.
+    unreachable: int = 0
+
+    def rest(self, reason: str, seconds: float | None = None) -> None:
+        """Stop using this source for the rest of the run."""
+        if not self.resting:
+            log.info("sourcing.adapter.resting", adapter=self.name, reason=reason)
+        self.resting = reason
+        self.rest_seconds = seconds
 
     @abc.abstractmethod
     def search(self, request: SearchRequest) -> tuple[Candidate, ...]:

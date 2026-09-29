@@ -16,6 +16,8 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from voxframe.processes import NO_WINDOW
+
 __all__ = [
     "INSTALL_HINT",
     "FFmpegCapabilities",
@@ -149,6 +151,7 @@ def _run_ffmpeg(binary: str, *args: str) -> str:
         capture_output=True,
         text=True,
         check=False,
+        creationflags=NO_WINDOW,
         encoding="utf-8",
         errors="replace",
     )
@@ -252,6 +255,7 @@ def probe_media(path: Path, caps: FFmpegCapabilities | None = None) -> MediaInfo
         capture_output=True,
         text=True,
         check=False,
+        creationflags=NO_WINDOW,
     )
 
     if completed.returncode != 0:
@@ -300,6 +304,7 @@ def detect_silences(
         capture_output=True,
         text=True,
         check=False,
+        creationflags=NO_WINDOW,
     )
 
     silences: list[tuple[float, float]] = []

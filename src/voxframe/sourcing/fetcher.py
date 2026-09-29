@@ -25,6 +25,7 @@ filled, not a traceback.
 
 from __future__ import annotations
 
+import hashlib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -36,6 +37,7 @@ import structlog
 from voxframe.models.provenance import (
     PROVENANCE_SUFFIX,
     read_provenance,
+    read_sourced_provenance,
     write_provenance,
 )
 from voxframe.sourcing.base import Adapter, AdapterError, Candidate, SearchRequest
@@ -74,6 +76,8 @@ class FetchResult:
     """What a fetch run downloaded, skipped and failed to get."""
 
     downloaded: list[Path] = field(default_factory=list)
+    #: Files an earlier render already downloaded, used again (D-166).
+    reused: list[Path] = field(default_factory=list)
     skipped: list[tuple[str, str]] = field(default_factory=list)
     failures: list[tuple[str, str]] = field(default_factory=list)
     total_bytes: int = 0
@@ -89,6 +93,8 @@ class FetchResult:
 
     def summary(self) -> str:
         parts = [f"{self.count} downloaded ({self.megabytes:.1f} MB)"]
+        if self.reused:
+            parts.append(f"{len(self.reused)} already downloaded")
         if self.skipped:
             parts.append(f"{len(self.skipped)} skipped")
         if self.failures:
@@ -149,6 +155,17 @@ def _download_one(
     return path
 
 
+def _already_downloaded(folder: Path, stem: str) -> Path | None:
+    """A file an earlier run saved under this name, with its provenance."""
+    for path in folder.glob(f"{stem}.*"):
+        if path.suffix.lower() in _MEDIA_SUFFIXES and read_sourced_provenance(path) is not None:
+            return path
+    return None
+
+
+_MEDIA_SUFFIXES = frozenset({".jpg", ".png", ".webp", ".gif", ".mp4", ".webm"})
+
+
 def download_candidates(
     candidates: list[Candidate],
     destination_dir: Path,
@@ -188,7 +205,7 @@ def download_candidates(
     file_cap = (max_file_mb or 0) * 1024 * 1024 or MAX_DOWNLOAD_BYTES
     total_cap = (max_total_mb or 0) * 1024 * 1024
 
-    for index, candidate in enumerate(candidates):
+    for candidate in candidates:
         if limit is not None and result.count >= limit:
             break
 
@@ -197,15 +214,21 @@ def download_candidates(
             continue
         seen_urls.add(candidate.url)
 
+        # Named by source and address: the same image always gets the same
+        # name, so a later render finds it instead of downloading it again.
+        # Naming by position in the run (the old way) also overwrote an
+        # earlier render's files with different images under the same name,
+        # which the library still pointed at (D-166).
+        stem = f"{candidate.license.source}_{hashlib.sha1(candidate.url.encode()).hexdigest()[:16]}"
+        if (existing := _already_downloaded(destination_dir, stem)) is not None:
+            result.reused.append(existing)
+            continue
+
         if total_cap and result.total_bytes >= total_cap:
             result.skipped.append(
                 (candidate.url, f"render download cap of {max_total_mb} MB reached")
             )
             continue
-
-        # Name by source and position so a staging directory is readable, and
-        # so two adapters cannot collide on the same stem.
-        stem = f"{candidate.license.source}_{index:04d}"
 
         try:
             path = _download_one(
@@ -238,6 +261,23 @@ def download_candidates(
     return result
 
 
+#: Connection failures in a row after which a source rests for the run. One
+#: can be a blip; retrying an unreachable source for every scene of a long
+#: recording cost a timeout each time.
+UNREACHABLE_LIMIT = 2
+
+def _rest_if_exhausted(adapter: Adapter, error: str) -> None:
+    """Rest a source that refused for its limit or cannot be reached."""
+    text = error.lower()
+    if "rate limit" in text:
+        adapter.rest(f"{adapter.name} reached its request limit", None)
+        return
+    if "could not reach" in text:
+        adapter.unreachable += 1
+        if adapter.unreachable >= UNREACHABLE_LIMIT:
+            adapter.rest(f"{adapter.name} could not be reached")
+
+
 def search_adapters(
     adapters: list[Adapter], request: SearchRequest
 ) -> tuple[list[Candidate], list[tuple[str, str]]]:
@@ -253,7 +293,7 @@ def search_adapters(
     failures: list[tuple[str, str]] = []
 
     for adapter in adapters:
-        if not adapter.available():
+        if not adapter.available() or adapter.resting:
             log.debug("sourcing.adapter.skipped", adapter=adapter.name)
             continue
 
@@ -262,7 +302,18 @@ def search_adapters(
         except AdapterError as exc:
             failures.append((adapter.name, str(exc)))
             log.warning("sourcing.adapter.failed", adapter=adapter.name, error=str(exc))
+            _rest_if_exhausted(adapter, str(exc))
             continue
+
+        adapter.unreachable = 0
+        limit = adapter.rate_limit
+        if limit is not None and limit.is_nearly_exhausted:
+            # Stop before the source refuses, so the rest of this render --
+            # and the person's next one -- are not met with a wall of 429s.
+            adapter.rest(
+                f"{adapter.name} reached its request limit ({limit.describe()})",
+                limit.reset_seconds,
+            )
 
         if found:
             per_adapter.append(found)

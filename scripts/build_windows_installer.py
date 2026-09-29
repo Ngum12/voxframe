@@ -196,11 +196,42 @@ _REMEMBER_D = (
 )
 
 
+#: What ``_tkinter`` needs beside it, from the Python that runs pynsist. pynsist
+#: copies ``_tkinter.pyd`` and the ``tkinter`` package but not these, so v0.1.0
+#: could not open its "Voxframe is running" window and ran with nothing on
+#: screen (D-164). ``zlib1.dll`` is a dependency of ``tcl86t.dll``.
+TK_DLLS = ("tcl86t.dll", "tk86t.dll", "zlib1.dll")
+TK_LIBRARIES = ("tcl8.6", "tk8.6")
+
+
+def add_tk(pynsist_python: Path, pkgs: Path) -> None:
+    """Put the Tcl/Tk DLLs and script libraries beside ``_tkinter.pyd``.
+
+    The launcher points Tcl at ``pkgs/lib`` (``prepare_tk``).
+    """
+    base = Path(
+        subprocess.run(
+            [str(pynsist_python), "-c", "import sys; print(sys.base_prefix)"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    )
+    if not (pkgs / "_tkinter.pyd").is_file():
+        raise SystemExit("pynsist did not copy _tkinter.pyd; check [Include] packages")
+    for name in TK_DLLS:
+        shutil.copy2(base / "DLLs" / name, pkgs / name)
+    for name in TK_LIBRARIES:
+        target = pkgs / "lib" / name
+        shutil.rmtree(target, ignore_errors=True)
+        shutil.copytree(base / "tcl" / name, target)
+    print(f"  Tcl/Tk from {base}")
+
+
 def build(config: Path, pynsist_python: Path, nsis: Path) -> Path:
     step("installer")
     subprocess.run(
         [str(pynsist_python), "-m", "nsist", "--no-makensis", str(config)], cwd=WORK, check=True
     )
+    add_tk(pynsist_python, WORK / "nsis" / "pkgs")
     script = WORK / "nsis" / "installer.nsi"
     text = script.read_text(encoding="utf-8")
     if text.count(_ONINIT) != 1 or "StrCpy $cmdLineInstallDir $1" not in text:

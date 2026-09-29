@@ -51,6 +51,11 @@ assert "ass" in caps.filters and "libx264" in caps.encoders
 print("FFmpeg", caps.version, "with libass and x264")
 import torch, faster_whisper, open_clip
 print("torch", torch.__version__, "faster-whisper", faster_whisper.__version__)
+# The window and the picture model, used for real: v0.1.0 imported fine and
+# could do neither (D-163, D-164).
+from voxframe.selfcheck import picture_model, window
+print(window())
+print(picture_model())
 from voxframe.config.settings import QualityPreset, get_settings
 from voxframe.config.style import get_template
 from voxframe.jobs.pipeline import JobOptions, run_pipeline

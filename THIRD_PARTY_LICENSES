@@ -97,6 +97,8 @@ Each is added to the "installed" section above as its phase lands.
   Phase 3 (library and matching):
     torch                   BSD-3-Clause Tensor operations
     open_clip_torch         MIT          Image and text embeddings
+    transformers            Apache-2.0   The default model's tokenizer and text
+                                         encoder (D-163); also depth, below
     LAION ViT-B-32 laion2b  MIT          CLIP weights (see note 2)
     sqlite-vec              Apache-2.0   Vector similarity search in SQLite
     opencv-python-headless  Apache-2.0   Image ops, saliency, inpainting
@@ -175,7 +177,9 @@ BUNDLED BY THE INSTALLERS ONLY
 
   Windows installer
     Python runtime          PSF-2.0         the embeddable CPython from python.org
-    Tcl/Tk                  Tcl/Tk licence  (BSD-style) for the small app window
+    Tcl/Tk                  Tcl/Tk licence  (BSD-style) for the small app window, with
+                                            its script libraries (D-164)
+    zlib                    zlib            zlib1.dll, which Tcl needs
     NSIS installer stub     zlib/libpng     the installer and uninstaller themselves
     FFmpeg                  GPL-3.0         see above: a separate program
 

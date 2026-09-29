@@ -42,8 +42,13 @@ on the computer, and where. It adds **Voxframe** to the Start menu.
 ## 4. First start
 
 Open **Voxframe** from the Start menu. A small window says *Voxframe is
-running*, and your web browser opens at Voxframe. Keep the small window open
-while you use it; **Quit** closes Voxframe.
+running*, and your web browser opens at Voxframe.
+
+- **Closed the browser tab?** Voxframe is still running. Click **Open in
+  browser** in the small window, or open Voxframe from the Start menu again:
+  it opens the running copy rather than starting a second one.
+- **Done?** Click **Quit** in the small window. A video still being made is
+  kept, and you can resume it next time.
 
 The first time, Voxframe asks to download its two models — about 3.1 GB, or
 750 MB for the Lite version — and shows how far it has got. After that it works

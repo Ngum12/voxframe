@@ -35,7 +35,9 @@ After that, Voxframe opens normally.
 ## 4. First start
 
 A small window says *Voxframe is running*, and your web browser opens at
-Voxframe. Keep the small window open while you use it; **Quit** closes it.
+Voxframe. Closing the browser tab does not stop it: click **Open in browser**
+in the small window, or open Voxframe again, to get back to it. **Quit** closes
+it.
 
 The first time, Voxframe asks to download its two models — about 3.1 GB, or
 750 MB for the Lite version — and shows how far it has got. After that it works

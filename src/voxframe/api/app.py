@@ -44,6 +44,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
+from voxframe import __version__
 from voxframe.api.security import (
     PathOutsideSandbox,
     SessionToken,
@@ -288,7 +289,7 @@ def create_app(context: ApiContext) -> FastAPI:
     app = FastAPI(
         title="Voxframe",
         description="Local API for turning audio into captioned video.",
-        version="0.1.0",
+        version=__version__,
         # No docs by default: an unauthenticated schema endpoint on a local port
         # is one more thing any page can read.
         docs_url=None,

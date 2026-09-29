@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     # Only for annotations: importing it at runtime would load the embedding
     # stack for every caller, including ones that never match anything.
     from voxframe.library.embeddings import Embedder
+    from voxframe.sourcing.registry import SourcingPlan
 
 __all__ = [
     "JobOptions",
@@ -217,7 +218,7 @@ def run_pipeline(
             from the underlying stages. The caller decides how to present them.
     """
     from voxframe.library.db import AssetLibrary
-    from voxframe.library.embeddings import Embedder
+    from voxframe.library.embeddings import Embedder, EmbedderUnavailable
     from voxframe.match.matcher import Matcher
     from voxframe.plan.builder import build_plan, insert_cards
     from voxframe.render.compose.captioned import render_captioned_video
@@ -227,6 +228,32 @@ def run_pipeline(
     from voxframe.transcribe.whisper import Transcriber
 
     warnings: list[str] = []
+
+    # With sourcing on, the library is where downloads go, so there is always
+    # one -- the configured library, even if it starts empty.
+    library = options.library
+    if library is None and options.source_imagery:
+        library = settings.library_path
+
+    embedder: Embedder | None = None
+    if library is not None:
+        embedder = Embedder(
+            use_gpu=settings.use_gpu, model_key=settings.resolved_embed_model
+        )
+        # Before transcription, not after: a model that cannot load fails every
+        # image alike, and finding that out after the whole recording has been
+        # transcribed, searched and downloaded wasted all of it -- and then
+        # rendered a video of plain backgrounds (D-163).
+        progress(Stage.TRANSCRIBING, "Preparing the picture model", None)
+        try:
+            embedder.load()
+        except EmbedderUnavailable as exc:
+            raise EmbedderUnavailable(
+                f"{exc}. No video was made, so no time was spent on one. "
+                "Reinstalling Voxframe usually fixes this. To make a video with "
+                "captions only in the meantime, turn off pictures from your "
+                "library and from online search."
+            ) from exc
 
     # The message distinguishes the two cases, because a first run sits here for
     # minutes downloading weights and a later one does not -- and a user shown
@@ -253,16 +280,7 @@ def run_pipeline(
 
     plan: ScenePlan | None = None
 
-    # With sourcing on, the library is where downloads go, so there is always
-    # one -- the configured library, even if it starts empty.
-    library = options.library
-    if library is None and options.source_imagery:
-        library = settings.library_path
-
-    if library is not None:
-        embedder = Embedder(
-            use_gpu=settings.use_gpu, model_key=settings.resolved_embed_model
-        )
+    if library is not None and embedder is not None:
 
         def match() -> ScenePlan:
             asset_library = AssetLibrary(library)
@@ -284,6 +302,7 @@ def run_pipeline(
                 template,
                 aspect=options.aspect,
                 embed_model=embedder.model_id if matches else "",
+                unmatched_reason="no image in the library yet",
             )
 
         plan = match()
@@ -528,6 +547,7 @@ def _add_atmosphere(
     over.
     """
     from voxframe.library.db import AssetLibrary
+    from voxframe.library.embeddings import EmbedderUnavailable
     from voxframe.library.ingest import ingest_directory
     from voxframe.match.atmosphere import apply_atmosphere, theme_queries
     from voxframe.match.text_detection import TextDetector
@@ -564,8 +584,13 @@ def _add_atmosphere(
             )
             if sourced.fetch.downloaded:
                 ingest_directory(library / "sourced", AssetLibrary(library), embedder)
+        except EmbedderUnavailable:
+            raise
         except Exception as exc:
-            log.warning("pipeline.atmosphere_sourcing_failed", error=type(exc).__name__)
+            log.warning(
+                "pipeline.atmosphere_sourcing_failed",
+                error=f"{type(exc).__name__}: {exc}",
+            )
 
     asset_library = AssetLibrary(library)
     if not asset_library.all_assets():
@@ -662,12 +687,40 @@ class _SourcingOutcome:
     warnings: tuple[str, ...]
 
 
-#: Most scenes a single render will search for. A long recording can have
-#: hundreds, and each costs several requests against APIs with hourly limits
-#: (Pexels 200/hour, D-079). Past this, the rest render as plain backgrounds
-#: and the warning says so, rather than exhausting the person's quota on one
-#: video.
-MAX_SOURCED_SCENES = 40
+def _limit_warnings(sourced: SourcingPlan) -> list[str]:
+    """Say plainly when a limit stopped the search, and what to do (D-166).
+
+    No fixed cap on scenes any more: the searches are shared and spread, and
+    each source stops only when its own allowance is nearly used. When that
+    happens, or the download cap is reached, the person is told which, and
+    that making the video again continues from where this one stopped.
+    """
+    warnings: list[str] = []
+    if sourced.unsearched:
+        names = sorted({name.capitalize() for name, _, _ in sourced.resting})
+        waits = [seconds for _, _, seconds in sourced.resting if seconds]
+        when = f"in about {max(1, round(min(waits) / 60))} minutes" if waits else "in an hour"
+        if not names:
+            because = "no image service could be used"
+        elif len(names) == 1:
+            because = f"{names[0]} reached its request limit"
+        else:
+            because = f"{', '.join(names)} reached their request limits"
+        count = len(sourced.unsearched)
+        them = "it" if count == 1 else "them"
+        warnings.append(
+            f"{count} scene{'' if count == 1 else 's'} could not be searched online "
+            f"because {because}. Make the video again {when} to search {them}: "
+            f"everything found so far is kept, so only what is left is searched."
+        )
+    capped = sum(1 for _, reason in sourced.fetch.skipped if "download cap" in reason)
+    if capped:
+        warnings.append(
+            f"Downloads stopped at the size limit for one video, so {capped} more "
+            f"image{' was' if capped == 1 else 's were'} not fetched. Making the "
+            f"video again fetches {'it' if capped == 1 else 'them'}."
+        )
+    return warnings
 
 
 def _source_missing_imagery(
@@ -700,35 +753,15 @@ def _source_missing_imagery(
         return _SourcingOutcome(0, ())
 
     warnings: list[str] = []
-    target = plan
-    if len(empty) > MAX_SOURCED_SCENES:
-        # Search the first scenes only; the rest keep plain backgrounds.
-        keep = set(empty[:MAX_SOURCED_SCENES])
-        target = plan.model_copy(
-            update={
-                "scenes": tuple(
-                    scene if scene.index in keep or scene.asset is not None
-                    # Marking the rest as already filled would lie; clearing
-                    # their text makes the sourcer skip them without one.
-                    else scene.model_copy(update={"text": "", "queries": ()})
-                    for scene in plan.scenes
-                )
-            }
-        )
-        warnings.append(
-            f"Searched online for the first {MAX_SOURCED_SCENES} of {len(empty)} "
-            f"scenes without an image, to stay within the image services' "
-            f"hourly limits. The rest show a plain background."
-        )
 
     progress(
         Stage.MATCHING,
-        f"Searching online for images for {min(len(empty), MAX_SOURCED_SCENES)} scenes",
+        f"Searching online for images for {len(empty)} scenes",
         None,
     )
 
     try:
-        sourced = source_for_plan(target, library / "sourced", settings)
+        sourced = source_for_plan(plan, library / "sourced", settings)
     except Exception as exc:
         log.warning("pipeline.sourcing_failed", error=exc.__class__.__name__)
         return _SourcingOutcome(
@@ -748,8 +781,10 @@ def _source_missing_imagery(
             f"Check your connection, or that key in Settings."
         )
 
-    if not sourced.fetch.downloaded:
-        if not sourced.adapter_failures:
+    warnings.extend(_limit_warnings(sourced))
+
+    if not sourced.fetch.downloaded and not sourced.fetch.reused:
+        if not sourced.adapter_failures and not sourced.unsearched:
             warnings.append(
                 "Searching online found nothing suitable for the scenes "
                 "without a match."
@@ -758,7 +793,7 @@ def _source_missing_imagery(
 
     progress(
         Stage.MATCHING,
-        f"Adding {sourced.fetch.count} downloaded images to your library",
+        f"Adding {sourced.fetch.count + len(sourced.fetch.reused)} images to your library",
         None,
     )
     ingested = ingest_directory(
@@ -768,10 +803,16 @@ def _source_missing_imagery(
     log.info(
         "pipeline.sourced",
         scenes=len(empty),
+        searched=sourced.searched_scenes,
         downloaded=sourced.fetch.count,
+        reused=len(sourced.fetch.reused),
         added=len(ingested.added),
     )
-    return _SourcingOutcome(len(ingested.added), tuple(warnings))
+    # Images an earlier render downloaded are already in the library; they
+    # count, because the plan is matched afresh against all of it.
+    return _SourcingOutcome(
+        len(ingested.added) + len(sourced.fetch.reused), tuple(warnings)
+    )
 
 
 def _apply_highlights(

@@ -17,6 +17,8 @@ import sys
 import threading
 from pathlib import Path
 
+from voxframe.processes import NO_WINDOW
+
 __all__ = ["DesktopUnavailable", "choose_folder", "open_folder"]
 
 
@@ -33,9 +35,9 @@ def open_folder(path: Path) -> None:
             # Windows only; other platforms' type stubs lack it.
             os.startfile(path)  # type: ignore[attr-defined,unused-ignore]
         elif platform == "darwin":
-            subprocess.run(["open", str(path)], check=True)
+            subprocess.run(["open", str(path)], check=True, creationflags=NO_WINDOW)
         else:
-            subprocess.run(["xdg-open", str(path)], check=True)
+            subprocess.run(["xdg-open", str(path)], check=True, creationflags=NO_WINDOW)
     except (OSError, subprocess.CalledProcessError) as exc:
         raise DesktopUnavailable(f"The folder could not be opened: {path}") from exc
 

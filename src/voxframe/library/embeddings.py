@@ -26,7 +26,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import numpy as np
 import structlog
@@ -43,8 +43,11 @@ __all__ = [
     "MODEL_NAME",
     "MODEL_PRETRAINED",
     "Embedder",
+    "EmbedderUnavailable",
     "EmbeddingError",
     "cosine_similarity",
+    "required_modules",
+    "stack_problem",
 ]
 
 log = structlog.get_logger(__name__)
@@ -125,6 +128,62 @@ class EmbeddingError(RuntimeError):
     """Raised when embeddings cannot be computed."""
 
 
+class EmbedderUnavailable(EmbeddingError):
+    """The model itself cannot be loaded: nothing can be embedded at all.
+
+    Distinct from one unreadable image. A missing library or an incomplete
+    model download affects every file alike, so callers must stop and say so
+    rather than record each file as failed -- which is how an installer
+    without ``transformers`` turned 374 good downloads into "374 failed" and a
+    video with no pictures (D-163).
+    """
+
+
+def required_modules(model_key: str = DEFAULT_MODEL_KEY) -> tuple[str, ...]:
+    """The Python modules a model needs, read from open_clip's own config.
+
+    A model whose text tower is a Hugging Face model (the multilingual
+    default) needs ``transformers`` for its tokenizer and its text encoder;
+    open_clip imports it lazily, so nothing fails until the model is used.
+
+    Reads the config file rather than importing open_clip, which imports torch:
+    this runs on the Getting-ready screen's status check, where a 20-second
+    import stalled the app's first page (D-163).
+    """
+    import importlib.util
+    import json
+
+    name, _ = _resolve(model_key)
+    modules = ["torch", "open_clip"]
+    spec = importlib.util.find_spec("open_clip")
+    if spec is None or not spec.submodule_search_locations:
+        return tuple(modules)
+    config = Path(next(iter(spec.submodule_search_locations))) / "model_configs" / f"{name}.json"
+    try:
+        text = json.loads(config.read_text(encoding="utf-8")).get("text_cfg", {})
+    except (OSError, ValueError):
+        return tuple(modules)
+    if text.get("hf_model_name") or text.get("hf_tokenizer_name"):
+        modules.append("transformers")
+    return tuple(modules)
+
+
+def stack_problem(model_key: str = DEFAULT_MODEL_KEY) -> str | None:
+    """Why this model cannot run here, or ``None`` when it can.
+
+    Checks each module is installed, without importing it, so it is cheap
+    enough for the Getting-ready screen's status and the start of every render.
+    A module present but broken still fails when the model loads, with its
+    reason (:class:`EmbedderUnavailable`).
+    """
+    import importlib.util
+
+    for module in required_modules(model_key):
+        if importlib.util.find_spec(module) is None:
+            return f"the Python module {module!r} is missing"
+    return None
+
+
 def _select_device(use_gpu: bool) -> str:
     """Pick a device, preferring CUDA when usable.
 
@@ -165,6 +224,9 @@ class Embedder:
         self._model: Any = None
         self._preprocess: Any = None
         self._tokenizer: Any = None
+        #: Set when loading failed once: every later call fails the same way,
+        #: so it is not retried per image (it was: 205 reloads in one render).
+        self._load_error: EmbedderUnavailable | None = None
 
     @property
     def model_id(self) -> str:
@@ -175,18 +237,31 @@ class Embedder:
         """
         return f"{self.model_name}/{self.model_pretrained}"
 
+    def load(self) -> None:
+        """Load the model now, so a problem shows before any work depends on it.
+
+        Raises:
+            EmbedderUnavailable: If the model cannot be loaded, with the reason.
+        """
+        self._load()
+
     def _load(self) -> tuple[Any, Any, Any]:
-        """Load the model, downloading weights on first use."""
+        """Load the model, downloading weights on first use.
+
+        Raises:
+            EmbedderUnavailable: If it cannot be loaded. Remembered, so every
+                later call fails at once with the same reason.
+        """
         if self._model is not None:
             return self._model, self._preprocess, self._tokenizer
+        if self._load_error is not None:
+            raise self._load_error
 
-        try:
-            import open_clip
-        except ImportError as exc:
-            raise EmbeddingError(
-                "open_clip_torch is not installed.\n"
-                "  pip install 'voxframe[library]'"
-            ) from exc
+        problem = stack_problem(self.model_key)
+        if problem is not None:
+            self._fail(problem)
+
+        import open_clip
 
         log.info(
             "embed.model.loading",
@@ -195,16 +270,27 @@ class Embedder:
             device=self.device,
         )
 
-        model, _, preprocess = open_clip.create_model_and_transforms(
-            self.model_name, pretrained=self.model_pretrained, device=self.device
-        )
-        model.eval()
+        try:
+            model, _, preprocess = open_clip.create_model_and_transforms(
+                self.model_name, pretrained=self.model_pretrained, device=self.device
+            )
+            model.eval()
+            tokenizer = open_clip.get_tokenizer(self.model_name)
+        except Exception as exc:
+            self._fail(f"{type(exc).__name__}: {exc}", exc)
 
         self._model = model
         self._preprocess = preprocess
-        self._tokenizer = open_clip.get_tokenizer(self.model_name)
+        self._tokenizer = tokenizer
 
         return self._model, self._preprocess, self._tokenizer
+
+    def _fail(self, reason: str, cause: BaseException | None = None) -> NoReturn:
+        self._load_error = EmbedderUnavailable(
+            f"Voxframe's picture model ({self.model_key}) could not be loaded: {reason}"
+        )
+        log.error("embed.model.unavailable", model=self.model_name, reason=reason)
+        raise self._load_error from cause
 
     def embed_image(self, image_path: Path) -> list[float]:
         """Embed one image file."""

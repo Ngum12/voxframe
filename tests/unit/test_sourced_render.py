@@ -80,6 +80,8 @@ def _plan(filled: int, empty: int, *, card: bool = True) -> ScenePlan:
 @dataclass
 class FakeFetch:
     downloaded: list[str] = field(default_factory=list)
+    reused: list[str] = field(default_factory=list)
+    skipped: list[tuple[str, str]] = field(default_factory=list)
 
     @property
     def count(self) -> int:
@@ -90,6 +92,9 @@ class FakeFetch:
 class FakeSourcing:
     fetch: FakeFetch = field(default_factory=FakeFetch)
     adapter_failures: list[tuple[str, str]] = field(default_factory=list)
+    unsearched: list[int] = field(default_factory=list)
+    resting: list[tuple[str, str, float | None]] = field(default_factory=list)
+    searched_scenes: int = 0
 
 
 @dataclass
@@ -169,15 +174,85 @@ class TestTheStep:
 
         assert any("Searching online" in event for event in events)
 
-    def test_a_long_recording_is_capped(
+    def test_a_long_recording_searches_every_scene(
         self, calls: dict[str, list], tmp_path: Path
     ) -> None:
-        """Hundreds of scenes would spend a whole hour's quota on one video."""
-        empty = pipeline.MAX_SOURCED_SCENES + 15
-        outcome, _ = _run(_plan(filled=0, empty=empty), tmp_path)
+        """No fixed cap: v0.1.0 searched 40 of 106 and left the rest blank (D-166).
 
-        assert len(calls["sourced"][0]) == pipeline.MAX_SOURCED_SCENES
-        assert any("first" in warning for warning in outcome.warnings)
+        The budget is each source's own limit, spent on shared searches.
+        """
+        outcome, _ = _run(_plan(filled=0, empty=106), tmp_path)
+
+        assert len(calls["sourced"][0]) == 106
+        assert not any("first" in warning for warning in outcome.warnings)
+
+    def test_images_already_downloaded_count(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """A second render reuses the first one's files, and still re-matches."""
+        monkeypatch.setattr(
+            "voxframe.sourcing.source_for_plan",
+            lambda *a, **k: FakeSourcing(FakeFetch(reused=["a.jpg", "b.jpg"])),
+        )
+        ingested: list[Path] = []
+        monkeypatch.setattr(
+            "voxframe.library.ingest.ingest_directory",
+            lambda directory, *a: ingested.append(directory) or FakeIngest(added=[]),
+        )
+        monkeypatch.setattr("voxframe.library.db.AssetLibrary", lambda path: object())
+
+        outcome, _ = _run(_plan(filled=0, empty=2), tmp_path)
+
+        assert ingested and outcome.added == 2
+
+
+class TestALimitIsSaidPlainly:
+    """When a source runs out, the person hears which, and what to do (D-166)."""
+
+    def _limited(self, monkeypatch: pytest.MonkeyPatch, **fields: object) -> None:
+        monkeypatch.setattr(
+            "voxframe.sourcing.source_for_plan",
+            lambda *a, **k: FakeSourcing(FakeFetch(downloaded=["a.jpg"]), **fields),  # type: ignore[arg-type]
+        )
+        monkeypatch.setattr(
+            "voxframe.library.ingest.ingest_directory", lambda *a: FakeIngest(added=["x"])
+        )
+        monkeypatch.setattr("voxframe.library.db.AssetLibrary", lambda path: object())
+
+    def test_names_the_source_and_when_to_try_again(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        self._limited(
+            monkeypatch,
+            unsearched=[70, 71, 72],
+            resting=[("pexels", "pexels reached its request limit", 1800.0)],
+        )
+
+        outcome, _ = _run(_plan(filled=0, empty=4), tmp_path)
+
+        text = " ".join(outcome.warnings)
+        assert "3 scenes could not be searched" in text
+        assert "Pexels reached its request limit" in text
+        assert "in about 30 minutes" in text
+        assert "everything found so far is kept" in text
+
+    def test_the_download_cap_is_said_too(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        self._limited(monkeypatch)
+        monkeypatch.setattr(
+            "voxframe.sourcing.source_for_plan",
+            lambda *a, **k: FakeSourcing(
+                FakeFetch(
+                    downloaded=["a.jpg"],
+                    skipped=[("u1", "render download cap of 400 MB reached")] * 2,
+                )
+            ),
+        )
+
+        outcome, _ = _run(_plan(filled=0, empty=4), tmp_path)
+
+        assert any("2 more images were not fetched" in w for w in outcome.warnings)
 
 
 class TestFailuresAreReportedNotRaised:

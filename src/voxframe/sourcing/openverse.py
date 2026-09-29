@@ -23,6 +23,7 @@ import structlog
 
 from voxframe.models.asset import AssetKind, LicenseInfo
 from voxframe.sourcing.base import Adapter, AdapterError, Candidate, SearchRequest
+from voxframe.sourcing.http import RequestCache
 from voxframe.sourcing.licenses import DEFAULT_POLICY, LicensePolicy, parse_license
 
 __all__ = ["OpenverseAdapter"]
@@ -55,9 +56,11 @@ class OpenverseAdapter(Adapter):
         policy: LicensePolicy = DEFAULT_POLICY,
         *,
         timeout: float = 30.0,
+        cache: RequestCache | None = None,
     ) -> None:
         self.policy = policy
         self.timeout = timeout
+        self.cache = cache
 
     def search(self, request: SearchRequest) -> tuple[Candidate, ...]:
         """Find images matching a request.
@@ -124,6 +127,8 @@ class OpenverseAdapter(Adapter):
     def _get(self, path: str, parameters: dict[str, str]) -> dict[str, Any]:
         """One GET against the API, with errors the caller can act on."""
         url = f"{API_ROOT}{path}?{urllib.parse.urlencode(parameters)}"
+        if self.cache is not None and (cached := self.cache.get(url)) is not None:
+            return cached
         http_request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
 
         try:
@@ -147,6 +152,8 @@ class OpenverseAdapter(Adapter):
         except json.JSONDecodeError as exc:
             raise AdapterError(f"Openverse returned invalid JSON: {exc}") from exc
 
+        if self.cache is not None:
+            self.cache.put(url, payload)
         return payload
 
     def _to_candidate(self, result: dict[str, Any]) -> Candidate | None:

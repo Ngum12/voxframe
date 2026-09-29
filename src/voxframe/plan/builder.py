@@ -63,6 +63,7 @@ def build_plan(
     *,
     aspect: AspectRatio = AspectRatio.HORIZONTAL,
     embed_model: str = "",
+    unmatched_reason: str = "no image library supplied",
 ) -> ScenePlan:
     """Assemble a scene plan.
 
@@ -78,6 +79,9 @@ def build_plan(
         style: The style template in use.
         aspect: Output aspect ratio.
         embed_model: Identifier of the embedding models, for diagnostics.
+        unmatched_reason: What each scene's details say when ``matches`` is
+            ``None``. A library that exists but holds nothing is not "no
+            library", and saying so sent a person looking in the wrong place.
 
     Returns:
         A complete, editable plan.
@@ -96,7 +100,7 @@ def build_plan(
                 score=0.0,
                 semantic_score=0.0,
                 queries=(),
-                reason="no image library supplied",
+                reason=unmatched_reason,
             )
             for scene in scenes
         )

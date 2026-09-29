@@ -41,6 +41,25 @@ log = structlog.get_logger(__name__)
 #: options per scene is what turns "filled" into "filled well" (D-069).
 CANDIDATES_PER_SCENE = 4
 
+#: More empty scenes than this makes a recording "long" (D-166): each scene
+#: then takes fewer candidates of its own, because every download goes into
+#: one pool that the whole recording is matched against afterwards.
+LONG_RECORDING_SCENES = 40
+LONG_CANDIDATES_PER_SCENE = 2
+
+#: A search phrase in at least this many scenes is a recurring theme: searched
+#: once, up front, with a page big enough for all of them.
+THEME_MIN_SCENES = 3
+MAX_THEMES = 12
+
+#: The largest page asked of any source in one request.
+MAX_PAGE = 30
+
+#: Share of a render's download cap that video clips may use. A clip is ten
+#: to fifty times the size of a still, so without this a long recording spent
+#: its whole cap on its first few clip scenes.
+CLIP_SHARE = 0.5
+
 
 def build_adapters(
     settings: Settings,
@@ -75,7 +94,7 @@ def build_adapters(
             min_width=minimum_width,
             output_height=output_height,
         ),
-        "openverse": OpenverseAdapter(policy),
+        "openverse": OpenverseAdapter(policy, cache=cache),
     }
 
     ordered: list[Adapter] = []
@@ -132,13 +151,27 @@ class SourcingPlan:
     metaphor_searches: int = 0
     fetch: FetchResult = field(default_factory=FetchResult)
     adapter_failures: list[tuple[str, str]] = field(default_factory=list)
+    #: Scenes searched, and those left because every source was resting.
+    searched_scenes: int = 0
+    unsearched: list[int] = field(default_factory=list)
+    #: Recurring themes searched once for many scenes (D-166).
+    theme_queries: list[str] = field(default_factory=list)
+    #: Searches answered from this run's earlier results, not a request.
+    shared_searches: int = 0
+    #: Sources that stopped partway: name, why, and seconds until they reset.
+    resting: list[tuple[str, str, float | None]] = field(default_factory=list)
 
     def summary(self) -> str:
         parts = [
             f"{self.scenes_needing_assets} scene(s) needed imagery",
+            f"{self.searched_scenes} searched",
             f"{self.candidates_found} candidate(s) found",
             self.fetch.summary(),
         ]
+        if self.shared_searches:
+            parts.append(f"{self.shared_searches} search(es) shared between scenes")
+        if self.unsearched:
+            parts.append(f"{len(self.unsearched)} scene(s) left for a later pass")
         if self.clip_fallbacks:
             parts.append(f"{self.clip_fallbacks} clip scene(s) fell back to stills")
         if self.adapter_failures:
@@ -273,6 +306,76 @@ def _scenes_wanting_clips(
     return {targets[min(len(targets) - 1, int(i * step))] for i in range(wanted)}
 
 
+class _Pool:
+    """Each query's results in this run, handed out a fresh slice at a time.
+
+    Scenes of one recording search the same words again and again: a talk
+    about faith says "faith" in a dozen scenes. Searching once and giving each
+    scene its own slice of one bigger page costs one request instead of a
+    dozen, and gives the scenes different images rather than the same few
+    (D-166).
+    """
+
+    def __init__(self) -> None:
+        self._found: dict[tuple[str, AssetKind], list[Candidate]] = {}
+        self._taken: dict[tuple[str, AssetKind], int] = {}
+
+    @staticmethod
+    def key(query: str, kind: AssetKind) -> tuple[str, AssetKind]:
+        return (" ".join(query.lower().split()), kind)
+
+    def has(self, query: str, kind: AssetKind) -> bool:
+        return self.key(query, kind) in self._found
+
+    def put(self, query: str, kind: AssetKind, candidates: list[Candidate]) -> None:
+        self._found[self.key(query, kind)] = candidates
+
+    def take(self, query: str, kind: AssetKind, count: int) -> list[Candidate]:
+        key = self.key(query, kind)
+        start = self._taken.get(key, 0)
+        chunk = self._found.get(key, [])[start : start + count]
+        self._taken[key] = start + len(chunk)
+        return chunk
+
+
+def spread_order(items: list[int]) -> list[int]:
+    """The same items, ordered to cover the whole range early.
+
+    First, middle, quarters, eighths... (the van der Corput sequence). If the
+    sources run out partway, the scenes searched are spread through the
+    recording rather than bunched at its start, which is what "Searched the
+    first 40 of 106 scenes" did.
+    """
+    count = len(items)
+
+    def radical_inverse(position: int) -> float:
+        result, base = 0.0, 0.5
+        while position:
+            if position & 1:
+                result += base
+            position >>= 1
+            base /= 2
+        return result
+
+    order = sorted(range(count), key=radical_inverse)
+    return [items[position] for position in order]
+
+
+def _cap_clips(scenes: set[int], settings: Settings) -> set[int]:
+    """At most as many clip scenes as the clip share of the download cap allows.
+
+    Kept evenly spread, like the choice of clip scenes itself (D-085).
+    """
+    most = int(settings.max_download_mb * CLIP_SHARE // max(1, settings.resolved_max_clip_mb))
+    if len(scenes) <= most:
+        return scenes
+    ordered = sorted(scenes)
+    if most <= 0:
+        return set()
+    step = len(ordered) / most
+    return {ordered[int(i * step)] for i in range(most)}
+
+
 def _search_scene(
     adapters: list[Adapter],
     plan: ScenePlan,
@@ -284,6 +387,8 @@ def _search_scene(
     policy: LicensePolicy,
     result: SourcingPlan,
     queries: list[str] | None = None,
+    pool: _Pool | None = None,
+    demand: dict[str, int] | None = None,
 ) -> list[Candidate]:
     """Search one scene, broadening the query until something returns.
 
@@ -293,27 +398,38 @@ def _search_scene(
     Args:
         queries: Queries to try in place of the scene's own, e.g. its visual
             metaphors (D-136).
+        pool: This run's results so far. A query already searched is answered
+            from it, with a slice no other scene has had.
+        demand: How many scenes' query lists hold each query, so the first
+            search for it asks for enough for all of them.
 
     Returns:
         Candidates, or an empty list when every query came back empty.
     """
+    pool = pool if pool is not None else _Pool()
     for query in queries if queries is not None else _queries_for(plan, index):
-        found, failures = search_adapters(
-            adapters,
-            SearchRequest(
-                query=query,
-                orientation=orientation,
-                kind=kind,
-                limit=limit,
-                language=plan.language,
-                commercial_only=not policy.allow_non_commercial,
-            ),
-        )
-        result.adapter_failures.extend(failures)
+        if pool.has(query, kind):
+            result.shared_searches += 1
+        else:
+            wanted = (demand or {}).get(_Pool.key(query, kind)[0], 1)
+            found, failures = search_adapters(
+                adapters,
+                SearchRequest(
+                    query=query,
+                    orientation=orientation,
+                    kind=kind,
+                    limit=min(MAX_PAGE, limit * max(1, wanted)),
+                    language=plan.language,
+                    commercial_only=not policy.allow_non_commercial,
+                ),
+            )
+            result.adapter_failures.extend(failures)
+            pool.put(query, kind, list(found))
 
-        if found:
+        mine = pool.take(query, kind, limit)
+        if mine:
             result.queries.append(query)
-            return list(found)
+            return mine
 
     return []
 
@@ -358,13 +474,67 @@ def source_for_plan(
         return result
 
     orientation = _orientation_for(plan)
-    clip_scenes = _scenes_wanting_clips(targets, settings)
+    long_recording = len(targets) > LONG_RECORDING_SCENES
+    if long_recording:
+        per_scene = min(per_scene, LONG_CANDIDATES_PER_SCENE)
+    clip_scenes = _cap_clips(_scenes_wanting_clips(targets, settings), settings)
     all_candidates: list[Candidate] = []
     seen: set[str] = set()
     # Which query found each candidate, recorded per asset (item 25).
     found_by: dict[str, str] = {}
+    pool = _Pool()
 
-    for index in targets:
+    # How many scenes would search each query, so one request can serve them.
+    chains = {index: _queries_for(plan, index) for index in targets}
+    demand: dict[str, int] = {}
+    for chain in chains.values():
+        for query in {_Pool.key(q, AssetKind.IMAGE)[0] for q in chain}:
+            demand[query] = demand.get(query, 0) + 1
+
+    def keep(batch: list[Candidate], query: str) -> None:
+        for candidate in batch:
+            # Neighbouring scenes often search similar text, so the same
+            # image comes back repeatedly. Downloading it once is both
+            # faster and what the library's own dedupe would arrive at.
+            if candidate.url in seen:
+                continue
+            seen.add(candidate.url)
+            all_candidates.append(candidate)
+            found_by[candidate.url] = query
+
+    # Recurring themes first: each serves many scenes for one request, so they
+    # are the best use of a source's hourly allowance (D-166).
+    themes = sorted(
+        (query for query, scenes in demand.items() if scenes >= THEME_MIN_SCENES),
+        key=lambda query: -demand[query],
+    )[:MAX_THEMES]
+    for theme in themes:
+        found, failures = search_adapters(
+            adapters,
+            SearchRequest(
+                query=theme,
+                orientation=orientation,
+                kind=AssetKind.IMAGE,
+                limit=min(MAX_PAGE, per_scene * demand[theme]),
+                language=plan.language,
+                commercial_only=not policy.allow_non_commercial,
+            ),
+        )
+        result.adapter_failures.extend(failures)
+        pool.put(theme, AssetKind.IMAGE, list(found))
+        if found:
+            result.theme_queries.append(theme)
+
+    order = spread_order(targets)
+    for position, index in enumerate(order):
+        if all(adapter.resting for adapter in adapters if adapter.available()):
+            # Every source has used its allowance. What is left is recorded
+            # rather than silently dropped, so the person can be told, and a
+            # later render continues from here: everything found so far stays
+            # in the library and the searches stay cached.
+            result.unsearched = sorted(order[position:])
+            break
+        result.searched_scenes += 1
         wants_clip = index in clip_scenes
 
         found = _search_scene(
@@ -373,9 +543,11 @@ def source_for_plan(
             index,
             orientation=orientation,
             kind=AssetKind.VIDEO if wants_clip else AssetKind.IMAGE,
-            limit=2 if wants_clip else per_scene,
+            limit=1 if wants_clip and long_recording else 2 if wants_clip else per_scene,
             policy=policy,
             result=result,
+            pool=pool,
+            demand=demand,
         )
 
         if wants_clip and not found:
@@ -392,6 +564,8 @@ def source_for_plan(
                 limit=per_scene,
                 policy=policy,
                 result=result,
+                pool=pool,
+                demand=demand,
             )
             if found:
                 result.clip_fallbacks += 1
@@ -419,6 +593,7 @@ def source_for_plan(
                 policy=policy,
                 result=result,
                 queries=metaphors,
+                pool=pool,
             )[:METAPHOR_CANDIDATES]
             if extra:
                 batches.append((extra, result.queries[-1]))
@@ -428,16 +603,19 @@ def source_for_plan(
             log.debug("sourcing.scene.no_results", scene=index)
 
         for batch, query in batches:
-            for candidate in batch:
-                # Neighbouring scenes often search similar text, so the same
-                # image comes back repeatedly. Downloading it once is both
-                # faster and what the library's own dedupe would arrive at.
-                if candidate.url in seen:
-                    continue
-                seen.add(candidate.url)
-                all_candidates.append(candidate)
-                found_by[candidate.url] = query
+            keep(batch, query)
 
+    # Theme results no scene took are still good images on the recording's
+    # subject: the whole plan is matched against the library afterwards, so
+    # they fill scenes whose own searches found nothing.
+    for theme in result.theme_queries:
+        keep(pool.take(theme, AssetKind.IMAGE, MAX_PAGE), theme)
+
+    result.resting = [
+        (adapter.name, adapter.resting, adapter.rest_seconds)
+        for adapter in adapters
+        if adapter.resting
+    ]
     result.candidates_found = len(all_candidates)
 
     if not all_candidates:
