@@ -1,0 +1,74 @@
+# Rendered output and large media — never committed (D-019)
+demo_output/
+*.mp4
+*.mkv
+*.webm
+*.mov
+*.avi
+# Sample inputs are committed only when small; see samples/README.md
+!samples/**/*.mp3
+!samples/**/*.wav
+
+# Caches and model weights
+.voxframe_cache/
+# Anchored: a bare "models/" also matched src/voxframe/models/, so the entire
+# domain-model package was silently untracked and a fresh clone could not
+# import Voxframe at all (D-078).
+/models/
+
+*.ckpt
+*.pth
+*.safetensors
+*.bin
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets — never commit
+.env
+.env.local
+
+# Node (Phase 8)
+node_modules/
+.next/
+out/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Sample media: fetched by scripts/fetch_samples.py, never committed (D-019).
+# Reference transcripts are text, not media, and are committed: they are the
+# ground truth WER is measured against and must travel with the repository.
+samples/public/*
+!samples/public/.gitkeep
+!samples/public/*.ref.txt
+!samples/public/*.ref.README
+# The one exception to D-019 (owner's decision, D-151): the 45-second
+# public-domain sonnet excerpt, so the A/V sync test runs on every machine.
+# SHA-256 cd927d85f09c3bde1422529afd66488302fea67d264a784f5453342e7fad4b2d.
+# Only this file.
+!samples/public/en_sonnet_january_45s.wav
+
+# Vite's dev cache. The build OUTPUT (src/voxframe/api/static/) is deliberately
+# committed -- the package must install without a Node toolchain (D-117).
+web/.vite/
+web/dist/
+
+# The default library, created on first use. Personal: never committed (D-150).
+/library/

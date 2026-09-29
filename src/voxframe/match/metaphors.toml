@@ -1,0 +1,98 @@
+# Visual metaphors for abstract themes (D-136).
+#
+# Speech about purpose, faith or growth names nothing a camera can photograph.
+# "Why are you on earth? What is your goal?" gives search terms like "goal
+# earth", which stock libraries answer with dartboards and planets at random.
+# A person illustrating it would reach for a metaphor: a summit, a path, a
+# sunrise. This file lists those metaphors, so Voxframe can too -- offline, with
+# no language model.
+#
+# HOW IT IS USED
+#   A theme is found when any of its `words` appear in what a scene says.
+#   Its `queries` are then searched for when the scene's own search terms are
+#   mostly abstract (see [abstract] below), and used for matching only if the
+#   scene's literal match fails. A literal match always comes first.
+#
+# TO ADD OR IMPROVE A THEME
+#   Copy a block. `en` and `fr` are the words that trigger it, lower case,
+#   accents optional (they are ignored when comparing). List the inflections
+#   you want caught: "goal" and "goals" are separate words.
+#   `queries` are in English, because the stock sites index in English and the
+#   matching model understands both. Prefer concrete, photographable scenes,
+#   and avoid images of printed words: captions are drawn over them (D-082).
+#   Three queries is plenty; the first is tried first.
+
+# Words that carry a theme but name nothing photographable. A scene whose
+# search terms are mostly these, or theme words, counts as abstract.
+[abstract]
+en = [
+  "life", "lives", "living", "meaning", "meaningful", "place", "system", "reason",
+  "idea", "ideas", "earth", "world", "dominion", "right", "wrong", "truth",
+  "value", "values", "power", "role", "potential", "vision", "dream", "dreams",
+  "journey", "people", "others", "man", "woman", "person", "everybody",
+]
+fr = [
+  "vie", "vies", "sens", "raison", "idee", "idees", "monde", "terre", "domaine",
+  "domaines", "verite", "valeur", "valeurs", "pouvoir", "role", "reve", "reves",
+  "chemin", "gens", "autres", "homme", "femme", "personne",
+]
+
+[themes.purpose]
+en = ["purpose", "purposes", "meaningful", "mission", "destiny", "reason", "why"]
+fr = ["but", "buts", "mission", "destin", "raison", "pourquoi"]
+queries = ["mountain summit at sunrise", "path through a forest", "sunrise over hills"]
+
+[themes.calling]
+en = ["calling", "called", "call", "calls", "vocation", "chosen"]
+fr = ["appel", "appele", "appelee", "vocation", "choisi"]
+queries = ["lighthouse at dusk", "open door with light beyond", "person looking at the horizon"]
+
+[themes.goals]
+en = ["goal", "goals", "aim", "aims", "target", "ambition", "objective", "objectives"]
+fr = ["objectif", "objectifs", "ambition", "cible"]
+queries = ["runner crossing the finish line", "climber reaching a summit", "arrow hitting a target"]
+
+[themes.hope]
+en = ["hope", "hopes", "hopeful", "optimism", "optimistic"]
+fr = ["espoir", "espoirs", "esperance", "esperer", "optimisme"]
+queries = ["sunrise through clouds", "light at the end of a tunnel", "seedling in soil"]
+
+[themes.faith]
+en = ["faith", "god", "belief", "believe", "prayer", "pray", "spirit", "spiritual", "lord", "church"]
+fr = ["foi", "dieu", "croyance", "croire", "priere", "prier", "esprit", "seigneur", "eglise"]
+queries = ["candle glowing in the dark", "hands folded in prayer", "sunlight through a church window"]
+
+[themes.growth]
+en = ["growth", "grow", "grows", "growing", "develop", "development", "progress"]
+fr = ["croissance", "grandir", "developpement", "progres", "pousser"]
+queries = ["seedling in soil", "young plant growing", "tree in a green field"]
+
+[themes.success]
+en = ["success", "successful", "achieve", "achievement", "victory", "win", "accomplish", "accomplishment"]
+fr = ["succes", "reussite", "reussir", "victoire", "gagner", "accomplir"]
+queries = ["climber on a mountain top", "team celebrating together", "athlete raising arms"]
+
+[themes.struggle]
+en = ["struggle", "struggles", "challenge", "challenges", "difficulty", "hardship", "obstacle", "obstacles", "pain", "suffering", "wasted"]
+fr = ["lutte", "difficulte", "difficultes", "epreuve", "obstacle", "obstacles", "souffrance", "defi"]
+queries = ["storm over the sea", "climber on a steep rock face", "rain on a window"]
+
+[themes.learning]
+en = ["learning", "learn", "study", "education", "knowledge", "school", "teach", "teaching", "wisdom"]
+fr = ["apprendre", "apprentissage", "etude", "education", "savoir", "ecole", "enseigner", "sagesse", "connaissance"]
+queries = ["person reading outdoors", "students in a classroom", "library shelves"]
+
+[themes.community]
+en = ["community", "together", "family", "friends", "team", "neighbour", "neighbor", "society", "assist", "help"]
+fr = ["communaute", "ensemble", "famille", "amis", "equipe", "voisin", "voisine", "societe", "aider"]
+queries = ["friends laughing together", "hands joined together", "family at a shared table"]
+
+[themes.time]
+en = ["time", "years", "days", "moment", "future", "past", "age", "season", "seasons"]
+fr = ["temps", "annees", "jours", "moment", "avenir", "passe", "age", "saison"]
+queries = ["hourglass", "clock on a wall", "clouds moving over a landscape"]
+
+[themes.change]
+en = ["change", "changes", "changing", "transform", "transformation", "different", "new"]
+fr = ["changement", "changer", "transformation", "nouveau", "nouvelle", "different"]
+queries = ["autumn leaves falling", "butterfly on a flower", "road turning through hills"]

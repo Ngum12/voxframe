@@ -1,0 +1,70 @@
+« Human-written evaluation queries. Fill in the rows below.
+«
+« WHY THIS EXISTS
+« The other eval queries were written by the same process that built the
+« matcher, so they share its assumptions about how narration is phrased.
+« Queries written independently can expose blind spots that self-written ones
+« cannot. Write these the way you would actually speak, not the way you think
+« the matcher wants.
+«
+« FORMAT: query,language,expected_concept
+«   query            What a narrator would say. Commas are fine if you wrap
+«                    the whole field in "double quotes".
+«   language         en or fr
+«   expected_concept One of the 50 concept keys listed at the bottom.
+«
+« Lines starting with « are comments and are ignored.
+«
+« GUIDANCE
+« - 15-20 rows total is plenty; a mix of English and French.
+« - Write full sentences as a narrator would speak them, not search terms.
+«   Good:  "and that's when we first saw the mountains in the distance"
+«   Less useful: "mountains"
+« - Include some that are deliberately hard: indirect phrasing, the subject
+«   mentioned late, or words that could point at two concepts.
+« - If no concept fits what you wrote, that is useful information. Use
+«   expected_concept = none and the result will be reported separately.
+«
+« EXAMPLES (delete these or keep them, either is fine)
+and that is when the whole valley finally came into view below us,en,hills_green
+"il faisait nuit, et la lune éclairait tout le chemin",fr,moon_night
+«
+« YOUR ROWS BELOW THIS LINE
+«
+
+
+
+
+«
+« ─────────────────────────────────────────────────────────────────────────
+« AVAILABLE CONCEPT KEYS
+«
+« sky and weather:
+«   sun_sky  moon_night  sunset_glow  storm_clouds  rain_weather
+«   cloud_white  star_field
+«
+« landscape:
+«   mountains_snow  hills_green  forest_trees  farmland_fields  desert_dunes
+«   beach_sand  ocean_waves  lake_calm  river_flowing  snow_winter
+«   mountain_lake  field_wheat  cave_dark  ice_frozen  rock_stone
+«   grass_meadow  tree_single  path_walking
+«
+« built:
+«   city_buildings  house_home  bridge_span  road_highway  window_light
+«   door_entrance  stairs_steps  sail_boat
+«
+« objects:
+«   book_reading  paper_document  clock_time  key_lock  cup_drink
+«   wheel_circle  box_container  bottle_glass  candle_light  lamp_glow
+«   chain_metal
+«
+« nature detail:
+«   flower_red  flower_yellow  leaf_green  fire_flames  bird_flying
+«   fish_water
+«
+« ─────────────────────────────────────────────────────────────────────────
+« WHEN DONE
+«   python scripts/run_human_eval.py
+«
+« Results are reported separately from the generated query set, so the two
+« are never averaged together.

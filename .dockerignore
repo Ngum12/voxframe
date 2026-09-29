@@ -1,0 +1,14 @@
+.git/
+.venv/
+venv/
+demo_output/
+.voxframe_cache/
+models/
+web/node_modules/
+**/__pycache__/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env
+docs/phases/*.png

@@ -1,0 +1,165 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "voxframe"
+version = "0.1.0"
+description = "Turn audio into captioned, visually dynamic video. Offline, free, open source."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = { file = "LICENSE" }
+authors = [{ name = "Voxframe contributors" }]
+keywords = ["video", "captions", "subtitles", "whisper", "ffmpeg", "audio"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Video",
+]
+
+# Phase 1 keeps the required set small and adds per-phase extras below.
+# Every entry is license-audited in THIRD_PARTY_LICENSES.
+dependencies = [
+    "pydantic>=2.7",
+    "pydantic-settings>=2.2",
+    "typer>=0.12",
+    "rich>=13.7",
+    "structlog>=24.1",
+    "numpy>=1.26",
+    "pillow>=10.3",
+]
+
+[project.optional-dependencies]
+transcribe = ["faster-whisper>=1.0"]
+library = [
+    "open_clip_torch>=2.24",
+    "torch>=2.2",
+    "sqlite-vec>=0.1.6",
+    "opencv-python-headless>=4.9",
+]
+depth = ["transformers>=4.40", "torchvision>=0.17", "safetensors>=0.4"]
+api = ["fastapi>=0.110", "uvicorn>=0.29"]
+# The web app (Phase 8). Same server as `api`, plus multipart uploads for
+# the browser's file picker. Localhost-only by default (D-113).
+web = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9"]
+# Everything the app needs to make a video: transcription, matching and the
+# web app. What the installer bundles, and what `pip install "voxframe[app]"`
+# gives a Mac or Linux user (D-158). `web` alone cannot transcribe or match.
+app = ["voxframe[transcribe,library,web]"]
+dev = [
+    "pytest>=8.1",
+    "pytest-cov>=5.0",
+    "mypy>=1.9",
+    "ruff>=0.4",
+    "types-Pillow",
+    # Drives the browser tests (D-119). Apache-2.0.
+    "playwright>=1.40",
+    # Builds the release packages (scripts/build_release.py).
+    "build>=1.0",
+]
+
+[project.scripts]
+voxframe = "voxframe.cli.main:app"
+
+# The app window: starts the server and opens the browser (D-158).
+[project.gui-scripts]
+voxframe-app = "voxframe.launcher:main"
+
+[project.urls]
+Homepage = "https://github.com/Ngum12/voxframe"
+Documentation = "https://github.com/Ngum12/voxframe/tree/main/docs"
+Issues = "https://github.com/Ngum12/voxframe/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/voxframe"]
+
+# Fonts must ship with the package: without them libass falls back to system
+# fonts and rendering stops being reproducible across machines.
+artifacts = [
+    "src/voxframe/assets/fonts/*.ttf",
+    "src/voxframe/assets/fonts/*.txt",
+    # The built web app. Committed and shipped for the same reason as the
+    # fonts: `pip install voxframe[app]` must work on a machine with no Node
+    # toolchain. Rebuilt by `npm run build` in web/ (D-117).
+    "src/voxframe/api/static/**/*",
+]
+
+# The source archive lists what it contains rather than taking everything not
+# ignored: hatch reads only the root .gitignore, and samples/private/ -- the
+# owner's own recordings -- is ignored by a nested one, so it was packaged
+# (D-150). scripts/build_release.py also fails if anything untracked ships.
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/docs",
+    "/scripts",
+    "/samples/README.md",
+    "/samples/PROVENANCE.md",
+    # The sample audio is not committed (D-019); only its reference texts are.
+    "/samples/public/*.ref.txt",
+    "/samples/public/*.ref.README",
+    # Committed as the one exception to D-019, for the A/V sync test (D-151).
+    "/samples/public/en_sonnet_january_45s.wav",
+    "/web/src",
+    "/web/index.html",
+    "/web/package.json",
+    "/web/package-lock.json",
+    "/web/tsconfig.json",
+    "/web/vite.config.ts",
+    "/README.md",
+    "/LICENSE",
+    "/THIRD_PARTY_LICENSES",
+    "/DECISIONS.md",
+    "/pyproject.toml",
+    "/.env.example",
+    "/Dockerfile",
+    "/.dockerignore",
+]
+exclude = ["/samples/private", "/library", "**/.env", "**/__pycache__"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "PTH", "RUF"]
+# N818: FFmpegNotFound / UnescapablePath read better without an "Error" suffix.
+ignore = ["A003", "N818"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+# B008 flags function calls in argument defaults. `Depends(...)` and `File(...)`
+# in a signature is how FastAPI declares dependencies and uploads -- it is the
+# framework's designed usage, not an accident, and rewriting around it would
+# make the routes harder to read for no gain.
+"src/voxframe/api/app.py" = ["B008"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["voxframe"]
+mypy_path = "src"
+strict = true
+warn_unreachable = true
+disallow_untyped_defs = true
+# Third-party packages without bundled type stubs.
+[[tool.mypy.overrides]]
+module = ["cv2.*", "open_clip.*", "sqlite_vec.*", "faster_whisper.*", "transformers.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "slow: long-running tests (real renders, large samples)",
+    "needs_ffmpeg: requires an ffmpeg binary on PATH",
+    "needs_models: requires downloaded model weights",
+    "browser: drives a real browser via Playwright (D-119)",
+]

@@ -1,0 +1,244 @@
+THIRD-PARTY LICENSES
+====================
+
+Voxframe is licensed under Apache 2.0 (see LICENSE). This file records every
+third-party component, its license, and why it is acceptable.
+
+The project's core promise is that everything required runs free and locally,
+and that any user may redistribute and use the result commercially. Every
+entry below is therefore under a permissive or weak-copyleft license allowing
+free commercial use. Components that fail that test are listed under
+"Excluded" with the reason.
+
+Last audited: 2026-09-25 (Phase 2)
+
+Audit scope: the full transitive closure of runtime requirements (19 packages),
+not only the packages declared in pyproject.toml. Enforced by
+tests/unit/test_license_audit.py, which walks the dependency graph and fails on
+any undocumented or non-permissive package.
+
+
+PHASE 1 — CURRENTLY INSTALLED
+------------------------------
+
+Required at runtime:
+
+  pydantic                  MIT          Data models and validation
+  pydantic-settings         MIT          Configuration loading
+  typer                     MIT          Command-line interface
+  rich                      MIT          Terminal output and progress
+  structlog                 Apache-2.0   Structured logging
+  numpy                     BSD-3-Clause Array operations
+  pillow                    MIT-CMU      Image loading and manipulation
+
+Pulled in transitively by the packages above. These ship to users just as
+the direct dependencies do, so they are audited on the same terms:
+
+  annotated-doc             MIT          via pydantic
+  annotated-types           MIT          via pydantic
+  click                     BSD-3-Clause via typer
+  colorama                  BSD-3-Clause via click/rich (Windows ANSI support)
+  markdown-it-py            MIT          via rich
+  mdurl                     MIT          via markdown-it-py
+  pydantic-core             MIT          via pydantic (compiled core)
+  pygments                  BSD-2-Clause via rich
+  python-dotenv             BSD-3-Clause via pydantic-settings
+  shellingham               ISC          via typer
+  typing-extensions         PSF-2.0      via pydantic
+  typing-inspection         MIT          via pydantic
+
+Optional extra [transcribe], installed for Phase 2 onwards:
+
+  faster-whisper            MIT          Transcription with word timestamps
+  ctranslate2               MIT          Inference backend for faster-whisper
+  Systran/faster-whisper-*  MIT          Whisper model weights (downloaded)
+  av                        BSD-3-Clause Audio decoding, via faster-whisper
+  huggingface-hub           Apache-2.0   Model download
+  tokenizers                Apache-2.0   Text tokenisation
+  onnxruntime               MIT          VAD inference
+  numpy                     BSD-3-Clause (already a core dependency)
+
+Bundled fonts, shipped inside the package (src/voxframe/assets/fonts/):
+
+  Inter-Regular.ttf         OFL-1.1      Inter v4.0, upstream static build
+  Inter-Bold.ttf            OFL-1.1      Inter v4.0, upstream static build
+  Inter-LICENSE.txt         OFL-1.1      The license text, as OFL requires
+
+    Fonts are bundled so caption rendering is identical on every machine;
+    without them libass falls back to system fonts and golden-frame tests
+    record the test machine rather than the code (D-033).
+
+    Static weights rather than the Google Fonts variable file: libass renders
+    a variable font at its default instance and ignores the ASS Bold field.
+
+    OFL-1.1 permits bundling and redistribution, including commercially,
+    provided the font is not sold on its own and the license travels with it.
+    Both conditions are met.
+
+Development only (not redistributed):
+
+  pytest                    MIT
+  pytest-cov                MIT
+  mypy                      MIT
+  ruff                      MIT
+  types-Pillow              Apache-2.0
+  playwright                Apache-2.0  (browser tests)
+  build                     MIT         (release packages)
+  pynsist                   MIT         (Windows installer; build tool only)
+  NSIS                      zlib/libpng (Windows installer; its stub ships)
+  gitleaks                  MIT         (history scan; not a dependency)
+
+
+PLANNED — PHASE 2 ONWARDS
+--------------------------
+
+Each is added to the "installed" section above as its phase lands.
+
+  Phase 3 (library and matching):
+    torch                   BSD-3-Clause Tensor operations
+    open_clip_torch         MIT          Image and text embeddings
+    LAION ViT-B-32 laion2b  MIT          CLIP weights (see note 2)
+    sqlite-vec              Apache-2.0   Vector similarity search in SQLite
+    opencv-python-headless  Apache-2.0   Image ops, saliency, inpainting
+
+  Phase 5 (depth and parallax):
+    transformers            Apache-2.0   Depth model loading
+    huggingface-hub         Apache-2.0   Model download
+    safetensors             Apache-2.0   Weight format
+    torchvision             BSD-3-Clause Image preprocessing
+    Depth-Anything-V2-Small Apache-2.0   Depth weights (see note 3)
+
+  Phase 8 (web app):
+    fastapi                 MIT          Local HTTP API
+    uvicorn                 BSD-3-Clause ASGI server
+    python-multipart        Apache-2.0   Multipart upload parsing
+    react                   MIT          UI library
+    react-dom               MIT          UI library (DOM renderer)
+    vite                    MIT          Build tool, static output
+    tailwindcss             MIT          Styling
+
+  Bundled fonts (Phase 5 adds the rest):
+    Montserrat              OFL-1.1
+    Source Serif 4          OFL-1.1
+    Bebas Neue              OFL-1.1
+
+
+EXTERNAL TOOLS — NOT BUNDLED
+-----------------------------
+
+  FFmpeg                    GPL-2.0+ / GPL-3.0 (typical builds)
+
+    Voxframe does NOT bundle, link against, or statically incorporate FFmpeg.
+    It invokes the binary already installed on the user's system as a separate
+    process, exchanging data through files and pipes. This arm's-length
+    invocation does not place Voxframe's source under the GPL.
+
+    EXCEPTIONS: the Docker image, the Windows installer and the macOS app
+    ship FFmpeg.
+
+    - The Docker image is a combined work distributed under GPL terms. It
+      documents this and carries the corresponding source offer.
+    - The Windows installer puts FFmpeg (the gyan.dev "essentials" build,
+      GPL-3.0) in its own folder beside Voxframe, as a separate program that
+      Voxframe runs as a separate process. That folder holds FFmpeg's licence
+      and SOURCE.txt, saying where the build and its source come from (D-158).
+    - The macOS app does the same with a static FFmpeg build for Apple Silicon
+      from ffmpeg.martin-riedl.de (GPL-3.0), in Contents/Resources/ffmpeg
+      (D-161).
+
+    The PyPI package does not bundle FFmpeg and carries no GPL obligation.
+
+
+BUNDLED BY THE INSTALLERS ONLY
+------------------------------
+
+  Windows installer
+    Python runtime          PSF-2.0         the embeddable CPython from python.org
+    Tcl/Tk                  Tcl/Tk licence  (BSD-style) for the small app window
+    NSIS installer stub     zlib/libpng     the installer and uninstaller themselves
+    FFmpeg                  GPL-3.0         see above: a separate program
+
+  macOS app
+    Python runtime          PSF-2.0         CPython, as packaged by python-build-standalone
+                                            (MPL-2.0 build scripts); includes OpenSSL
+                                            (Apache-2.0), SQLite (public domain), Tcl/Tk
+                                            (BSD-style) and zlib (zlib)
+    FFmpeg                  GPL-3.0         see above: a separate program
+
+  Every Python library in either is one listed above, installed from its
+  published wheel. pynsist (MIT), NSIS and GitHub's runners build them and are
+  not shipped, beyond NSIS's stub.
+
+
+EXCLUDED — LICENSE INCOMPATIBLE
+--------------------------------
+
+  Depth-Anything-V2-Base    CC-BY-NC-4.0
+  Depth-Anything-V2-Large   CC-BY-NC-4.0
+
+    Non-commercial only, which would break the promise that users may use
+    Voxframe commercially. Only the Apache-2.0 Small checkpoint is used, and
+    the non-commercial variants are never downloaded automatically. A user who
+    explicitly opts into one gets the restriction recorded in their credits
+    output. See DECISIONS.md D-007.
+
+  OpenAI CLIP weights       Custom terms
+
+    Carry usage restrictions that would propagate to every downstream user.
+    The LAION-trained checkpoints (MIT) are used instead, with comparable
+    performance for semantic image search. See DECISIONS.md D-008.
+
+  Remotion                  Custom (company-size restrictions)
+
+    Free for individuals and small companies, but requires a paid license
+    above a size threshold. Incompatible with the requirement that any user
+    may redistribute and use commercially. Not used, including in the web app.
+    See DECISIONS.md D-010.
+
+  MoviePy                   MIT (excluded for technical reasons, not license)
+
+    License is fine. Excluded because it holds video frames in memory, which
+    conflicts with the requirement to process 60-minute audio without loading
+    whole videos. See DECISIONS.md D-009.
+
+
+NOTES
+-----
+
+1. WEAK COPYLEFT (LGPL)
+
+   libsndfile (via soundfile) is LGPL-2.1. It is dynamically linked and
+   unmodified, which LGPL permits without imposing terms on Voxframe. Users
+   may replace it with their own build.
+
+2. MODEL WEIGHTS ARE SEPARATELY LICENSED
+
+   Model weights carry their own license, independent of the code that loads
+   them. transformers being Apache-2.0 says nothing about the license of a
+   checkpoint it loads. Each checkpoint is listed above with its own license,
+   and this distinction is why the Depth-Anything exclusion above is necessary.
+
+3. MODELS ARE DOWNLOADED, NOT BUNDLED
+
+   No model weights ship with Voxframe. They are downloaded on first use and
+   cached locally. Voxframe never downloads a checkpoint whose license fails
+   the commercial-use test, even when a user names one explicitly, without
+   recording that restriction in the render's credits file.
+
+4. CODEC PATENTS ARE NOT A LICENSING QUESTION
+
+   H.264 and H.265 are covered by patent pools (MPEG LA / Via LA, Access
+   Advance) entirely independent of any software license here. No open-source
+   license grants rights to them, because no author of that software holds
+   them. Voxframe ships no codec and can output royalty-free VP9 or AV1 for
+   users who prefer to avoid the question. See README "Licensing".
+
+
+VERIFYING THIS FILE
+-------------------
+
+  pip install pip-licenses
+  pip-licenses --format=markdown --with-urls
+
+CI checks that every installed distribution appears here and that no
+GPL-licensed Python package has entered the dependency tree.

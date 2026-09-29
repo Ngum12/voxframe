@@ -1,0 +1,29 @@
+PROVENANCE OF THIS REFERENCE — read before trusting its WER numbers.
+
+The poem text is from "A Calendar of Sonnets" by Helen Hunt Jackson (1830-1885),
+public domain, so those lines are independent of any transcription.
+
+The LibriVox preamble ("read for LibriVox dot org by ...") was taken from the
+base model's own output, because the reader's name and website are not in any
+published text. That part is therefore NOT independent: a model that hears the
+preamble the same way base did scores better than it should.
+
+Consequence: treat WER on this clip as indicative, not authoritative. The
+authoritative reference is the project owner's hand-written transcript of their
+own recording, which no model has seen.
+
+CONFIRMED IN PRACTICE (2026-09-26)
+----------------------------------
+This warning was not hypothetical. Comparing tiny/base/small/medium on the full
+45 seconds gave medium 28.9% WER with 24 deletions — apparently the worst model
+of the four. medium simply skips the spoken preamble and starts at the poem,
+and the preamble is exactly the part of this reference that came from base.
+
+Scored from the poem's first word, where the reference is Helen Hunt Jackson's
+published text, the ranking reverses and medium is the best at 3.0%. See D-065.
+
+Use --score-from to exclude the preamble:
+
+    python scripts/benchmark_transcription.py \
+        --audio samples/public/en_sonnet_january_45s.wav \
+        --models tiny base small medium --language en --score-from winter

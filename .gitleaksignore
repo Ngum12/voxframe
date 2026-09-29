@@ -1,0 +1,3 @@
+# The two made-up keys the redaction tests plant are marked in place with
+# `gitleaks:allow`, which holds in any copy of the history (D-153, D-160).
+# Findings to ignore by fingerprint, if any are ever needed, go below.

@@ -1,0 +1,5 @@
+# Private samples: your own recordings, never committed (owner instruction).
+# Tests skip cleanly when this directory is empty.
+*
+!.gitignore
+!README.md
