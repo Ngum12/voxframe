@@ -5008,3 +5008,20 @@ built and install-tested on a Windows runner, the macOS app built and tested on
 a macOS runner, then a **draft** release with both, `SHA256SUMS` and the notes
 from `.github/release-notes/<tag>.md`. Untested until the first tag: nothing can
 run GitHub's machines from here.
+
+### D-162 · FFmpeg's source ships with every release — PROJECT OWNER'S DECISION
+
+The installers' FFmpeg source notes no longer carry a written offer. Each
+release attaches the corresponding source instead: FFmpeg's release tarball for
+every version the installers bundle (both 9.0.2 today), fetched from ffmpeg.org
+by the release workflow and checked against a SHA-256 pinned in
+`scripts/ffmpeg_sources.py` after checking FFmpeg's release signature, with the
+signature file; and a list of the libraries compiled into each build, with
+their versions as the build reports them and where each provider publishes
+their source. The Windows build, which followed gyan.dev's latest release, is
+now pinned to one version and SHA-256 like the Mac build, so the attached
+source always matches what ships.
+
+Contact: security reports go through GitHub private vulnerability reporting,
+with the maintainer's LinkedIn as the fallback; other questions go to GitHub
+issues first, LinkedIn second.

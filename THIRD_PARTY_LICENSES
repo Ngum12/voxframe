@@ -146,6 +146,27 @@ EXTERNAL TOOLS — NOT BUNDLED
       from ffmpeg.martin-riedl.de (GPL-3.0), in Contents/Resources/ffmpeg
       (D-161).
 
+    SOURCE FOR THE BUNDLED FFMPEG (D-162). Instead of a written offer, every
+    GitHub release carries the corresponding source beside the installers:
+
+    - ffmpeg-<version>.tar.xz: FFmpeg's complete source for the version both
+      installers ship, downloaded from ffmpeg.org by the release workflow and
+      checked against a SHA-256 pinned in scripts/ffmpeg_sources.py (pinned
+      after checking FFmpeg's release signature), with ffmpeg-<version>.tar.xz.asc.
+      If the two installers ever ship different FFmpeg versions, both are
+      attached.
+    - ffmpeg-<version>-libraries.txt: for each build, the libraries compiled
+      into it and their versions, as the build itself reports them (gyan.dev's
+      README.txt; Martin Riedl's versions.txt), and where each build provider
+      publishes their source: gyan.dev links each library to its project
+      (https://www.gyan.dev/ffmpeg/builds/#libraries); Martin Riedl publishes
+      the build scripts that download each library's source
+      (https://git.martin-riedl.de/ffmpeg/build-script).
+
+    Both builds are pinned by SHA-256 in the build scripts, so the source
+    attached is the source of what ships. Each installer's SOURCE.txt, beside
+    FFmpeg, points to that release and to the providers' source links.
+
     The PyPI package does not bundle FFmpeg and carries no GPL obligation.
 
 

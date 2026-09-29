@@ -2,7 +2,8 @@
 #
 # Runs ONLY when the owner pushes a version tag. Builds the Windows installer
 # and the macOS app on GitHub's own runners, tests each on its runner, and
-# creates a DRAFT release with both, a SHA256SUMS file, and the notes from
+# creates a DRAFT release with both, the complete source of the FFmpeg they
+# bundle (D-162), a SHA256SUMS file, and the notes from
 # .github/release-notes/<tag>.md. The owner reviews the draft and publishes it.
 #
 # No secrets, no signing certificates, no paid accounts. The owner's API keys
@@ -88,8 +89,23 @@ jobs:
           name: macos
           path: build/macos/*.dmg
 
+  ffmpeg-source:
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: FFmpeg's source for each bundled build, checked by pinned SHA-256
+        run: python scripts/ffmpeg_sources.py --out ffmpeg-source
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-source
+          path: ffmpeg-source/*
+
   release:
-    needs: [windows, macos]
+    needs: [windows, macos, ffmpeg-source]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -103,7 +119,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir upload
-          cp artifacts/windows/* artifacts/macos/* upload/
+          cp artifacts/windows/* artifacts/macos/* artifacts/ffmpeg-source/* upload/
           (cd upload && sha256sum * > SHA256SUMS)
           gh release create "$GITHUB_REF_NAME" upload/* --draft \
             --title "Voxframe ${GITHUB_REF_NAME#v}" \

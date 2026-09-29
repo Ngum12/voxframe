@@ -83,7 +83,8 @@ change, share and sell it, and anything you make with it, at no cost.
 
 **FFmpeg.** The Windows installer and the Mac app include FFmpeg, which is
 licensed under the GPL, as a separate program in its own folder, with its licence
-and a note of where its source comes from. Voxframe runs it as a separate
+and a note of where its source comes from. Every release also carries FFmpeg's
+complete source and a list of the libraries compiled into each build. Voxframe runs it as a separate
 process and does not link to it, so Voxframe's own code, and yours, are not
 under the GPL. Installed with `pip`, Voxframe uses the FFmpeg already on your
 computer.
@@ -99,4 +100,5 @@ videos is not normally where those licences apply. *This is not legal advice.*
 ## Reporting a problem
 
 Bugs and ideas: [open an issue](https://github.com/Ngum12/voxframe/issues).
+Anything else: [the maintainer on LinkedIn](https://www.linkedin.com/in/ngum-dieudonne/).
 Security problems: privately, as [SECURITY.md](SECURITY.md) describes.

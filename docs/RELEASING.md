@@ -37,8 +37,13 @@ git push origin v0.1.0
    uninstalls it (`scripts/test_windows_installer.py`).
 3. **macOS** (on GitHub's Apple Silicon machine): builds `Voxframe.app`, tests it
    the same way, ad-hoc signs it and packs a DMG (`scripts/build_macos_app.py`).
-4. **Release**: creates a **draft** GitHub release with both files, a
-   `SHA256SUMS` file and the release notes.
+4. **FFmpeg source** (`scripts/ffmpeg_sources.py`): downloads FFmpeg's source
+   for the version each installer bundles, checks it against a pinned SHA-256,
+   and lists the libraries compiled into each build and where their source is
+   published (D-162). A new FFmpeg version in a build script needs its source's
+   SHA-256 pinned there, or the release stops.
+5. **Release**: creates a **draft** GitHub release with both installers, the
+   FFmpeg source files, a `SHA256SUMS` file and the release notes.
 
 The maintainer reviews the draft, then publishes it. No secrets, certificates or
 paid accounts are used.

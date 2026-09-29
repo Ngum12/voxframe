@@ -52,6 +52,12 @@ FFMPEG_FILES = {
     "ffmpeg.zip": "c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924",
     "ffprobe.zip": "fcbe839537485eaee7a7a8bc5cbc0f90d53617e80943e8a5b2e31cb851197ea6",
 }
+#: The build's own list of the libraries compiled in, with their versions.
+FFMPEG_VERSIONS_SHA256 = "fc92572e752e09b20e7ff28d64fb7096f7bc1a0d589b2e40f17ac91b7fd0ca61"
+FFMPEG_BUILD_SCRIPT = "https://git.martin-riedl.de/ffmpeg/build-script"
+RELEASES = "https://github.com/Ngum12/voxframe/releases"
+#: ffmpeg.martin-riedl.de refuses Python's default User-Agent (HTTP 403).
+USER_AGENT = "voxframe-release (+https://github.com/Ngum12/voxframe)"
 GPL3_URL = "https://www.gnu.org/licenses/gpl-3.0.txt"
 
 SONNET = REPO_ROOT / "samples" / "public" / "en_sonnet_january_45s.wav"
@@ -69,7 +75,9 @@ def version() -> str:
 
 
 def fetch(url: str, target: Path, sha256: str) -> Path:
-    urllib.request.urlretrieve(url, target)
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request) as response:
+        target.write_bytes(response.read())
     actual = hashlib.sha256(target.read_bytes()).hexdigest()
     if actual != sha256:
         raise SystemExit(f"{target.name} does not match its pinned SHA-256 (got {actual})")
@@ -118,6 +126,7 @@ def assemble(wheel: Path) -> Path:
     for binary in ("ffmpeg", "ffprobe"):
         (ffmpeg / binary).chmod(0o755)
     urllib.request.urlretrieve(GPL3_URL, ffmpeg / "LICENSE-FFmpeg.txt")
+    fetch(f"{FFMPEG_BASE}/versions.txt", ffmpeg / "versions.txt", FFMPEG_VERSIONS_SHA256)
     (ffmpeg / "SOURCE.txt").write_text(
         f"""FFmpeg {FFMPEG_VERSION}, static build for macOS (Apple Silicon)
 =============================================================
@@ -130,10 +139,21 @@ link to it.
 
 Where this build came from: {FFMPEG_BASE}/
 Its SHA-256 values, checked when this app was built: {FFMPEG_FILES}
-How it was built, and the libraries compiled into it: https://ffmpeg.martin-riedl.de/
-FFmpeg's own source for this version: https://ffmpeg.org/releases/ffmpeg-{FFMPEG_VERSION}.tar.xz
 
-Written offer of source: CONTACT_EMAIL_TBD
+Source code
+-----------
+The complete source of FFmpeg {FFMPEG_VERSION}, the version in this folder, is
+attached to the same GitHub release as this app (ffmpeg-{FFMPEG_VERSION}.tar.xz),
+with a list of the libraries compiled into this build and where the build
+provider publishes their source (ffmpeg-{FFMPEG_VERSION}-libraries.txt):
+{RELEASES}/tag/v{version()}
+
+The build provider's own source links:
+- FFmpeg {FFMPEG_VERSION}: https://ffmpeg.org/releases/ffmpeg-{FFMPEG_VERSION}.tar.xz
+- The build scripts, which fetch each library's source from its project:
+  {FFMPEG_BUILD_SCRIPT}
+- The libraries compiled in, each linked to its project: https://ffmpeg.martin-riedl.de/
+- versions.txt in this folder: the build's configuration and every library's version
 """,
         encoding="utf-8",
     )

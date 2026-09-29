@@ -10,10 +10,11 @@ shipped. Steps:
 1. Build Voxframe's wheel from this tree.
 2. Download every dependency as a Windows wheel for the bundled Python version
    -- PyTorch from PyPI, which for Windows is the CPU build.
-3. Download FFmpeg (gyan.dev "essentials" build, GPLv3) and check it against
-   the SHA-256 the builder publishes. It ships as a separate program beside
-   Voxframe with its licence and a source notice, the same arm's-length
-   arrangement as the Docker image (D-113); see THIRD_PARTY_LICENSES.
+3. Download FFmpeg (gyan.dev "essentials" build, GPLv3), pinned to one version
+   and checked against a pinned SHA-256, so the source attached to the release
+   (scripts/ffmpeg_sources.py, D-162) is the source of what ships. It ships as
+   a separate program beside Voxframe with its licence and a source notice, the
+   same arm's-length arrangement as the Docker image (D-113); see THIRD_PARTY_LICENSES.
 4. Write the pynsist configuration and build the installer.
 5. Run the release key check over everything the installer contains, before
    compression hides it (D-149).
@@ -40,8 +41,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORK = REPO_ROOT / "build" / "windows"
-FFMPEG_ZIP = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-FFMPEG_VERSION_URL = "https://www.gyan.dev/ffmpeg/builds/release-version"
+FFMPEG_VERSION = "9.0.2"
+FFMPEG_ZIP = (
+    f"https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-{FFMPEG_VERSION}-essentials_build.zip"
+)
+FFMPEG_SHA256 = "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba"
+FFMPEG_LIBRARIES = "https://www.gyan.dev/ffmpeg/builds/#libraries"
+RELEASES = "https://github.com/Ngum12/voxframe/releases"
 
 
 def step(title: str) -> None:
@@ -96,13 +102,11 @@ def download_ffmpeg() -> Path:
     folder = WORK / "ffmpeg"
     shutil.rmtree(folder, ignore_errors=True)
     folder.mkdir(parents=True)
-    release = urllib.request.urlopen(FFMPEG_VERSION_URL).read().decode().strip()
-    expected = urllib.request.urlopen(FFMPEG_ZIP + ".sha256").read().decode().split()[0]
     archive = WORK / "ffmpeg.zip"
     urllib.request.urlretrieve(FFMPEG_ZIP, archive)
     actual = hashlib.sha256(archive.read_bytes()).hexdigest()
-    if actual != expected:
-        raise SystemExit(f"FFmpeg download does not match its published SHA-256 ({actual})")
+    if actual != FFMPEG_SHA256:
+        raise SystemExit(f"FFmpeg download does not match its pinned SHA-256 ({actual})")
     with zipfile.ZipFile(archive) as bundle:
         for member in bundle.namelist():
             name = Path(member).name
@@ -110,7 +114,7 @@ def download_ffmpeg() -> Path:
                 (folder / name).write_bytes(bundle.read(member))
     (folder / "LICENSE").rename(folder / "LICENSE-FFmpeg.txt")
     (folder / "SOURCE.txt").write_text(
-        f"""FFmpeg {release}, "essentials" build by gyan.dev
+        f"""FFmpeg {FFMPEG_VERSION}, "essentials" build by gyan.dev
 ===================================================
 
 This folder holds FFmpeg, a separate program that Voxframe runs to make video.
@@ -119,16 +123,25 @@ Voxframe itself is licensed under the Apache License 2.0 and carries no GPL
 obligation: it runs FFmpeg as a separate process and does not link to it.
 
 Where this build came from: {FFMPEG_ZIP}
-Its published SHA-256, checked when this installer was built: {expected}
-How it was built, and the libraries compiled into it: https://www.gyan.dev/ffmpeg/builds/
-FFmpeg's own source for this version: https://ffmpeg.org/releases/ffmpeg-{release}.tar.xz
+Its SHA-256, checked when this installer was built: {FFMPEG_SHA256}
 
-Written offer of source: CONTACT_EMAIL_TBD
+Source code
+-----------
+The complete source of FFmpeg {FFMPEG_VERSION}, the version in this folder, is
+attached to the same GitHub release as this installer (ffmpeg-{FFMPEG_VERSION}.tar.xz),
+with a list of the libraries compiled into this build and where the build
+provider publishes their source (ffmpeg-{FFMPEG_VERSION}-libraries.txt):
+{RELEASES}/tag/v{version()}
+
+The build provider's own source links:
+- FFmpeg {FFMPEG_VERSION}: https://ffmpeg.org/releases/ffmpeg-{FFMPEG_VERSION}.tar.xz
+- The libraries compiled in, each linked to its project: {FFMPEG_LIBRARIES}
+- README.txt in this folder: the build's configuration and every library's version
 """,
         encoding="utf-8",
     )
     archive.unlink()
-    print(f"  FFmpeg {release}, SHA-256 verified")
+    print(f"  FFmpeg {FFMPEG_VERSION}, SHA-256 verified")
     return folder
 
 
