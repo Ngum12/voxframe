@@ -226,6 +226,65 @@ def add_tk(pynsist_python: Path, pkgs: Path) -> None:
     print(f"  Tcl/Tk from {base}")
 
 
+#: Where each section begins, in pynsist's template; the running-app check goes
+#: first in both, before any file is touched.
+_INSTALL_SECTION = 'Section "!${PRODUCT_NAME}" sec_app\n'
+_UNINSTALL_SECTION = 'Section "Uninstall"\n'
+
+#: The check itself, once for the installer and once for the uninstaller.
+#: A running Voxframe holds its ``pythonw.exe`` open, and Windows refuses to
+#: open a running program for writing -- so that is the test, with no process
+#: listing and no console window. Replacing files under a running app fails
+#: partway, or leaves a mix of two versions; v0.1.1 did not check (D-168).
+_NOT_RUNNING = r"""
+!macro VOXFRAME_NOT_RUNNING un
+Function ${un}VoxframeNotRunning
+  IfFileExists "$INSTDIR\Python\pythonw.exe" 0 free
+  check:
+    ClearErrors
+    FileOpen $0 "$INSTDIR\Python\pythonw.exe" a
+    IfErrors running
+    FileClose $0
+    Goto free
+  running:
+    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION \
+      "Voxframe is running.$\r$\n$\r$\nClick Quit in its small window, then click Retry." \
+      /SD IDCANCEL IDRETRY check
+    SetErrorLevel 3
+    Abort "Voxframe is running. Quit it, then try again."
+  free:
+    Return
+FunctionEnd
+!macroend
+!insertmacro VOXFRAME_NOT_RUNNING ""
+!insertmacro VOXFRAME_NOT_RUNNING "un."
+"""
+
+
+def patch_script(text: str) -> str:
+    """pynsist's installer script, with Voxframe's two changes.
+
+    - ``/D=<folder>`` is kept (D-158).
+    - The installer and the uninstaller both stop, with a message, while
+      Voxframe is running (D-168).
+
+    Raises:
+        SystemExit: If pynsist's template has changed so a patch would not
+            land where it must.
+    """
+    if (
+        text.count(_ONINIT) != 1
+        or "StrCpy $cmdLineInstallDir $1" not in text
+        or text.count(_INSTALL_SECTION) != 1
+        or text.count(_UNINSTALL_SECTION) != 1
+    ):
+        raise SystemExit("pynsist's installer script has changed; review patch_script")
+    text = text.replace(_ONINIT, _REMEMBER_D)
+    text = text.replace(_INSTALL_SECTION, _INSTALL_SECTION + "  Call VoxframeNotRunning\n")
+    text = text.replace(_UNINSTALL_SECTION, _UNINSTALL_SECTION + "  Call un.VoxframeNotRunning\n")
+    return text + _NOT_RUNNING
+
+
 def build(config: Path, pynsist_python: Path, nsis: Path) -> Path:
     step("installer")
     subprocess.run(
@@ -233,10 +292,7 @@ def build(config: Path, pynsist_python: Path, nsis: Path) -> Path:
     )
     add_tk(pynsist_python, WORK / "nsis" / "pkgs")
     script = WORK / "nsis" / "installer.nsi"
-    text = script.read_text(encoding="utf-8")
-    if text.count(_ONINIT) != 1 or "StrCpy $cmdLineInstallDir $1" not in text:
-        raise SystemExit("pynsist's installer script has changed; review the /D= patch")
-    script.write_text(text.replace(_ONINIT, _REMEMBER_D), encoding="utf-8")
+    script.write_text(patch_script(script.read_text(encoding="utf-8")), encoding="utf-8")
     subprocess.run([str(nsis / "makensis.exe"), "/V2", str(script)], check=True)
     installer = next((WORK / "nsis").glob("*.exe"))
     print(f"  {installer.relative_to(REPO_ROOT)}  {installer.stat().st_size / 1_000_000:.0f} MB")

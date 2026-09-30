@@ -9,7 +9,9 @@ The check first done by hand, made repeatable for the release workflow:
    scratch folder: import Voxframe from the install, find the bundled FFmpeg
    with libass and x264, load PyTorch, Whisper and CLIP, render the 45-second
    public-domain sonnet with a title card, and serve the app.
-3. Uninstall with the installer's own uninstaller, and confirm the program
+3. With the installed app running, the installer and the uninstaller must both
+   refuse and change nothing (D-168).
+4. Uninstall with the installer's own uninstaller, and confirm the program
    folder, the Start-menu shortcut and the uninstall entry are gone.
 
 It installs software, so it is for a CI runner or a throwaway machine -- on a
@@ -95,6 +97,38 @@ def uninstall_entry() -> bool:
     return False
 
 
+def refuse_while_running(installer: Path, target: Path) -> None:
+    """Installing over, or uninstalling, a running Voxframe must stop (D-168).
+
+    The installed ``pythonw.exe`` is started, as the app runs; then both the
+    installer and the uninstaller must refuse, leaving every file in place.
+    ``_?=`` runs the uninstaller in place, so its exit code is its own rather
+    than that of the copy it normally launches.
+    """
+    marker = target / "pkgs" / "voxframe" / "__init__.py"
+    before = marker.read_bytes()
+    running = subprocess.Popen(
+        [str(target / "Python" / "pythonw.exe"), "-c", "import time; time.sleep(600)"]
+    )
+    try:
+        time.sleep(3)
+        again = subprocess.run(
+            [str(installer), "/S", "/CurrentUser", f"/INSTDIR={target}"], check=False
+        )
+        away = subprocess.run(
+            [str(target / "uninstall.exe"), "/S", f"_?={target}"], check=False
+        )
+    finally:
+        running.kill()
+        running.wait()
+    print(f"   installer exit {again.returncode}, uninstaller exit {away.returncode}")
+    if again.returncode == 0 or away.returncode == 0:
+        raise SystemExit("The installer or uninstaller went ahead while Voxframe was running.")
+    if not marker.is_file() or marker.read_bytes() != before:
+        raise SystemExit("Files changed although the installer refused.")
+    print("   both refused, files untouched")
+
+
 def main() -> int:
     installer = (
         Path(sys.argv[1]) if len(sys.argv) > 1
@@ -135,6 +169,9 @@ def main() -> int:
     if result.returncode != 0 or "INSTALLED APP OK" not in result.stdout:
         print(result.stderr[-4000:])
         raise SystemExit("The installed app did not pass its test.")
+
+    print("== while Voxframe is running ==", flush=True)
+    refuse_while_running(installer, target)
 
     print("== uninstall ==", flush=True)
     subprocess.run([str(target / "uninstall.exe"), "/S"], check=True)

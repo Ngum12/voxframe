@@ -37,7 +37,10 @@ from pathlib import Path
 
 from voxframe.processes import NO_WINDOW
 
-__all__ = ["FFmpegError", "FFmpegResult", "run_ffmpeg"]
+__all__ = ["COMMAND_LINE_LIMIT", "FFmpegError", "FFmpegResult", "run_ffmpeg"]
+
+#: Longest command line Windows will start, less a margin (D-167).
+COMMAND_LINE_LIMIT = 32_000
 
 
 class FFmpegError(RuntimeError):
@@ -101,6 +104,20 @@ def run_ffmpeg(
         subprocess.TimeoutExpired: If ``timeout`` elapses.
     """
     command = [binary, "-hide_banner", *args]
+
+    # Windows refuses a command line over 32,767 characters with WinError 206
+    # ("The filename or extension is too long"), which says nothing about
+    # what was too long. Checked everywhere, so a test on any platform finds
+    # a command that would fail there (D-167).
+    length = len(subprocess.list2cmdline(command))
+    if length > COMMAND_LINE_LIMIT:
+        raise FFmpegError(
+            [*command[:4], "..."],
+            -1,
+            f"The FFmpeg command is {length} characters long, over the "
+            f"{COMMAND_LINE_LIMIT} Windows allows. This is a bug in Voxframe; "
+            f"please report it with the log.",
+        )
 
     # The binary path comes from find_ffmpeg, never from user input.
     completed = subprocess.run(

@@ -39,6 +39,10 @@ voxframe-app
 Follow the installer. It asks whether to install for you only or for everyone
 on the computer, and where. It adds **Voxframe** to the Start menu.
 
+Installing a new version over an old one keeps your library, videos and
+settings. If Voxframe is running, the installer asks you to click **Quit** in
+its small window first, then **Retry**.
+
 ## 4. First start
 
 Open **Voxframe** from the Start menu. A small window says *Voxframe is

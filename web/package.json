@@ -1,7 +1,7 @@
 {
   "name": "voxframe-web",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Voxframe web app. Built to static files and served by FastAPI.",
   "scripts": {

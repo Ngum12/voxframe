@@ -373,16 +373,100 @@ def _concat_with_transitions(
             desynchronises every later caption (D-025, D-097), so this is
             checked rather than trusted.
     """
+    # Transitions are matched to boundaries by position, as crossfade_filter
+    # does: the i-th joins segment i to segment i + 1.
+    boundaries = list(transitions[: max(0, len(segments) - 1)])
+    expected = total_frames_after([s.frames for s in segments], boundaries)
+    runs = transition_chunks(boundaries, len(segments))
+
+    if len(runs) == 1:
+        _crossfade_run(segments, boundaries, caps, output, fps)
+    else:
+        # A long video is joined in runs that break only at hard cuts, so no
+        # blend is lost; the runs are then joined by the concat demuxer from a
+        # list file, which has no length limit. One call for every segment put
+        # 157 inputs and their filter graph on one command line, past Windows'
+        # limit: WinError 206, and no video (D-167).
+        folder = output.parent / f".{output.stem}_runs"
+        folder.mkdir(parents=True, exist_ok=True)
+        pieces = []
+        for number, (start, end) in enumerate(runs):
+            piece = folder / f"run_{number:03d}.mp4"
+            _crossfade_run(
+                segments[start:end], boundaries[start : end - 1], caps, piece, fps
+            )
+            pieces.append(piece)
+        _concat_listed(pieces, caps, output, folder / "runs.txt")
+        shutil.rmtree(folder, ignore_errors=True)
+
+    log.info(
+        "render.concat.transitions",
+        segments=len(segments),
+        blends=sum(1 for t in boundaries if t.is_blend),
+        frames=expected,
+        runs=len(runs),
+    )
+
+    return output
+
+
+#: Most segments one FFmpeg call joins with crossfades. Each is an input on
+#: the command line, which Windows caps at 32,767 characters (D-167): 40
+#: inputs with long paths and their filter graph stay under a third of that.
+MAX_SEGMENTS_PER_RUN = 40
+
+
+def transition_chunks(
+    boundaries: list[TransitionPlan], segment_count: int, limit: int = MAX_SEGMENTS_PER_RUN
+) -> list[tuple[int, int]]:
+    """Split segments into runs of at most ``limit``, breaking only at hard cuts.
+
+    A blend needs both its segments in one FFmpeg call, so a run can only end
+    at a cut. A run with no cut in reach grows past ``limit`` until one comes;
+    the runner's command-line check stops the rare case where that is still
+    too long, with a message rather than WinError 206.
+
+    Returns:
+        ``(start, end)`` segment ranges, end exclusive, covering every segment.
+    """
+    runs: list[tuple[int, int]] = []
+    start = 0
+    last_cut: int | None = None
+    for index in range(segment_count - 1):
+        boundary = boundaries[index] if index < len(boundaries) else None
+        if boundary is None or not boundary.is_blend:
+            last_cut = index
+        if index + 1 - start >= limit and last_cut is not None:
+            runs.append((start, last_cut + 1))
+            start = last_cut + 1
+            last_cut = None
+    runs.append((start, segment_count))
+    return runs
+
+
+def _crossfade_run(
+    segments: list[SegmentResult],
+    boundaries: list[TransitionPlan],
+    caps: FFmpegCapabilities,
+    output: Path,
+    fps: float,
+) -> None:
+    """Join a run of segments with its blends and cuts, in one FFmpeg call."""
+    durations = [segment.frames for segment in segments]
+    expected = total_frames_after(durations, boundaries)
+
     inputs: list[str] = []
     for segment in segments:
         inputs.extend(["-i", str(segment.path.resolve())])
 
-    durations = [segment.frames for segment in segments]
-    chain, final = crossfade_filter(
-        [s.path for s in segments], transitions, fps, durations
-    )
-
-    expected = total_frames_after(durations, transitions)
+    if len(segments) == 1:
+        # Re-encoded like every other run, so the pieces the demuxer joins
+        # share one encoder's settings and timebase.
+        chain, final = "[0:v]settb=AVTB,setpts=PTS-STARTPTS,setsar=1[v]", "v"
+    else:
+        chain, final = crossfade_filter(
+            [s.path for s in segments], boundaries, fps, durations
+        )
 
     run_ffmpeg(
         caps.ffmpeg_path,
@@ -398,14 +482,33 @@ def _concat_with_transitions(
         ],
     )
 
-    log.info(
-        "render.concat.transitions",
-        segments=len(segments),
-        blends=sum(1 for t in transitions if t.is_blend),
-        frames=expected,
-    )
 
-    return output
+def _concat_listed(
+    files: list[Path], caps: FFmpegCapabilities, output: Path, listing: Path
+) -> None:
+    """Join files that share codec and parameters, without re-encoding.
+
+    The paths go in a list file, not on the command line, so any number fit.
+    """
+    lines = []
+    for path in files:
+        # The concat demuxer's own quoting: a single quote is closed, escaped
+        # and reopened.
+        escaped = str(path.resolve()).replace("\\", "/").replace("'", r"'\''")
+        lines.append(f"file '{escaped}'")
+    listing.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    run_ffmpeg(
+        caps.ffmpeg_path,
+        [
+            "-loglevel", "error",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", str(listing.resolve()),
+            "-c", "copy",
+            "-y", str(output.resolve()),
+        ],
+    )
 
 
 def concat_segments(
@@ -443,30 +546,12 @@ def concat_segments(
             segments, caps, output, transitions, fps
         )
 
-    listing = work_dir / "segments.txt"
-
     # The concat demuxer resolves paths relative to the list file, and its own
     # quoting rules differ from the filter parser's, so single quotes are
     # escaped in its own way.
-    lines = []
-    for segment in segments:
-        escaped = str(segment.path.resolve()).replace("\\", "/").replace("'", r"'\''")
-        lines.append(f"file '{escaped}'")
-
-    listing.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-    run_ffmpeg(
-        caps.ffmpeg_path,
-        [
-            "-loglevel", "error",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", str(listing.resolve()),
-            "-c", "copy",
-            "-y", str(output.resolve()),
-        ],
+    _concat_listed(
+        [segment.path for segment in segments], caps, output, work_dir / "segments.txt"
     )
-
     return output
 
 

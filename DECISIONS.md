@@ -5139,3 +5139,39 @@ missing module. The rest of the gain is the budget: 104 of 107 scenes searched
 (three have no searchable words) against 40, at under half the download.
 v0.1.0's warning also said "the rest show a plain background" while they were
 being given atmospheric images; the new messages say only what happened.
+
+## v0.1.2
+
+### D-167 · A long video's segments are joined in runs, never on one command line
+
+**What happened.** A 126-scene talk failed after rendering all 157 segments,
+three times, with `FileNotFoundError: [WinError 206] The filename or extension
+is too long` (the installed app's log, `subprocess.run` inside `run_ffmpeg`,
+called from `_concat_with_transitions`). The join passed every segment's full
+path as an `-i` argument, plus the whole crossfade graph, on one command line;
+Windows refuses a command line over 32,767 characters before FFmpeg starts. A
+112-scene video had fitted, which is why v0.1.0's long renders worked.
+
+**Decided.**
+- The join runs in runs of at most 40 segments, breaking only at hard cuts
+  (a blend needs both its segments in one call), then joins the runs with the
+  concat demuxer from a list file, which has no length limit. Every blend is
+  kept; the frame count is exact (tested with real FFmpeg, forced into
+  several runs).
+- `run_ffmpeg` refuses any command over 32,000 characters, on every platform,
+  with a message that says so, so a test anywhere finds what would fail on
+  Windows. A test builds a 157-segment join with long paths and checks every
+  command fits in half the limit; on v0.1.1's code its one command was about
+  36,000 characters.
+
+### D-168 · The installer and uninstaller wait for Voxframe to be closed
+
+Installing over a running Voxframe replaced files under a live process, which
+fails partway or leaves two versions mixed. Both now check first: a running
+Voxframe holds its `pythonw.exe` open, and Windows refuses to open a running
+program for writing, so that is the test (no process listing, no console
+window). If it is running they say so and offer Retry after Quit; a silent
+install stops with an error code instead of waiting. The release workflow
+proves it on GitHub's Windows machine: with the installed `pythonw.exe`
+running, the installer and the uninstaller must both refuse and change no
+file.
