@@ -101,34 +101,103 @@ def _escape_text(text: str) -> str:
     )
 
 
-def _wrap_words(words: tuple[Word, ...], style: CaptionStyle) -> list[list[int]]:
+class _TextWidth:
+    """How wide caption text is drawn, in frame pixels, from the bundled font.
+
+    libass sizes a font so its ascent and descent together equal the style's
+    font size; Pillow sizes it by its em. Converting one to the other from the
+    font's own metrics predicted a vertical caption at 1053 px that libass drew
+    at 1059 (D-194), so a small allowance is added.
+    """
+
+    #: Allowance for the difference measured above, and for rounding.
+    ALLOWANCE = 1.02
+
+    def __init__(self, style: CaptionStyle, height: int) -> None:
+        from PIL import ImageFont
+
+        from voxframe.assets import fonts_dir
+
+        size = style.font_size_px(height)
+        face = "Inter-Bold.ttf" if style.font_weight >= 600 else "Inter-Regular.ttf"
+        self._font = ImageFont.truetype(str(fonts_dir() / face), size)
+        ascent, descent = self._font.getmetrics()
+        self._scale = size / max(1, ascent + descent) * self.ALLOWANCE
+        self._outline = 2 * style.outline_width
+        self._uppercase = style.uppercase
+
+    def __call__(self, text: str) -> float:
+        if self._uppercase:
+            text = text.upper()
+        return self._font.getlength(text) * self._scale + self._outline
+
+    @classmethod
+    def for_frame(cls, style: CaptionStyle, height: int) -> _TextWidth | None:
+        """A measurer, or ``None`` when the fonts are missing: then lines are
+        limited by their number of characters alone, as they always were."""
+        from voxframe.assets import FontsMissing
+
+        try:
+            return cls(style, height)
+        except (FontsMissing, OSError):
+            return None
+
+
+def _usable_width(style: CaptionStyle, width: int, measure: _TextWidth) -> float:
+    """The width a line may take: inside the side margins, less a box's padding."""
+    usable = width - 2 * style.margin_horizontal_px(width)
+    if style.backing is CaptionBacking.BOX:
+        usable -= measure(_PAD_CHAR * (2 * style.box_padding_chars))
+    return usable
+
+
+def _wrap_words(
+    words: tuple[Word, ...],
+    style: CaptionStyle,
+    width: int | None = None,
+    height: int | None = None,
+) -> list[list[int]]:
     """Group word indices into display lines that fit the caption box.
+
+    A line ends at ``max_chars_per_line`` characters, and, given the frame's
+    size, when it would be wider than the frame allows (D-194). A vertical
+    frame is under a third as wide as a landscape one at the same height and
+    the same font size, so 32 characters ran off its edges; a landscape frame
+    fits them easily, and its lines are as they were.
 
     Returns:
         Lists of word indices, one per line. Every word is placed; limiting how
-        many lines are on screen at once is :func:`_paginate`'s job.
+        many lines are on screen at once is :func:`_paginate`'s job. A single
+        word too wide for any line still gets a line of its own.
     """
     if not words:
         return []
 
+    measure = (
+        _TextWidth.for_frame(style, height) if width is not None and height is not None else None
+    )
+    usable = _usable_width(style, width, measure) if measure is not None and width else 0.0
+
     lines: list[list[int]] = []
     current: list[int] = []
-    current_length = 0
+    current_text = ""
 
     for index, word in enumerate(words):
         token = word.text.strip()
         if not token:
             continue
 
-        addition = len(token) + (1 if current else 0)
+        candidate = f"{current_text} {token}" if current else token
+        too_long = len(candidate) > style.max_chars_per_line
+        too_wide = measure is not None and measure(candidate) > usable
 
-        if current and current_length + addition > style.max_chars_per_line:
+        if current and (too_long or too_wide):
             lines.append(current)
             current = [index]
-            current_length = len(token)
+            current_text = token
         else:
             current.append(index)
-            current_length += addition
+            current_text = candidate
 
     if current:
         lines.append(current)
@@ -155,6 +224,10 @@ def _paginate(
         for start in range(0, len(lines), style.max_lines)
     ]
 
+
+#: The character a backing box is padded with: a non-breaking space, which
+#: libass keeps where it would drop an ordinary one.
+_PAD_CHAR = "\u00a0"
 
 #: Width of a space in the bundled Inter font, as a fraction of font size.
 #: Measured, not assumed: ``ImageFont.getlength`` reports 24 px at size 100.
@@ -398,7 +471,7 @@ def build_ass(
         if scene.is_silent:
             continue
 
-        all_lines = _wrap_words(scene.words, style)
+        all_lines = _wrap_words(scene.words, style, width, height)
         if not all_lines:
             continue
 

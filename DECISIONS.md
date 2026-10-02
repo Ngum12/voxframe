@@ -6093,3 +6093,29 @@ crop is placed where the picture moves, as in D-192, then in the centre.
 **Test media.** `tests/fixtures/astronaut_collins.jpg` (20 KB), a crop of
 NASA's public-domain portrait of Eileen Collins, from which the tests make
 recordings at run time. No video is committed.
+
+### D-194 · Caption lines fit the frame they are in: vertical videos no longer run off the edges
+
+Found by the owner looking at a vertical video from D-193: the captions ran
+from edge to edge.
+
+- **The cause:** a caption line ended at 32 characters whatever the frame,
+  and the font is sized by the frame's height. A vertical frame is under a
+  third as wide as a landscape one of the same height, so the same line took
+  its whole width: "The winter morning was bright" was drawn 1059 px wide in
+  a 1080 px frame whose margins leave 950. This was true of every vertical
+  video, with or without the speaker on screen, and of square videos in the
+  `energetic` template, whose font is larger.
+- **The fix:** a line also ends when it would be wider than the frame
+  allows: inside the side margins, less a backing box's padding, measured
+  with the bundled Inter at the caption's size. libass sizes a font so its
+  ascent and descent equal the font size; converting from the font's own
+  metrics predicted 1053 px for that line against 1059 drawn, so 2% is
+  allowed on top. Without the fonts, lines are limited by characters alone,
+  as before.
+- **Landscape is unchanged:** 32 characters fit a landscape frame easily, so
+  its lines are exactly what they were, in every template (tested).
+- **Tests** burn captions with libass in every template at vertical, square
+  and landscape sizes and measure the lit pixels: every caption stays inside
+  the side margins. On the old code, every vertical case and `energetic`
+  square failed; landscape passed.
