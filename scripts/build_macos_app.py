@@ -61,7 +61,9 @@ FFMPEG_BUILD_SCRIPT = "https://git.martin-riedl.de/ffmpeg/build-script"
 RELEASES = "https://github.com/Ngum12/voxframe/releases"
 #: ffmpeg.martin-riedl.de refuses Python's default User-Agent (HTTP 403).
 USER_AGENT = "voxframe-release (+https://github.com/Ngum12/voxframe)"
-GPL3_URL = "https://www.gnu.org/licenses/gpl-3.0.txt"
+#: The GPL v3 text, kept here: fetching it from gnu.org at build time timed out
+#: on GitHub's macOS runner and failed a release.
+GPL3 = Path(__file__).with_name("gpl-3.0.txt")
 
 SONNET = REPO_ROOT / "samples" / "public" / "en_sonnet_january_45s.wav"
 
@@ -148,7 +150,7 @@ def assemble(wheel: Path) -> Path:
         (WORK / name).unlink()
     for binary in ("ffmpeg", "ffprobe"):
         (ffmpeg / binary).chmod(0o755)
-    urllib.request.urlretrieve(GPL3_URL, ffmpeg / "LICENSE-FFmpeg.txt")
+    shutil.copyfile(GPL3, ffmpeg / "LICENSE-FFmpeg.txt")
     fetch(f"{FFMPEG_BASE}/versions.txt", ffmpeg / "versions.txt", FFMPEG_VERSIONS_SHA256)
     (ffmpeg / "SOURCE.txt").write_text(
         f"""FFmpeg {FFMPEG_VERSION}, static build for macOS (Apple Silicon)

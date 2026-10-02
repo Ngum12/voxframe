@@ -94,26 +94,24 @@ class TestInstall:
 
         assert not (tmp_path / "escaped.txt").exists()
 
-    def test_a_transient_zip_error_is_retried(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_a_wheel_holding_its_own_name_unpacks(self, tmp_path: Path, data: Path) -> None:
+        # scipy 1.18.1's Windows wheel holds an empty file named like the wheel
+        # itself; unpacking a copy of the wheel kept in the same folder
+        # emptied it mid-read (EOFError, release run 36985276990).
         served = tmp_path / "served"
         served.mkdir()
-        manifest = _manifest(tmp_path, _wheel(served, "vfcomponentprobe"))
-        real_extractall = zipfile.ZipFile.extractall
-        failed_once = {"done": False}
+        path = served / "vfcomponentprobe-1.0-py3-none-any.whl"
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("vfcomponentprobe/__init__.py", "VALUE = 42\n" * 5000)
+            archive.writestr(path.name, "")
+            archive.writestr("vfcomponentprobe/zz_last.py", "LAST = 1\n" * 5000)
+        raw = path.read_bytes()
+        wheel = Wheel(path.name, path.as_uri(), hashlib.sha256(raw).hexdigest(), len(raw))
 
-        def flaky_extractall(self, path, members=None, _ignored=None):  # type: ignore[no-untyped-def]
-            if not failed_once["done"]:
-                failed_once["done"] = True
-                raise EOFError("truncated archive")
-            return real_extractall(self, path, members=members)
+        home = install(_manifest(tmp_path, wheel))
 
-        monkeypatch.setattr(components.zipfile.ZipFile, "extractall", flaky_extractall)
-
-        home = install(manifest)
-
-        assert failed_once["done"]
         assert (home / ".complete").is_file()
-
+        assert (home / "vfcomponentprobe" / "zz_last.py").read_text() == "LAST = 1\n" * 5000
 
 
 class TestFindingTheManifest:
