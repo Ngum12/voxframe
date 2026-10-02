@@ -20,6 +20,7 @@ pytestmark = pytest.mark.browser
 playwright_api = pytest.importorskip("playwright.sync_api", reason="playwright not installed")
 pytest.importorskip("fastapi", reason="web extra not installed")
 
+from tests.browser.first_run import to_upload_screen  # noqa: E402
 from voxframe.api.app import static_root  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -91,8 +92,7 @@ def _without_score_sounds(route) -> None:  # type: ignore[no-untyped-def]
 def test_the_score_is_not_offered_without_its_sounds(server, page) -> None:  # type: ignore[no-untyped-def]
     page.route("**/api/capabilities", _without_score_sounds)
     page.goto(server.url, wait_until="networkidle")
-    if page.get_by_role("button", name="Not now").count():
-        page.get_by_role("button", name="Not now").click()
+    to_upload_screen(page)
     page.set_input_files("input[type=file]", str(SONNET))
     page.wait_for_selector("text=How should it look?", timeout=60_000)
 

@@ -24,6 +24,7 @@ pytestmark = pytest.mark.browser
 playwright_api = pytest.importorskip("playwright.sync_api", reason="playwright not installed")
 pytest.importorskip("fastapi", reason="web extra not installed")
 
+from tests.browser.first_run import to_upload_screen  # noqa: E402
 from voxframe.api.app import static_root  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -100,9 +101,7 @@ def studio(server, page):  # type: ignore[no-untyped-def]
     """The sonnet, made into a video through the app, open in the studio."""
     handle, _ = server
     page.goto(handle.url, wait_until="networkidle")
-    page.wait_for_selector("text=Should Voxframe look for images online?", timeout=30_000)
-    page.click("text=Not now")
-    page.wait_for_selector("text=Turn a recording into a video")
+    to_upload_screen(page)
     page.set_input_files("input[type=file]", str(SONNET))
     page.wait_for_selector("text=How should it look?", timeout=60_000)
     page.click("text=Draft")
@@ -291,8 +290,7 @@ def test_the_layout_is_kept_and_recent_videos_open_the_studio(studio, server) ->
     studio.keyboard.press("]")  # the timeline folded away
 
     studio.goto(handle.url, wait_until="networkidle")
-    if studio.get_by_role("button", name="Not now").count():  # "Not now" asks again next time
-        studio.get_by_role("button", name="Not now").click()
+    to_upload_screen(studio)  # "Not now" asks again next time
     recent = studio.locator(".recent-video").first
     recent.wait_for(timeout=15_000)
     assert "en_sonnet_january_45s.wav" in recent.inner_text()  # the person's own name for it

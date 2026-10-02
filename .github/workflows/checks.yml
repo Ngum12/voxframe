@@ -79,6 +79,10 @@ jobs:
     env:
       PYTHONUTF8: "1"
     steps:
+      # Check files out exactly as committed. Git on GitHub's Windows runners
+      # turns every LF into CRLF, and the line-ending test then reads every
+      # file as changed.
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
@@ -87,9 +91,13 @@ jobs:
           cache-dependency-path: pyproject.toml
       - name: FFmpeg, as each installer ships it
         run: python scripts/ci_ffmpeg.py --github
+      - name: On macOS, the Python the Mac app ships (its sqlite3 loads extensions)
+        if: runner.os == 'macOS'
+        run: python scripts/ci_python.py --github
       - name: CPU-only PyTorch on Linux (the default wheel carries CUDA)
         if: runner.os == 'Linux'
-        run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+        # torchvision from the same index, or it is built for another torch.
+        run: python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
       - name: Voxframe and its test tools
         run: |
           python -m pip install --upgrade pip
@@ -115,7 +123,7 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - run: python scripts/ci_ffmpeg.py --github
-      - run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
       - run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,app,music]"

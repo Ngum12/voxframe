@@ -6159,3 +6159,30 @@ Fixed on the way, so the checks start green:
 
 Run as the Linux job runs it, with FFmpeg 9.0.2: no failures; the only
 errors were Whisper downloads, which the machine it was run on cannot make.
+
+**What the first run found** (on this pull request, before merging), each
+fixed at its cause:
+
+- **Browser tests assumed the models were downloaded.** A fresh machine
+  opens on "Getting ready" (D-157), which the older tests never met; they
+  now pass first-run screens as a new user does ("Not now",
+  `tests/browser/first_run.py`).
+- **macOS:** the Python GitHub's runners provide cannot load SQLite
+  extensions, so 24 library and matching tests failed although the app
+  works. The checks now run on the Python the Mac app ships
+  (python-build-standalone 3.12.14, `scripts/ci_python.py`, the build
+  script's own pin and checksum).
+- **Linux:** `torchvision` came from PyPI while `torch` came from the CPU
+  index, so the two did not match; both now come from the CPU index.
+- **The licence audit** read every requirement, including `colorama`, which
+  `click` needs only on Windows and which is not installed elsewhere; it
+  now audits what is installed, so `colorama` is audited by the Windows
+  checks.
+- **Windows:** Git on the runner turned every LF into CRLF at checkout, so
+  the line-ending test saw every file as changed; checkout is now
+  byte-exact.
+- **The long-command test** built its paths under the runner's temporary
+  folder, which differs in length by system (16,647 characters on macOS,
+  16,155 on Windows, about 15,000 on Linux, against a threshold of 16,000).
+  It now uses a fixed, realistic AppData-length path: about 13,800 to 14,700
+  everywhere.

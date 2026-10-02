@@ -24,6 +24,7 @@ playwright_api = pytest.importorskip("playwright.sync_api", reason="playwright n
 pytest.importorskip("fastapi", reason="web extra not installed")
 pytest.importorskip("soundfile")
 
+from tests.browser.first_run import to_upload_screen  # noqa: E402
 from voxframe.api.app import static_root  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -105,9 +106,7 @@ def made(server, page):  # type: ignore[no-untyped-def]
     generated_track(track, bars=24)
 
     page.goto(handle.url, wait_until="networkidle")
-    page.wait_for_selector("text=Should Voxframe look for images online?", timeout=30_000)
-    page.click("text=Not now")
-    page.wait_for_selector("text=Turn a recording into a video")
+    to_upload_screen(page)
     page.set_input_files("input[type=file]", str(SONNET))
     page.wait_for_selector("text=How should it look?", timeout=60_000)
     page.click("text=Draft")

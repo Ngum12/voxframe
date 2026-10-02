@@ -18,6 +18,7 @@ import pytest
 playwright_api = pytest.importorskip("playwright.sync_api", reason="playwright not installed")
 pytest.importorskip("fastapi", reason="web extra not installed")
 
+from tests.browser.first_run import to_upload_screen  # noqa: E402
 from voxframe.api.app import static_root  # noqa: E402
 
 pytestmark = pytest.mark.browser
@@ -110,21 +111,8 @@ def _recording(caps, path: Path) -> Path:  # type: ignore[no-untyped-def]
 
 
 def _home(page, handle) -> None:  # type: ignore[no-untyped-def]
-    """The upload screen, past what a first run shows before it.
-
-    Without the models downloaded, the app opens on "Getting ready", and the
-    first time, on the online-search question: both are answered "Not now".
-    """
     page.goto(handle.url, wait_until="networkidle")
-    upload = page.get_by_text("Turn a recording into a video")
-    not_now = page.get_by_role("button", name="Not now", exact=True)
-    for _ in range(20):
-        if upload.count():
-            break
-        if not_now.count():
-            not_now.first.click(timeout=5_000)
-        page.wait_for_timeout(250)
-    upload.wait_for(timeout=15_000)
+    to_upload_screen(page)
 
 
 def test_a_video_file_offers_use_my_video(server, page, caps, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
