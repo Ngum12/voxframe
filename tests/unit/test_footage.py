@@ -253,7 +253,7 @@ class TestCaching:
         return segment_key(
             scene, frames=scene.duration_frames, width=640, height=360, fps=FPS,
             motion_signature="m", quality="draft", background="0x000000",
-            footage_signature=_footage_signature(plan, scene),
+            footage_signature=_footage_signature(plan, scene, scene.duration_frames),
         )
 
     def test_speaker_and_picture_shots_never_share_a_segment(self, tmp_path: Path) -> None:
@@ -278,4 +278,4 @@ class TestCaching:
     def test_other_scenes_keep_their_keys(self) -> None:
         plan = _plan([3, 3], [0.9, None])
         scene = plan.scenes[0]
-        assert _footage_signature(plan, scene) == ""
+        assert _footage_signature(plan, scene, scene.duration_frames) == ""

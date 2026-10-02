@@ -135,7 +135,7 @@ def test_a_video_file_offers_use_my_video(server, page, caps, tmp_path: Path) ->
 
     assert page.get_by_role("radio", name="Use my video").is_checked()
     page.get_by_text("Vertical", exact=True).click()
-    assert page.get_by_text("cropped to the new shape around where you are").count() == 1
+    assert page.get_by_text("follows you as you move").count() == 1
     assert page._voxframe_errors == []
 
 

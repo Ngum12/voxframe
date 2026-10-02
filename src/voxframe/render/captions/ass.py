@@ -40,6 +40,9 @@ from voxframe.models.transcript import Word
 __all__ = ["build_ass", "format_timestamp", "write_ass"]
 
 #: ASS alignment codes (numpad layout): 2 = bottom centre, 5 = middle, 8 = top.
+#: The style for captions moved to the top of a frame (D-193).
+TOP_STYLE = "VoxframeTop"
+
 _ALIGNMENT = {
     CaptionPosition.BOTTOM: 2,
     CaptionPosition.CENTER: 5,
@@ -325,20 +328,24 @@ def _styles_block(style: CaptionStyle, width: int, height: int) -> str:
         "Encoding": 1,
     }
 
+    # The same captions anchored at the top, for a scene where the speaker's
+    # face reaches down into the caption area (D-193).
+    top = {**values, "Name": TOP_STYLE, "Alignment": _ALIGNMENT[CaptionPosition.TOP]}
     return (
         "[V4+ Styles]\n"
         f"Format: {', '.join(_STYLE_FIELDS)}\n"
         f"Style: {','.join(str(values[field]) for field in _STYLE_FIELDS)}\n"
+        f"Style: {','.join(str(top[field]) for field in _STYLE_FIELDS)}\n"
     )
 
 
-def _dialogue(start: float, end: float, text: str) -> str:
+def _dialogue(start: float, end: float, text: str, style: str = "Voxframe") -> str:
     """One Dialogue line, with fields in the declared order."""
     values = {
         "Layer": "0",
         "Start": format_timestamp(start),
         "End": format_timestamp(end),
-        "Style": "Voxframe",
+        "Style": style,
         "Name": "",
         "MarginL": "0",
         "MarginR": "0",
@@ -355,6 +362,8 @@ def build_ass(
     width: int,
     height: int,
     fps: float,
+    *,
+    top_scenes: frozenset[int] = frozenset(),
 ) -> str:
     """Build a complete ASS subtitle document.
 
@@ -365,6 +374,8 @@ def build_ass(
             burned into.
         height: Frame height in pixels. Must match the video.
         fps: Frame rate, for converting scene frames to seconds.
+        top_scenes: Indices of scenes whose captions go to the top of the
+            frame instead, clear of the speaker's face (D-193).
 
     Returns:
         The ASS document.
@@ -392,6 +403,7 @@ def build_ass(
             continue
 
         pages = _paginate(all_lines, style)
+        style_name = TOP_STYLE if scene.index in top_scenes else "Voxframe"
         scene_start = scene.start_seconds(fps)
         scene_end = scene.end_seconds(fps)
 
@@ -420,7 +432,7 @@ def build_ass(
 
             if not style.highlight_enabled:
                 text = _render_caption(scene.words, page, None, style, width)
-                events.append(_dialogue(page_start, page_end, text))
+                events.append(_dialogue(page_start, page_end, text, style_name))
                 continue
 
             # One Dialogue line per word, each highlighting a different word.
@@ -446,7 +458,7 @@ def build_ass(
                     continue
 
                 text = _render_caption(scene.words, page, index, style, width)
-                events.append(_dialogue(start_time, end_time, text))
+                events.append(_dialogue(start_time, end_time, text, style_name))
 
     parts.append("\n".join(events) + "\n")
     return "\n".join(parts)
@@ -459,6 +471,8 @@ def write_ass(
     width: int,
     height: int,
     fps: float,
+    *,
+    top_scenes: frozenset[int] = frozenset(),
 ) -> Path:
     """Write an ASS subtitle file.
 
@@ -468,7 +482,7 @@ def write_ass(
     Returns:
         The path written.
     """
-    content = build_ass(scenes, style, width, height, fps)
+    content = build_ass(scenes, style, width, height, fps, top_scenes=top_scenes)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8", newline="\n")
     return path

@@ -6035,3 +6035,61 @@ tracking that follows a moving speaker is the next step.
 
 **Not in this step:** face tracking, jump cuts, clips from a long recording,
 Shorts captions and export presets: the later steps of the Shorts plan.
+
+### D-193 · Framing that follows you, and captions clear of your face — AWAITING THE OWNER'S APPROVAL
+
+Step 2 of the Shorts plan. D-192 placed a vertical crop once per video; a
+speaker who leaned or stepped drifted towards the edge, and captions could
+sit across a face filmed low in the frame.
+
+**Finding the face.** YuNet, OpenCV's small face detector (MIT, 232,589
+bytes), ships inside the package at `assets/models/`, run by OpenCV, which
+the installers already carry: no new package, nothing downloaded, nothing
+leaves the computer. The file is the one OpenCV's model zoo publishes: its
+SHA-256 matches the zoo's git-LFS record. It works on OpenCV 5.0 at every
+frame shape tried (16:9, 9:16, square).
+
+- Frames are read four times a second at 320 pixels wide, in 30-second
+  windows. Measured on 1080p at 12 Mb/s: 27 times faster than real time,
+  about a minute and a half for a 40-minute talk.
+- The speaker is the face nearest where the speaker was, so someone passing
+  through does not take the camera; at the start, the largest face.
+
+**The camera** (`render/motion/faces.py`) behaves like an operator, not a
+tracker:
+
+- it holds still while the face stays within a zone around the centre
+  (16% of the crop's width);
+- when the face leaves it, one move for one change of place, however long
+  the walk: easing in from where the camera was, following the face's own
+  path smoothed over a second (centred, so it neither leads nor lags), and
+  settling where the face comes to rest. It starts a little early, since the
+  whole recording is known in advance;
+- brief misses and one-frame glitches are smoothed out before it reacts.
+
+The path is a short list of points in the plan (`Footage.track`, D-011),
+and each speaker segment's crop moves along its own stretch of it, frame by
+frame, clamped inside the picture. A segment's cache key includes its
+stretch, so a different path re-renders only the scenes it touches.
+
+- **Measured in the finished video:** a face that walks across the frame
+  stays within 0.09 of a vertical frame's width of the middle (0.31 with a
+  single eased move, the first version, which raced ahead), and a still face
+  off to one side is centred to within 0.01.
+
+**Captions clear of the face.** For each speaker scene, where the head
+reaches in the finished frame is worked out from the path, with the
+renderer's own scaling and crop and a quarter of the face's height added
+for the head beyond the detector's box. When it reaches into the caption
+area at the bottom and the top is clear, that scene's captions go to the
+top (a second caption style, `VoxframeTop`). A face filling the frame keeps
+them at the bottom, where a viewer looks; a template whose captions are not
+at the bottom is left alone.
+
+**Falling back, never failing.** Without OpenCV, or where faces are found in
+under 30% of the samples (slides, a screen, someone filmed from behind), the
+crop is placed where the picture moves, as in D-192, then in the centre.
+
+**Test media.** `tests/fixtures/astronaut_collins.jpg` (20 KB), a crop of
+NASA's public-domain portrait of Eileen Collins, from which the tests make
+recordings at run time. No video is committed.
