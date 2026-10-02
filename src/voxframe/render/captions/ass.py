@@ -40,6 +40,9 @@ from voxframe.models.transcript import Word
 __all__ = ["build_ass", "format_timestamp", "write_ass"]
 
 #: ASS alignment codes (numpad layout): 2 = bottom centre, 5 = middle, 8 = top.
+#: The style for captions moved to the top of a frame (D-193).
+TOP_STYLE = "VoxframeTop"
+
 _ALIGNMENT = {
     CaptionPosition.BOTTOM: 2,
     CaptionPosition.CENTER: 5,
@@ -98,34 +101,103 @@ def _escape_text(text: str) -> str:
     )
 
 
-def _wrap_words(words: tuple[Word, ...], style: CaptionStyle) -> list[list[int]]:
+class _TextWidth:
+    """How wide caption text is drawn, in frame pixels, from the bundled font.
+
+    libass sizes a font so its ascent and descent together equal the style's
+    font size; Pillow sizes it by its em. Converting one to the other from the
+    font's own metrics predicted a vertical caption at 1053 px that libass drew
+    at 1059 (D-194), so a small allowance is added.
+    """
+
+    #: Allowance for the difference measured above, and for rounding.
+    ALLOWANCE = 1.02
+
+    def __init__(self, style: CaptionStyle, height: int) -> None:
+        from PIL import ImageFont
+
+        from voxframe.assets import fonts_dir
+
+        size = style.font_size_px(height)
+        face = "Inter-Bold.ttf" if style.font_weight >= 600 else "Inter-Regular.ttf"
+        self._font = ImageFont.truetype(str(fonts_dir() / face), size)
+        ascent, descent = self._font.getmetrics()
+        self._scale = size / max(1, ascent + descent) * self.ALLOWANCE
+        self._outline = 2 * style.outline_width
+        self._uppercase = style.uppercase
+
+    def __call__(self, text: str) -> float:
+        if self._uppercase:
+            text = text.upper()
+        return self._font.getlength(text) * self._scale + self._outline
+
+    @classmethod
+    def for_frame(cls, style: CaptionStyle, height: int) -> _TextWidth | None:
+        """A measurer, or ``None`` when the fonts are missing: then lines are
+        limited by their number of characters alone, as they always were."""
+        from voxframe.assets import FontsMissing
+
+        try:
+            return cls(style, height)
+        except (FontsMissing, OSError):
+            return None
+
+
+def _usable_width(style: CaptionStyle, width: int, measure: _TextWidth) -> float:
+    """The width a line may take: inside the side margins, less a box's padding."""
+    usable = width - 2 * style.margin_horizontal_px(width)
+    if style.backing is CaptionBacking.BOX:
+        usable -= measure(_PAD_CHAR * (2 * style.box_padding_chars))
+    return usable
+
+
+def _wrap_words(
+    words: tuple[Word, ...],
+    style: CaptionStyle,
+    width: int | None = None,
+    height: int | None = None,
+) -> list[list[int]]:
     """Group word indices into display lines that fit the caption box.
+
+    A line ends at ``max_chars_per_line`` characters, and, given the frame's
+    size, when it would be wider than the frame allows (D-194). A vertical
+    frame is under a third as wide as a landscape one at the same height and
+    the same font size, so 32 characters ran off its edges; a landscape frame
+    fits them easily, and its lines are as they were.
 
     Returns:
         Lists of word indices, one per line. Every word is placed; limiting how
-        many lines are on screen at once is :func:`_paginate`'s job.
+        many lines are on screen at once is :func:`_paginate`'s job. A single
+        word too wide for any line still gets a line of its own.
     """
     if not words:
         return []
 
+    measure = (
+        _TextWidth.for_frame(style, height) if width is not None and height is not None else None
+    )
+    usable = _usable_width(style, width, measure) if measure is not None and width else 0.0
+
     lines: list[list[int]] = []
     current: list[int] = []
-    current_length = 0
+    current_text = ""
 
     for index, word in enumerate(words):
         token = word.text.strip()
         if not token:
             continue
 
-        addition = len(token) + (1 if current else 0)
+        candidate = f"{current_text} {token}" if current else token
+        too_long = len(candidate) > style.max_chars_per_line
+        too_wide = measure is not None and measure(candidate) > usable
 
-        if current and current_length + addition > style.max_chars_per_line:
+        if current and (too_long or too_wide):
             lines.append(current)
             current = [index]
-            current_length = len(token)
+            current_text = token
         else:
             current.append(index)
-            current_length += addition
+            current_text = candidate
 
     if current:
         lines.append(current)
@@ -152,6 +224,10 @@ def _paginate(
         for start in range(0, len(lines), style.max_lines)
     ]
 
+
+#: The character a backing box is padded with: a non-breaking space, which
+#: libass keeps where it would drop an ordinary one.
+_PAD_CHAR = "\u00a0"
 
 #: Width of a space in the bundled Inter font, as a fraction of font size.
 #: Measured, not assumed: ``ImageFont.getlength`` reports 24 px at size 100.
@@ -325,20 +401,24 @@ def _styles_block(style: CaptionStyle, width: int, height: int) -> str:
         "Encoding": 1,
     }
 
+    # The same captions anchored at the top, for a scene where the speaker's
+    # face reaches down into the caption area (D-193).
+    top = {**values, "Name": TOP_STYLE, "Alignment": _ALIGNMENT[CaptionPosition.TOP]}
     return (
         "[V4+ Styles]\n"
         f"Format: {', '.join(_STYLE_FIELDS)}\n"
         f"Style: {','.join(str(values[field]) for field in _STYLE_FIELDS)}\n"
+        f"Style: {','.join(str(top[field]) for field in _STYLE_FIELDS)}\n"
     )
 
 
-def _dialogue(start: float, end: float, text: str) -> str:
+def _dialogue(start: float, end: float, text: str, style: str = "Voxframe") -> str:
     """One Dialogue line, with fields in the declared order."""
     values = {
         "Layer": "0",
         "Start": format_timestamp(start),
         "End": format_timestamp(end),
-        "Style": "Voxframe",
+        "Style": style,
         "Name": "",
         "MarginL": "0",
         "MarginR": "0",
@@ -355,6 +435,8 @@ def build_ass(
     width: int,
     height: int,
     fps: float,
+    *,
+    top_scenes: frozenset[int] = frozenset(),
 ) -> str:
     """Build a complete ASS subtitle document.
 
@@ -365,6 +447,8 @@ def build_ass(
             burned into.
         height: Frame height in pixels. Must match the video.
         fps: Frame rate, for converting scene frames to seconds.
+        top_scenes: Indices of scenes whose captions go to the top of the
+            frame instead, clear of the speaker's face (D-193).
 
     Returns:
         The ASS document.
@@ -387,11 +471,12 @@ def build_ass(
         if scene.is_silent:
             continue
 
-        all_lines = _wrap_words(scene.words, style)
+        all_lines = _wrap_words(scene.words, style, width, height)
         if not all_lines:
             continue
 
         pages = _paginate(all_lines, style)
+        style_name = TOP_STYLE if scene.index in top_scenes else "Voxframe"
         scene_start = scene.start_seconds(fps)
         scene_end = scene.end_seconds(fps)
 
@@ -420,7 +505,7 @@ def build_ass(
 
             if not style.highlight_enabled:
                 text = _render_caption(scene.words, page, None, style, width)
-                events.append(_dialogue(page_start, page_end, text))
+                events.append(_dialogue(page_start, page_end, text, style_name))
                 continue
 
             # One Dialogue line per word, each highlighting a different word.
@@ -446,7 +531,7 @@ def build_ass(
                     continue
 
                 text = _render_caption(scene.words, page, index, style, width)
-                events.append(_dialogue(start_time, end_time, text))
+                events.append(_dialogue(start_time, end_time, text, style_name))
 
     parts.append("\n".join(events) + "\n")
     return "\n".join(parts)
@@ -459,6 +544,8 @@ def write_ass(
     width: int,
     height: int,
     fps: float,
+    *,
+    top_scenes: frozenset[int] = frozenset(),
 ) -> Path:
     """Write an ASS subtitle file.
 
@@ -468,7 +555,7 @@ def write_ass(
     Returns:
         The path written.
     """
-    content = build_ass(scenes, style, width, height, fps)
+    content = build_ass(scenes, style, width, height, fps, top_scenes=top_scenes)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8", newline="\n")
     return path

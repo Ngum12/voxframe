@@ -87,7 +87,12 @@ def _runtime_closure(root: str = "voxframe") -> set[str]:
         try:
             requires = distribution(key).requires or []
         except PackageNotFoundError:
-            continue  # declared but not installed; nothing to audit
+            # Declared but not installed: a requirement for another system,
+            # such as colorama, which click needs only on Windows. Its
+            # licence is audited where it is installed (the Windows checks,
+            # D-195); here there is nothing to read.
+            seen.discard(key)
+            continue
 
         for spec in requires:
             if "extra ==" in spec:

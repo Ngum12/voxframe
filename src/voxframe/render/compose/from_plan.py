@@ -177,6 +177,46 @@ def _scenes_for_captions(plan: ScenePlan) -> tuple[Scene, ...]:
     return tuple(scenes)
 
 
+def _captions_above_face(
+    plan: ScenePlan, style: StyleTemplate, width: int, height: int
+) -> frozenset[int]:
+    """Speaker scenes whose captions go to the top, clear of the face (D-193).
+
+    A scene moves its captions when the speaker's head, as framed, reaches
+    down into the caption area while the top of the frame is clear of it. A
+    face filling the frame, reaching both, keeps them at the bottom, where a
+    viewer looks for them.
+    """
+    from voxframe.config.style import CaptionPosition
+    from voxframe.render.compose.footage import face_extent
+
+    captions = style.captions
+    if plan.footage is None or not plan.footage.track:
+        return frozenset()
+    if captions.position is not CaptionPosition.BOTTOM:
+        return frozenset()
+    margin = captions.margin_vertical_px(width, height)
+    # The tallest the caption block can be: every line, with line spacing.
+    block = captions.max_lines * captions.font_size_px(height) * 1.3
+    bottom_band = height - margin - block
+    top_band = margin + block
+    moved = set()
+    for scene in plan.scenes:
+        if not plan.shows_speaker(scene) or scene.footage_start is None:
+            continue
+        extent = face_extent(
+            plan.footage, width, height, scene.footage_start, scene.duration_frames / plan.fps
+        )
+        if extent is None:
+            continue
+        face_top, face_bottom = extent
+        if face_bottom > bottom_band and face_top > top_band:
+            moved.add(scene.index)
+    if moved:
+        log.info("render.captions.above_face", scenes=len(moved))
+    return frozenset(moved)
+
+
 def _evenly_spaced(
     tokens: list[str], start: float, duration: float
 ) -> tuple[Word, ...]:
@@ -296,7 +336,10 @@ def render_from_plan(
     # --- 3. captions ---
     ass_path = output_path.with_suffix(".ass")
     caption_scenes = _scenes_for_captions(plan)
-    write_ass(ass_path, caption_scenes, style.captions, width, out_height, plan.fps)
+    write_ass(
+        ass_path, caption_scenes, style.captions, width, out_height, plan.fps,
+        top_scenes=_captions_above_face(plan, style, width, out_height),
+    )
 
     srt_path = vtt_path = None
     if write_sidecars:

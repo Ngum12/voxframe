@@ -9,14 +9,14 @@ import pytest
 
 pytest.importorskip("fastapi")
 
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
-from voxframe.api import app as app_module  # noqa: E402
-from voxframe.api.app import ApiContext, create_app  # noqa: E402
-from voxframe.api.security import SessionToken  # noqa: E402
-from voxframe.config.settings import Settings  # noqa: E402
-from voxframe.config.userprefs import load_preferences  # noqa: E402
-from voxframe.jobs.store import JobStore  # noqa: E402
+from voxframe.api import app as app_module
+from voxframe.api.app import ApiContext, create_app
+from voxframe.api.security import SessionToken
+from voxframe.config.settings import Settings
+from voxframe.config.userprefs import load_preferences
+from voxframe.jobs.store import JobStore
 
 STYLES = Path(__file__).resolve().parents[2] / "web" / "src" / "styles.css"
 LOOPBACK = "http://127.0.0.1:8765"

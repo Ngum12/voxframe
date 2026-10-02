@@ -47,7 +47,9 @@ pytest tests/unit      # the quick ones
 ```
 
 Every change comes with tests. **The full suite must pass, browser tests
-included**, before a pull request is merged. Tests that need something
+included**, before a pull request is merged. GitHub runs it on Linux, Windows
+and macOS for every pull request (`.github/workflows/checks.yml`), with the
+FFmpeg each installer ships. Tests that need something
 missing (models, a browser, large samples) skip with a reason; they never
 fail for that.
 

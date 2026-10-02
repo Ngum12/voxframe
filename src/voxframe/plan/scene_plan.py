@@ -45,6 +45,7 @@ __all__ = [
     "QuerySource",
     "ScenePlan",
     "Shot",
+    "TrackPoint",
 ]
 
 #: Bumped when the plan format changes incompatibly, so an old plan is refused
@@ -93,6 +94,23 @@ class Shot(StrEnum):
     SPEAKER = "speaker"
 
 
+class TrackPoint(BaseModel):
+    """Where the camera is centred at one moment of the footage (D-193).
+
+    Fractions of the footage's frame; ``t`` is seconds on the sound's clock.
+    The camera moves in a straight line between points, so an eased move is
+    written as several. ``h`` is the speaker's face height there, which keeps
+    captions clear of it.
+    """
+
+    model_config = {"frozen": True}
+
+    t: float = Field(ge=0)
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    h: float = Field(default=0.0, ge=0, le=1)
+
+
 class Footage(BaseModel):
     """The recording's own picture, when it has one and the person chose it.
 
@@ -113,8 +131,17 @@ class Footage(BaseModel):
     #: Where the speaker is across the frame, 0 (left) to 1 (right). Used when
     #: the video is narrower than the footage, so the crop keeps them in.
     subject_x: float = Field(default=0.5, ge=0, le=1)
-    #: Where it came from: ``motion``, ``centre`` or ``user``.
+    #: Where it came from: ``faces``, ``motion``, ``centre`` or ``user``.
     subject_source: str = Field(default="centre")
+    #: The camera's path, following the speaker's face (D-193). Empty: the
+    #: crop stays at ``subject_x``.
+    track: tuple[TrackPoint, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def _track_in_order(self) -> Self:
+        if any(b.t < a.t for a, b in zip(self.track, self.track[1:], strict=False)):
+            raise PlanError("the footage's camera path must be in time order")
+        return self
 
 
 class PlanAsset(BaseModel):

@@ -17,6 +17,7 @@ pytestmark = pytest.mark.browser
 playwright_api = pytest.importorskip("playwright.sync_api", reason="playwright not installed")
 pytest.importorskip("fastapi", reason="web extra not installed")
 
+from tests.browser.first_run import to_upload_screen  # noqa: E402
 from voxframe.api.app import static_root  # noqa: E402
 
 PAPER = "rgb(244, 241, 234)"  # --canvas, light
@@ -79,8 +80,7 @@ def _open(browser, handle, scheme: str):  # type: ignore[no-untyped-def]
     page._voxframe_errors = []
     page.on("pageerror", lambda exc: page._voxframe_errors.append(str(exc)))
     page.goto(handle.url, wait_until="networkidle")
-    if page.get_by_role("button", name="Not now").count():
-        page.get_by_role("button", name="Not now").click()
+    to_upload_screen(page)
     return page
 
 
@@ -117,6 +117,7 @@ def test_a_chosen_look_is_kept_and_never_flashes(browser, server) -> None:  # ty
     assert _background(first_paint) == PAPER
 
     page.reload(wait_until="networkidle")
+    to_upload_screen(page)
     page.get_by_role("button", name="Settings", exact=True).click()
     group = page.get_by_role("radiogroup", name="Theme")
     assert group.get_by_role("radio", name="Light").get_attribute("aria-checked") == "true"

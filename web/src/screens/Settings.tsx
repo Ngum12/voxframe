@@ -274,8 +274,9 @@ export function Settings({
           </fieldset>
           {useVideo && aspect !== "16:9" && (
             <p className="muted" style={{ marginTop: 10 }}>
-              Your video is cropped to the new shape around where you are in the frame.
-              You can switch any scene between you and its picture in the studio.
+              Your video is cropped to the new shape and follows you as you move, and
+              captions keep clear of your face. You can switch any scene between you
+              and its picture in the studio.
             </p>
           )}
         </div>

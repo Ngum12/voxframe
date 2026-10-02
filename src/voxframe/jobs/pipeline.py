@@ -35,12 +35,13 @@ from voxframe.plan.scene_plan import PlanAsset, PlannedScene, ScenePlan
 from voxframe.plan.score_choice import ScoreChoice
 from voxframe.render.audio.music import MusicSettings
 from voxframe.render.compose.captioned import RenderResult
-from voxframe.render.encode.probe import FFmpegCapabilities
+from voxframe.render.encode.probe import FFmpegCapabilities, FootageInfo
 
 if TYPE_CHECKING:
     # Only for annotations: importing it at runtime would load the embedding
     # stack for every caller, including ones that never match anything.
     from voxframe.library.embeddings import Embedder
+    from voxframe.plan.scene_plan import TrackPoint
     from voxframe.sourcing.registry import SourcingPlan
 
 __all__ = [
@@ -948,6 +949,8 @@ def attach_recording_footage(
         person asked for their video, and must not be left wondering why it
         is not there. The warning is empty otherwise.
     """
+    import numpy as np
+
     from voxframe.plan.scene_plan import Footage
     from voxframe.plan.shots import attach_footage
     from voxframe.render.compose.captioned import _dimensions
@@ -964,9 +967,16 @@ def attach_recording_footage(
 
     width, out_height = _dimensions(aspect, height)
     subject_x, source = 0.5, "centre"
-    # Only a crop narrower than the footage can leave the speaker out.
-    if width / out_height < info.width / info.height - 0.01:
-        subject_x, source = find_speaker_x(recording, info, capabilities)
+    track: tuple[TrackPoint, ...] = ()
+    # Only a crop smaller than the footage, one way or the other, can leave
+    # the speaker out; the same shape shows the whole frame.
+    output_shape, footage_shape = width / out_height, info.width / info.height
+    if abs(output_shape - footage_shape) > 0.01:
+        track = _follow_faces(recording, info, capabilities, output_shape, footage_shape)
+        if track:
+            subject_x, source = float(np.median([point.x for point in track])), "faces"
+        elif output_shape < footage_shape:
+            subject_x, source = find_speaker_x(recording, info, capabilities)
     footage = Footage(
         path=str(recording),
         width=info.width,
@@ -974,10 +984,51 @@ def attach_recording_footage(
         fps=info.fps,
         duration=info.duration,
         audio_offset=info.audio_offset,
-        subject_x=subject_x,
+        subject_x=round(subject_x, 4),
         subject_source=source,
+        track=track,
     )
     return attach_footage(plan, footage, cutaways=cutaways), ""
+
+
+def _follow_faces(
+    recording: Path,
+    info: FootageInfo,
+    capabilities: FFmpegCapabilities,
+    output_shape: float,
+    footage_shape: float,
+) -> tuple[TrackPoint, ...]:
+    """The camera's path following the speaker's face (D-193), or ``()``.
+
+    Empty when faces cannot be looked for here or are found too rarely; the
+    caller then falls back to where the picture moves. Never a reason for a
+    video to fail.
+    """
+    from voxframe.plan.scene_plan import TrackPoint
+    from voxframe.render.motion.faces import (
+        detector_available,
+        find_faces,
+        plan_camera,
+        primary_faces,
+    )
+
+    if not detector_available():
+        log.info("faces.unavailable")
+        return ()
+    try:
+        keyframes = plan_camera(
+            primary_faces(find_faces(recording, info, capabilities)),
+            crop_width=min(1.0, output_shape / footage_shape),
+            crop_height=min(1.0, footage_shape / output_shape),
+        )
+    except Exception as exc:  # following faces improves a crop; it never fails a video
+        log.warning("faces.failed", error=f"{type(exc).__name__}: {exc}")
+        return ()
+    if not keyframes:
+        log.info("faces.too_rare")
+        return ()
+    log.info("faces.followed", keyframes=len(keyframes))
+    return tuple(TrackPoint(t=k.t, x=k.x, y=k.y, h=k.h) for k in keyframes)
 
 
 def _attach_footage(

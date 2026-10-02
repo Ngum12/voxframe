@@ -155,7 +155,7 @@ def render_scene_segments(
                 motion_signature=_motion_signature(motion),
                 quality=quality.value,
                 background=background,
-                footage_signature=_footage_signature(plan, scene),
+                footage_signature=_footage_signature(plan, scene, frames),
             )
             if cache.fetch(key, segment):
                 results.append(
@@ -302,7 +302,7 @@ def render_scene_segments(
     return results
 
 
-def _footage_signature(plan: ScenePlan, scene: PlannedScene) -> str:
+def _footage_signature(plan: ScenePlan, scene: PlannedScene, frames: int) -> str:
     """What makes a speaker shot look as it does, or ``""`` for any other scene.
 
     The file is identified by its size and modification time as well as its
@@ -317,9 +317,19 @@ def _footage_signature(plan: ScenePlan, scene: PlannedScene) -> str:
         identity = f"{stat.st_size}:{stat.st_mtime_ns}"
     except OSError:
         identity = "missing"
+    path = ""
+    if footage.track and scene.footage_start is not None:
+        # Only this segment's stretch of the camera path (D-193): moving the
+        # camera in one scene re-renders that scene alone.
+        from voxframe.render.compose.footage import track_between
+
+        stretch = track_between(
+            footage.track, scene.footage_start, scene.footage_start + frames / plan.fps
+        )
+        path = ":path=" + ";".join(f"{p.t:.3f},{p.x:.4f},{p.y:.4f}" for p in stretch)
     return (
         f"speaker:{footage.path}:{identity}:{footage.audio_offset:.6f}"
-        f":{footage.subject_x:.4f}:{scene.footage_start:.6f}"
+        f":{footage.subject_x:.4f}:{scene.footage_start:.6f}{path}"
     )
 
 

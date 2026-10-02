@@ -68,7 +68,14 @@ def test_157_segments_with_long_paths_fit_on_windows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The failing render, without FFmpeg: every command must fit."""
-    folder = tmp_path / ("a-long-folder-name-like-an-app-data-path-" * 3) / "segments"
+    # A fixed folder, as long as a real one under a Windows user's AppData,
+    # rather than under the runner's temporary folder: that is 40 characters
+    # longer on macOS than on Linux, which made the measurement the runner's
+    # rather than the code's (D-195). Nothing is written there.
+    folder = (
+        Path(Path.cwd().anchor) / "Users" / "a-person-with-a-long-name" / "AppData" / "Local"
+        / ("a-long-folder-name-like-an-app-data-path-" * 3) / "segments"
+    )
     segments = [
         SegmentResult(i, folder / f"seg_{i:04d}_{'0123456789abcdef' * 2}.mp4", 30, True)
         for i in range(157)

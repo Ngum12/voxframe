@@ -1210,7 +1210,9 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             credit = str(kept.get("credit", ""))
             if edit.credit is not None:
                 credit = " ".join(edit.credit.split())
-                context.store.remember(job, "kept_track", {"path": str(kept["path"]), "credit": credit})
+                context.store.remember(
+                    job, "kept_track", {"path": str(kept["path"]), "credit": credit}
+                )
             update.update(music_path=str(kept["path"]), music_credit=credit)
         elif edit.choice == "score":
             if not edit.style or edit.style not in styles():

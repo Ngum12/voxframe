@@ -83,6 +83,20 @@ Bundled fonts, shipped inside the package (src/voxframe/assets/fonts/):
     provided the font is not sold on its own and the license travels with it.
     Both conditions are met.
 
+Bundled model, shipped inside the package (src/voxframe/assets/models/):
+
+  face_detection_yunet_     MIT          Finds the speaker's face, so a crop
+    2023mar.onnx                         follows them (D-193). 232,589 bytes,
+                                         SHA-256 8f2383e4dd3cfbb4553ea8718107fc04
+                                         23210dc964f9f4280604804ed2552fa4, the
+                                         file OpenCV's model zoo publishes
+                                         (opencv/opencv_zoo, git LFS)
+  YuNet-LICENSE.txt         MIT          Its license text, by Shiqi Yu
+
+    Run by OpenCV (already a dependency, Apache-2.0), on this computer. MIT
+    permits bundling and redistribution, including commercially, provided the
+    copyright notice travels with it, which YuNet-LICENSE.txt does.
+
 Development only (not redistributed):
 
   pytest                    MIT

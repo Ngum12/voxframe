@@ -103,6 +103,10 @@ packages = ["src/voxframe"]
 artifacts = [
     "src/voxframe/assets/fonts/*.ttf",
     "src/voxframe/assets/fonts/*.txt",
+    # The face detector that keeps a crop on the speaker (D-193), with its
+    # licence: small, and needed offline, so it ships rather than downloads.
+    "src/voxframe/assets/models/*.onnx",
+    "src/voxframe/assets/models/*.txt",
     # The built web app. Committed and shipped for the same reason as the
     # fonts: `pip install voxframe[app]` must work on a machine with no Node
     # toolchain. Rebuilt by `npm run build` in web/ (D-117).

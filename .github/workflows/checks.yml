@@ -1,0 +1,136 @@
+# Checks for every pull request and every push to main (D-195).
+#
+# The release workflow tests the installers, but only when a version tag is
+# pushed: a change that broke Windows was found on release day. These run
+# the test suite on Linux, Windows and macOS for every change, with the
+# FFmpeg each installer ships, and check the lint and the committed web app.
+#
+# What is left out, and why:
+# - tests marked needs_models: they need the 1.5 GB picture model; they run
+#   on a developer's machine and in the installed-app check at release.
+# - tests/eval: measurements of matching quality, not pass/fail checks.
+# - mypy: the code has many type errors from before it was checked; turning
+#   it on is its own piece of work.
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip "ruff>=0.4"
+      - run: ruff check src tests scripts
+
+  web:
+    # The built app is committed so pip installs need no Node (D-117); it
+    # must match its source.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the web app
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: The committed build matches its source
+        run: |
+          git status --porcelain -- src/voxframe/api/static
+          test -z "$(git status --porcelain -- src/voxframe/api/static)" || {
+            echo "src/voxframe/api/static differs from a fresh build of web/."
+            echo "Run: cd web && npm run build, and commit the result."
+            exit 1; }
+
+  tests:
+    name: tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: "3.11" }
+          - { os: ubuntu-latest, python: "3.13" }
+          # As the Windows installer is built (release.yml).
+          - { os: windows-latest, python: "3.13" }
+          # As the Mac app is built: Apple Silicon (release.yml).
+          - { os: macos-14, python: "3.12" }
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      # Check files out exactly as committed. Git on GitHub's Windows runners
+      # turns every LF into CRLF, and the line-ending test then reads every
+      # file as changed.
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: FFmpeg, as each installer ships it
+        run: python scripts/ci_ffmpeg.py --github
+      - name: On macOS, the Python the Mac app ships (its sqlite3 loads extensions)
+        if: runner.os == 'macOS'
+        run: python scripts/ci_python.py --github
+      - name: CPU-only PyTorch on Linux (the default wheel carries CUDA)
+        if: runner.os == 'Linux'
+        # torchvision from the same index, or it is built for another torch.
+        run: python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      - name: Voxframe and its test tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,app,music]"
+      - name: Whisper models, kept between runs
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-whisper-v1
+      - name: Tests
+        run: python -m pytest -rfE -m "not needs_models and not browser" tests/unit tests/integration
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python scripts/ci_ffmpeg.py --github
+      - run: python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      - run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,app,music]"
+          python -m playwright install --with-deps chromium
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-whisper-v1
+      - name: Browser tests
+        run: python -m pytest -rfE -m "browser" tests/browser
