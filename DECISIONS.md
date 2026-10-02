@@ -5949,3 +5949,89 @@ installed PyAV is under 19.
 **The release:** nothing was published from the failed tag. As the owner
 chose, the public repository gets the fix as a second commit, and `v0.2.0`
 is moved onto it. The owner deletes the old tag on GitHub and pushes again.
+
+### D-191 · The v0.2.0 release build: wheels unpacked from memory, the GPL text kept here
+
+The release run for `v0.2.0` failed on both installers:
+
+- **Windows: the music component could not be unpacked** (`EOFError`). SciPy
+  1.18.1's Windows wheel holds an empty file named exactly like the wheel
+  itself. `install()` saved each downloaded wheel into the folder it unpacks
+  into, so unpacking that file emptied the zip being read. Reproduced with the
+  real Windows wheels, every time: it is not a network fault, so the retry
+  added just before could never succeed.
+  - **The fix:** each wheel is unpacked from memory, after its SHA-256 check,
+    and nothing is written beside the files being unpacked. The retry is
+    gone. All 26 real music wheels for Windows unpack.
+  - **The test** builds a wheel holding its own name: it failed three times
+    over on the retrying code and passes now.
+- **macOS: gnu.org timed out** while the build fetched the GPL text for the
+  bundled FFmpeg. The text is now `scripts/gpl-3.0.txt` (SHA-256 matches the
+  canonical file), copied in by the build.
+
+`v0.2.0` was moved onto the fixed commit; nothing had been published from the
+failed run.
+
+### D-192 · Your video on screen: the speaker in sync, pictures as cutaways — AWAITING THE OWNER'S APPROVAL
+
+The first step of the Shorts plan (ROADMAP: "Then: Shorts"). A video file used
+to be reduced to its sound. With **Use my video**, the speaker is on screen,
+cut to the frames each scene's words were spoken over, and the matched
+pictures become cutaways.
+
+**What the plan records** (the renderer still reads nothing else, D-011):
+
+- `ScenePlan.footage`: the recording's path, displayed size (after a phone's
+  rotation), frame rate, length, `audio_offset` and `subject_x`.
+- Per scene: `shot` (`speaker` or `picture`), `shot_source`, `shot_reason`,
+  and `footage_start`: where the scene starts in the recording, in seconds on
+  the sound's clock. Kept per scene, not derived, so cards and highlights,
+  which move scenes on the video's clock, keep each scene on its own frames.
+- Plans without these fields load unchanged; the plan version is not bumped.
+
+**Sync.** A word's time counts from the first decoded sound; FFmpeg seeks a
+picture from the file's start, which can be earlier (phones; AAC priming). The
+seek adds `audio_offset`, measured by ffprobe from the same zero the
+soundtrack uses. Footage is resampled to the grid with `fps` before scaling,
+and exactly the scene's frames are written (D-013). A scene followed by a
+crossfade carries on into the footage for its padding (D-097); past the end
+of the footage the last frame is held.
+
+- **Measured, not trusted:** source videos carry clapper flashes at the
+  moments a tone sounds, and tests find both in the finished video: through
+  cuts on either side of each clap, a chapter card, crossfades, a 9:16 crop,
+  sound starting 0.4 s after the picture, a picture starting 0.3 s after the
+  sound (its first frame is held until it begins), and 25 fps footage on a
+  30 fps grid. Every flash lands on its tone within a frame (measured 0 to 11 ms).
+  A frame-numbered source checked seeks at 25, 30 and 60 fps, frame for frame.
+
+**Cutaways** (`plan/shots.py`), each scene saying why it shows what it shows:
+the video opens and closes on the speaker; only a matched picture cuts away,
+best matches first; never two cutaways in a row; at most 40% of the speaking
+time; not under 1.2 s or over 7 s. A person's choice (`shot_source="user"`)
+is never changed. Without an image library the speaker is on throughout.
+
+**Framing.** Footage is scaled to cover the frame and cropped, never squashed
+or letterboxed. When the video is narrower than the footage (a vertical video
+from a landscape recording), the crop is centred on the speaker, found by
+where the picture *moves* across sixteen pairs of frames: the head, mouth and
+hands move and the room does not. No model and no new dependency; a recording
+where nothing moves, or everything does, keeps the centre, as before. Face
+tracking that follows a moving speaker is the next step.
+
+**Where it shows:**
+
+- **Upload:** the response says `has_video`; the settings screen offers
+  "Use my video" / "Pictures only" for a file with a picture, on by default.
+  An MP3's cover art is not a picture.
+- **Studio:** every scene of such a video has "You" / "The picture"; choosing
+  or adding a picture for a scene also cuts to it. Thumbnails, the timeline
+  and the preview show the speaker's frame. A shot change is a pending edit
+  like any other, and only that scene is rendered again.
+- **CLI:** `voxframe make talk.mp4 --video`.
+- **Never silent:** a file with no picture, asked to use it, makes a
+  pictures-only video and says so. A recording moved since falls back to the
+  scene's picture rather than failing the video.
+
+**Not in this step:** face tracking, jump cuts, clips from a long recording,
+Shorts captions and export presets: the later steps of the Shorts plan.

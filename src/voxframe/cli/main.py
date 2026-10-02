@@ -324,6 +324,17 @@ def make(
             ),
         ),
     ] = None,
+    show_video: Annotated[
+        bool,
+        typer.Option(
+            "--video/--no-video",
+            help=(
+                "Show the recording's own picture, the speaker in sync, with "
+                "matched pictures cutting in (D-192). For a video file; an "
+                "audio file has no picture and keeps pictures only."
+            ),
+        ),
+    ] = False,
     music_path: Annotated[
         Path | None,
         typer.Option(
@@ -455,13 +466,23 @@ def make(
                 console.print(f"[red]{exc}[/red]")
                 raise typer.Exit(code=1) from exc
 
-        elif plan_out is not None:
+        elif plan_out is not None or show_video:
             # A plan without imagery still carries caption text and word
             # timings, which is what caption correction needs. Asking for a plan
             # should produce one whether or not a library was supplied.
             plan = build_plan(
                 audio, transcript, scenes, None, grid, template, aspect=aspect_ratio
             )
+
+        if plan is not None and show_video:
+            from voxframe.jobs.pipeline import attach_recording_footage
+
+            progress.update(task, description="Placing you on screen...")
+            plan, footage_warning = attach_recording_footage(
+                plan, audio, aspect_ratio, height, caps, cutaways=library is not None
+            )
+            if footage_warning:
+                console.print(f"  [yellow]{footage_warning}[/yellow]")
 
         if plan is not None and (title or len(scenes) > 1):
             from voxframe.plan.builder import insert_cards
@@ -498,6 +519,10 @@ def make(
                     caps.ffmpeg_path,
                 )
                 plan = build_highlights_plan(plan, selection)
+                if plan.footage is not None:
+                    from voxframe.plan.shots import choose_shots
+
+                    plan = choose_shots(plan, cutaways=library is not None)
             else:
                 console.print(
                     "  [yellow]Recording too short for highlights;[/yellow] "
@@ -581,6 +606,12 @@ def make(
             f"  Matched {plan.matched_scenes}/{len(plan.scenes)} scenes to "
             f"{plan.unique_assets} images"
         )
+        if plan.footage is not None:
+            console.print(
+                f"  On the speaker: {plan.speaker_scenes} scenes; "
+                f"cutaways: {len(plan.scenes) - plan.speaker_scenes} "
+                f"(including cards)"
+            )
         console.print(f"  Scene plan: {plan_path.name} (edit and re-render)")
         for line in plan.credits():
             console.print(f"    credit: {line}")

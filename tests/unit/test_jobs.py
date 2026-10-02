@@ -425,8 +425,9 @@ class TestFrontEndParity:
         }
         expected = {field.name for field in JobOptions.__dataclass_fields__.values()}
         exposed = set(RenderRequest.model_fields) | internal
-        # The API names this one for the client; the pipeline names it plainly.
+        # The API names these for the client; the pipeline names them plainly.
         exposed.add("library")
+        exposed.add("footage")  # use_video (D-192)
 
         missing = expected - exposed
 

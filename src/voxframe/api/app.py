@@ -194,6 +194,9 @@ class RenderRequest(BaseModel):
     chapters: bool = True
     highlights_seconds: float | None = Field(default=None, gt=0)
     use_library: bool = True
+    #: Show the recording's own picture, when it has one (D-192): the speaker
+    #: in sync, with the matched pictures as cutaways.
+    use_video: bool = False
     language: str | None = None
     languages: list[str] = Field(default_factory=list)
     model: str | None = None
@@ -284,6 +287,12 @@ class MotionEdit(BaseModel):
     """Whether a scene's camera moves."""
 
     on: bool
+
+
+class ShotEdit(BaseModel):
+    """Whether a scene shows the speaker or its picture (D-192)."""
+
+    shot: Literal["speaker", "picture"]
 
 
 class CaptionEdit(BaseModel):
@@ -927,6 +936,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             "name": original.name,
             "bytes": written,
             "duration_seconds": _probe_duration(target),
+            # Whether "Use my video" applies (D-192): a picture to show.
+            "has_video": _probe_has_video(target),
         }
 
     @app.post("/api/jobs", status_code=202)
@@ -1043,6 +1054,32 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         scenes = payload.get("scenes", [])
         if not 0 <= index < len(scenes):
             raise HTTPException(status_code=404, detail="No such scene.")
+
+        footage = payload.get("footage")
+        if (
+            footage
+            and scenes[index].get("shot") == "speaker"
+            and scenes[index].get("footage_start") is not None
+        ):
+            # What the scene shows: the speaker, a moment into it (D-192).
+            try:
+                recording = resolve_within(Path(footage["path"]), context.allowed_paths)
+            except PathOutsideSandbox as exc:
+                raise HTTPException(
+                    status_code=403,
+                    detail="That scene's recording is outside the allowed directories.",
+                ) from exc
+            if not recording.is_file():
+                raise HTTPException(status_code=404, detail="The recording is missing.")
+            seconds = (scenes[index]["end_frame"] - scenes[index]["start_frame"]) / float(
+                payload.get("fps") or 30.0
+            )
+            at = float(scenes[index]["footage_start"]) + float(
+                footage.get("audio_offset") or 0.0
+            ) + min(0.5, seconds / 2)
+            return FileResponse(
+                _thumbnail_for(context, job_id, recording, at=at), media_type="image/jpeg"
+            )
 
         asset = scenes[index].get("asset")
         if not asset or not asset.get("path"):
@@ -1271,6 +1308,30 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         saved = _save_plan(edited, plan_path, "the camera movement")
+        context.store.set_pending(job, saved.pending)
+        return {"scene": edited.scenes[index].model_dump(mode="json"),
+                "pending_edits": job.summary.get("pending_edits", 0)}
+
+    @app.put("/api/jobs/{job_id}/scenes/{index}/shot")
+    def edit_shot(
+        job_id: str,
+        index: int,
+        edit: ShotEdit,
+        context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        """Show the speaker or the scene's picture (D-192)."""
+        from voxframe.plan.editing import EditError, set_shot
+        from voxframe.plan.scene_plan import Shot
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            edited = set_shot(plan, index, Shot(edit.shot))
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        saved = _save_plan(
+            edited, plan_path, "you on screen" if edit.shot == "speaker" else "a picture"
+        )
         context.store.set_pending(job, saved.pending)
         return {"scene": edited.scenes[index].model_dump(mode="json"),
                 "pending_edits": job.summary.get("pending_edits", 0)}
@@ -1897,12 +1958,17 @@ def _probe_key(adapter: str, key: str) -> tuple[bool, str]:
 THUMBNAIL_PIXELS = 320
 
 
-def _thumbnail_for(context: ApiContext, job_id: str, source: Path) -> Path:
-    """A cached thumbnail for one image in a job, generated if needed."""
-    return _thumbnail_into(context.store.job_directory(job_id) / "thumbnails", source)
+def _thumbnail_for(
+    context: ApiContext, job_id: str, source: Path, *, at: float | None = None
+) -> Path:
+    """A cached thumbnail for one image in a job, generated if needed.
+
+    ``at`` takes the frame at that many seconds into a recording (D-192).
+    """
+    return _thumbnail_into(context.store.job_directory(job_id) / "thumbnails", source, at=at)
 
 
-def _thumbnail_into(directory: Path, source: Path) -> Path:
+def _thumbnail_into(directory: Path, source: Path, *, at: float | None = None) -> Path:
     """Return a cached thumbnail for one image, generating it if needed.
 
     Keyed on the file itself -- its resolved path, size and modification time
@@ -1920,6 +1986,8 @@ def _thumbnail_into(directory: Path, source: Path) -> Path:
         identity = f"{source.resolve()}|{stat.st_size}|{stat.st_mtime_ns}"
     except OSError:
         identity = str(source)
+    if at is not None:
+        identity += f"|at={at:.3f}"
 
     key = hashlib.sha1(identity.encode("utf-8"), usedforsecurity=False).hexdigest()
     cached = directory / f"{key[:20]}.jpg"
@@ -1934,6 +2002,7 @@ def _thumbnail_into(directory: Path, source: Path) -> Path:
         capabilities.ffmpeg_path,
         [
             "-loglevel", "error",
+            *(["-ss", f"{at:.3f}"] if at is not None else []),
             # One frame is enough for a still and is the right choice for a
             # clip too: the filmstrip shows what the scene opens on.
             "-i", str(source.resolve()),
@@ -2245,7 +2314,8 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
 
     def looks(scene: Any) -> tuple[Any, ...]:
         return (
-            scene.asset.id if scene.asset else None,
+            # What is on screen: the speaker (D-192), else the picture.
+            "speaker" if now.shows_speaker(scene) else (scene.asset.id if scene.asset else None),
             scene.motion,
             scene.caption_text,
             scene.card_kind,
@@ -2492,6 +2562,7 @@ def _job_options(
         language=request.language,
         languages=tuple(request.languages),
         source_imagery=source_imagery,
+        footage=request.use_video,
         music=music,
         score=score,
     )
@@ -2721,6 +2792,20 @@ def _probe_duration(path: Path) -> float | None:
         return probe_media(path).duration or None
     except Exception:
         return None
+
+
+def _probe_has_video(path: Path) -> bool:
+    """Whether a recording has a picture of its own to show (D-192).
+
+    ``False`` rather than raising, like the duration: the choice is simply
+    not offered, and nothing else depends on it.
+    """
+    try:
+        from voxframe.render.encode.probe import probe_footage
+
+        return probe_footage(path) is not None
+    except Exception:
+        return False
 
 
 def build_default_app() -> FastAPI:

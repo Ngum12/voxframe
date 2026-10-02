@@ -121,7 +121,7 @@ export function Upload({
         </h1>
         <p className="lead">
           Voxframe listens to what is said, finds pictures for it and writes the captions, on
-          this computer. Then you finish it in the studio. Your audio is not uploaded anywhere.
+          this computer. Then you finish it in the studio. Your recording is not uploaded anywhere.
         </p>
       </header>
 
@@ -140,7 +140,7 @@ export function Upload({
           data-over={over}
           role="button"
           tabIndex={0}
-          aria-label="Choose an audio file, or drop one here"
+          aria-label="Choose a recording, sound or video, or drop one here"
           aria-describedby="upload-formats"
           onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => {
@@ -175,7 +175,7 @@ export function Upload({
                   <path d="M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
                 </svg>
               </span>
-              <strong>Drop an audio file here</strong>
+              <strong>Drop a recording here</strong>
               <span>or click to choose one</span>
             </>
           )}
@@ -200,8 +200,8 @@ export function Upload({
         />
 
         <p className="muted" id="upload-formats" style={{ marginTop: 14 }}>
-          WAV, MP3, M4A, FLAC, OGG, Opus, and video files with an audio track.
-          Up to 2 GB.
+          Sound: WAV, MP3, M4A, FLAC, OGG, Opus. Video: MP4, MOV, MKV, with you
+          on screen if you like. Up to 2 GB.
         </p>
       </div>
 

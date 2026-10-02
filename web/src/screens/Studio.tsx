@@ -33,7 +33,7 @@ import {
   undoPlan,
 } from "../api";
 import { Notice } from "../components";
-import { SceneDetail, TitleAdder, sceneThumbnail } from "./Filmstrip";
+import { SceneDetail, TitleAdder, sceneThumbnail, showsSpeaker } from "./Filmstrip";
 import { SoundPanel } from "./Sound";
 import { Timeline, type TimedWord } from "./Timeline";
 
@@ -401,7 +401,7 @@ export function Studio({
   const summary = job.summary ?? {};
   const hasVideo = job.artifacts.includes("video");
   const position = plan.scenes.findIndex((s) => s.index === scene.index);
-  const previewing = changedPictures.has(scene.index) && !!scene.asset;
+  const previewing = changedPictures.has(scene.index) && (!!scene.asset || showsSpeaker(scene));
   const statusText =
     status.kind === "updating"
       ? `Updating your video… ${status.fraction !== null ? `${Math.round(status.fraction * 100)}%` : ""}`

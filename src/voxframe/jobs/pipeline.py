@@ -47,6 +47,7 @@ __all__ = [
     "JobOptions",
     "PipelineOutcome",
     "Stage",
+    "attach_recording_footage",
     "render_plan",
     "run_pipeline",
 ]
@@ -111,6 +112,9 @@ class JobOptions:
     #: the server from the person's saved consent and configured keys, never
     #: from a request (D-116, D-132).
     source_imagery: bool = False
+    #: Show the recording's own picture, when it has one, with the matched
+    #: pictures as cutaways (D-192). Off: pictures only, as before.
+    footage: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +151,15 @@ class PipelineOutcome:
         illustratable = self.illustratable_scenes
         if not illustratable:
             return 0.0
+        if self.plan is not None and self.plan.footage is not None:
+            # A scene on the speaker shows the person, not a plain background.
+            shown = sum(
+                1
+                for scene in self.plan.scenes
+                if not scene.is_card
+                and (self.plan.shows_speaker(scene) or scene.asset is not None)
+            )
+            return shown / illustratable
         return self.matched_scenes / illustratable
 
     @property
@@ -327,7 +340,7 @@ def run_pipeline(
         plan = _flag_printed_text(
             plan, library, embedder, settings.resolved_embed_model
         )
-    elif options.want_plan:
+    elif options.want_plan or options.footage:
         # A plan without imagery still carries caption text and word timings,
         # which is what caption correction needs.
         plan = build_plan(
@@ -336,6 +349,11 @@ def run_pipeline(
         )
 
     audio = options.audio
+
+    if plan is not None and options.footage:
+        plan = _attach_footage(
+            plan, options, capabilities, progress, warnings, cutaways=library is not None
+        )
 
     if plan is not None:
         progress(Stage.PLANNING, "Placing cards", None)
@@ -353,6 +371,12 @@ def run_pipeline(
                 progress,
             )
             warnings.extend(highlight_warnings)
+            if plan.footage is not None:
+                # The kept scenes are in a new order: the video must still
+                # open and close on the speaker, and cutaways not touch.
+                from voxframe.plan.shots import choose_shots
+
+                plan = choose_shots(plan, cutaways=library is not None)
 
         if options.music is not None:
             # Recorded in the plan so credits describe what was rendered and a
@@ -904,6 +928,77 @@ def _source_missing_imagery(
     )
 
 
+def attach_recording_footage(
+    plan: ScenePlan,
+    recording: Path,
+    aspect: AspectRatio,
+    height: int,
+    capabilities: FFmpegCapabilities,
+    *,
+    cutaways: bool,
+) -> tuple[ScenePlan, str]:
+    """Put the recording's own picture in the plan, when it has one (D-192).
+
+    Shared by both front ends, so a video made from the command line and from
+    the app show the speaker the same way.
+
+    Returns:
+        ``(plan, warning)``. A recording with no picture, or one that cannot
+        be read, keeps the pictures-only plan, and the warning says so: the
+        person asked for their video, and must not be left wondering why it
+        is not there. The warning is empty otherwise.
+    """
+    from voxframe.plan.scene_plan import Footage
+    from voxframe.plan.shots import attach_footage
+    from voxframe.render.compose.captioned import _dimensions
+    from voxframe.render.encode.probe import FFmpegNotFound, probe_footage
+    from voxframe.render.motion.speaker import find_speaker_x
+
+    try:
+        info = probe_footage(recording, capabilities)
+    except (OSError, FFmpegNotFound) as exc:
+        log.warning("footage.unreadable", error=str(exc))
+        info = None
+    if info is None:
+        return plan, "This file has no picture to show, so the video uses pictures only."
+
+    width, out_height = _dimensions(aspect, height)
+    subject_x, source = 0.5, "centre"
+    # Only a crop narrower than the footage can leave the speaker out.
+    if width / out_height < info.width / info.height - 0.01:
+        subject_x, source = find_speaker_x(recording, info, capabilities)
+    footage = Footage(
+        path=str(recording),
+        width=info.width,
+        height=info.height,
+        fps=info.fps,
+        duration=info.duration,
+        audio_offset=info.audio_offset,
+        subject_x=subject_x,
+        subject_source=source,
+    )
+    return attach_footage(plan, footage, cutaways=cutaways), ""
+
+
+def _attach_footage(
+    plan: ScenePlan,
+    options: JobOptions,
+    capabilities: FFmpegCapabilities,
+    progress: ProgressCallback,
+    warnings: list[str],
+    *,
+    cutaways: bool,
+) -> ScenePlan:
+    progress(Stage.PLANNING, "Placing you on screen", None)
+    plan, warning = attach_recording_footage(
+        plan, options.audio, options.aspect, options.height, capabilities,
+        cutaways=cutaways,
+    )
+    if warning:
+        warnings.append(warning)
+    return plan
+
+
 def _apply_highlights(
     plan: ScenePlan,
     audio: Path,
@@ -986,6 +1081,11 @@ def _illustratable(plan: ScenePlan) -> int:
     return sum(1 for scene in plan.scenes if not getattr(scene, "card_kind", ""))
 
 
+def _on_speaker(plan: ScenePlan, scene: PlannedScene) -> bool:
+    """Whether a scene shows the speaker (D-192), for any plan-like object."""
+    return getattr(plan, "footage", None) is not None and getattr(scene, "shot", None) == "speaker"
+
+
 def _imagery_warnings(
     plan: ScenePlan, *, library: Path | None, sourcing: bool = False
 ) -> list[str]:
@@ -997,19 +1097,26 @@ def _imagery_warnings(
     """
     # Cards are drawn text, not failed matches, so they are not counted. Nor is
     # a scene the person cleared on purpose: describing their own choice as
-    # "found no suitable image" would be wrong (D-128).
+    # "found no suitable image" would be wrong (D-128). Nor a scene showing
+    # the speaker, which is not a plain background (D-192).
     intentional = sum(
         1
         for scene in plan.scenes
         if not getattr(scene, "card_kind", "")
         and getattr(scene, "asset", None) is None
-        and getattr(scene, "asset_source", "") == "user"
+        and (getattr(scene, "asset_source", "") == "user" or _on_speaker(plan, scene))
     )
     total = _illustratable(plan) - intentional
     if not total:
         return []
 
-    filled = plan.matched_scenes
+    # A scene on the speaker is not counted as filled by its picture either:
+    # it was left out of the total above.
+    filled = plan.matched_scenes - sum(
+        1
+        for scene in plan.scenes
+        if getattr(scene, "asset", None) is not None and _on_speaker(plan, scene)
+    )
     if filled == total:
         return []
 

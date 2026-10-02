@@ -53,6 +53,8 @@ export interface UploadResult {
   name: string;
   bytes: number;
   duration_seconds: number | null;
+  /** The file has a picture of its own to show: "Use my video" applies (D-192). */
+  has_video?: boolean;
 }
 
 export interface JobSummary {
@@ -198,6 +200,8 @@ export interface RenderOptions {
   chapters: boolean;
   highlights_seconds: number | null;
   use_library: boolean;
+  /** Show the recording's own picture, with matched pictures as cutaways (D-192). */
+  use_video?: boolean;
   /** A music bed, uploaded like the recording (D-148). */
   music_upload_id?: string | null;
   /** Attribution for the track, for the credits. */
@@ -251,6 +255,13 @@ export interface PlannedScene {
   asset_source: string;
   motion: string;
   motion_reason: string;
+  /** What the scene shows when the video has the speaker's footage (D-192). */
+  shot?: "picture" | "speaker";
+  /** "user" once a person has chosen the shot. */
+  shot_source?: string;
+  shot_reason?: string;
+  /** Where the scene starts in the recording; null for a card or no footage. */
+  footage_start?: number | null;
   match_score: number;
   semantic_score: number;
   match_reason: string;
@@ -273,6 +284,8 @@ export interface ScenePlan {
   music_credit: string;
   /** Music generated for the video (D-176). */
   score?: { style: string; seed: number; intensity: number } | null;
+  /** The recording's own picture, when the video shows the speaker (D-192). */
+  footage?: { path: string; width: number; height: number; subject_x: number } | null;
   created_at: string;
   scenes: PlannedScene[];
 }
@@ -561,6 +574,13 @@ export interface UpdateCheck {
 /** Ask for the latest release. Only ever called by the button (D-155). */
 export const checkForUpdates = () =>
   request<UpdateCheck>("/api/updates/check", { method: "POST" });
+
+/** Show the speaker or the scene's picture (D-192). */
+export const setShot = (jobId: string, index: number, shot: "speaker" | "picture") =>
+  request<EditResult>(`/api/jobs/${jobId}/scenes/${index}/shot`, {
+    method: "PUT",
+    body: JSON.stringify({ shot }),
+  });
 
 /** Turn a scene's camera movement on or off (D-154). */
 export const setMotion = (jobId: string, index: number, on: boolean) =>

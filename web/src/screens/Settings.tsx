@@ -228,6 +228,8 @@ export function Settings({
   const [musicBusy, setMusicBusy] = useState(false);
   const [musicChoice, setMusicChoice] = useState<MusicChoice>("none");
   const [scoreStyle, setScoreStyle] = useState("inspiring");
+  // A video's own picture is what its maker expects to see (D-192).
+  const [useVideo, setUseVideo] = useState(Boolean(upload.has_video));
 
   const duration = upload.duration_seconds ?? 0;
   const longEnoughForHighlights = duration >= HIGHLIGHTS_FLOOR_SECONDS;
@@ -244,6 +246,40 @@ export function Settings({
       </header>
 
       <UploadedFile result={upload} />
+
+      {upload.has_video && (
+        <div className="card">
+          <header>
+            <h2>Picture</h2>
+            <p>Your file has a picture as well as sound.</p>
+          </header>
+          <fieldset className="choices">
+            <legend className="sr-only">Picture</legend>
+            <Choice
+              name="picture"
+              value="video"
+              checked={useVideo}
+              onChange={() => setUseVideo(true)}
+              title="Use my video"
+              description="You on screen, in sync, with pictures cutting in when you mention what they show."
+            />
+            <Choice
+              name="picture"
+              value="pictures"
+              checked={!useVideo}
+              onChange={() => setUseVideo(false)}
+              title="Pictures only"
+              description="Your voice over matched pictures, as for a sound recording."
+            />
+          </fieldset>
+          {useVideo && aspect !== "16:9" && (
+            <p className="muted" style={{ marginTop: 10 }}>
+              Your video is cropped to the new shape around where you are in the frame.
+              You can switch any scene between you and its picture in the studio.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="card">
         <header>
@@ -412,7 +448,7 @@ export function Settings({
         </Notice>
       )}
 
-      {capabilities && capabilities.library.assets === 0 && !sourcingEnabled && (
+      {capabilities && capabilities.library.assets === 0 && !sourcingEnabled && !useVideo && (
         <Notice tone="warn">
           <strong>Scenes will show a plain background.</strong> There are no
           images in your library yet. Add your own photos in the Library, or turn
@@ -485,6 +521,7 @@ export function Settings({
               highlights_seconds:
                 highlights && longEnoughForHighlights ? highlightSeconds : null,
               use_library: true,
+              use_video: useVideo,
               music_upload_id: musicChoice === "own" ? (music?.upload_id ?? null) : null,
               music_credit: musicChoice === "own" ? musicCredit : "",
               score_style: musicChoice === "score" ? scoreStyle : null,

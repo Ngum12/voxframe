@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import structlog
 
-from voxframe.plan.scene_plan import MotionKind, PlanAsset, PlannedScene, ScenePlan
+from voxframe.plan.scene_plan import MotionKind, PlanAsset, PlannedScene, ScenePlan, Shot
 
 __all__ = [
     "MAX_CAPTION_CHARACTERS",
@@ -35,6 +35,7 @@ __all__ = [
     "remove_card",
     "remove_image",
     "set_motion",
+    "set_shot",
     "use_image",
 ]
 
@@ -126,6 +127,7 @@ def choose_image(plan: ScenePlan, index: int, asset_id: str) -> ScenePlan:
             "near_misses": near_misses,
             "asset_source": USER,
             **_motion_after_new_image(scene, "image chosen by you"),
+            **_show_the_picture(plan),
             "semantic_score": chosen.similarity or 0.0,
             "match_score": chosen.similarity or 0.0,
             "match_reason": "chosen by you",
@@ -161,6 +163,7 @@ def use_image(plan: ScenePlan, index: int, asset: PlanAsset) -> ScenePlan:
             "alternatives": alternatives,
             "asset_source": USER,
             **_motion_after_new_image(scene, "your own image"),
+            **_show_the_picture(plan),
             "semantic_score": 0.0,
             "match_score": 0.0,
             "match_reason": "your own image",
@@ -408,6 +411,50 @@ def add_chapter(plan: ScenePlan, before: int, text: str = "") -> ScenePlan:
     scenes.insert(before, card)
     log.info("plan.edit.chapter_added", before=before)
     return _retile(plan, scenes)
+
+
+# --- the speaker or the picture (D-192) ----------------------------------------
+
+
+def _show_the_picture(plan: ScenePlan) -> dict[str, object]:
+    """A picture a person just chose is one they want to see (D-192).
+
+    Choosing an image for a scene that shows the speaker would otherwise
+    change nothing on screen, which reads as the edit not working.
+    """
+    if plan.footage is None:
+        return {}
+    return {"shot": Shot.PICTURE, "shot_source": USER, "shot_reason": "the picture you chose"}
+
+
+def set_shot(plan: ScenePlan, index: int, shot: Shot) -> ScenePlan:
+    """Show the speaker, or the scene's picture, in one scene.
+
+    The choice is the person's: choosing shots again, as a new highlights cut
+    does, leaves it alone (``shot_source="user"``).
+
+    Raises:
+        EditError: The video has no footage, or the scene is a card.
+    """
+    if 0 <= index < len(plan.scenes) and plan.scenes[index].is_card:
+        raise EditError("A title or chapter card shows its text, not you or a picture.")
+    scene = _scene(plan, index)
+    if plan.footage is None:
+        raise EditError(
+            "This video was made from sound only, so there is no recording of you "
+            "to show. Make it again from a video file with \"Use my video\" on."
+        )
+    if scene.footage_start is None:
+        raise EditError("This scene has no part of your recording to show.")
+    reason = "on you, as you chose" if shot is Shot.SPEAKER else (
+        "the picture, as you chose" if scene.asset is not None
+        else "a plain background, as you chose"
+    )
+    log.info("plan.edit.shot", scene=index, shot=shot.value)
+    return _replace(
+        plan,
+        scene.model_copy(update={"shot": shot, "shot_source": USER, "shot_reason": reason}),
+    )
 
 
 # --- motion (D-154) ------------------------------------------------------------
