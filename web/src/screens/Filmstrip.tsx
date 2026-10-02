@@ -33,6 +33,7 @@ import {
   searchImages,
   searchPreviewUrl,
   setMotion,
+  setShot,
   thumbnailUrl,
   uploadOwnImage,
   type EditResult,
@@ -42,7 +43,7 @@ import {
   type ScenePlan,
   type SearchResult,
 } from "../api";
-import { Notice } from "../components";
+import { Choice, Notice } from "../components";
 
 /** Frames to "1:04.5" — the form an editor expects. */
 function timecode(frames: number, fps: number): string {
@@ -72,8 +73,15 @@ function explainEmpty(scene: PlannedScene): string {
  * The scene's thumbnail URL is the same before and after a swap, so without
  * this the browser would keep showing the old picture from its own cache.
  */
+/** Whether a scene shows the speaker rather than a picture (D-192). */
+export function showsSpeaker(scene: PlannedScene): boolean {
+  return scene.shot === "speaker" && scene.footage_start != null;
+}
+
 export function sceneThumbnail(jobId: string, scene: PlannedScene): string {
-  return `${thumbnailUrl(jobId, scene.index)}?v=${encodeURIComponent(scene.asset?.id ?? "")}`;
+  // Keyed on what is on screen, so switching a shot never shows a stale frame.
+  const shown = showsSpeaker(scene) ? `you-${scene.footage_start}` : (scene.asset?.id ?? "");
+  return `${thumbnailUrl(jobId, scene.index)}?v=${encodeURIComponent(shown)}`;
 }
 
 function SceneCard({
@@ -94,7 +102,9 @@ function SceneCard({
   const isCard = Boolean(scene.card_kind);
   const caption = scene.caption_text || scene.text;
 
-  useEffect(() => setThumbnailFailed(false), [scene.asset?.id]);
+  const speaker = showsSpeaker(scene);
+
+  useEffect(() => setThumbnailFailed(false), [scene.asset?.id, speaker]);
 
   return (
     <li>
@@ -102,7 +112,7 @@ function SceneCard({
         type="button"
         className="scene"
         data-selected={selected}
-        data-kind={isCard ? "card" : scene.asset ? "asset" : "empty"}
+        data-kind={isCard ? "card" : speaker ? "speaker" : scene.asset ? "asset" : "empty"}
         aria-pressed={selected}
         onClick={onSelect}
       >
@@ -114,7 +124,7 @@ function SceneCard({
               </span>
               <span className="scene-card-text">{scene.card_text}</span>
             </span>
-          ) : scene.asset && !thumbnailFailed ? (
+          ) : (scene.asset || speaker) && !thumbnailFailed ? (
             <img
               src={sceneThumbnail(jobId, scene)}
               alt=""
@@ -133,7 +143,8 @@ function SceneCard({
               )}
             </span>
           )}
-          {scene.asset?.kind === "video" && <span className="scene-badge">clip</span>}
+          {speaker && <span className="scene-badge">you</span>}
+          {!speaker && scene.asset?.kind === "video" && <span className="scene-badge">clip</span>}
           {scene.asset_source === "atmospheric" && (
             // Labelled on the card itself, so a filler is never mistaken for a
             // match even at a glance (D-137).
@@ -581,6 +592,25 @@ function explanation(scene: PlannedScene): string {
   return "Nothing in your library resembled this scene, so it shows a plain background.";
 }
 
+/** Why a scene shows the speaker, in the words its plan recorded (D-192). */
+function speakerExplanation(scene: PlannedScene): string {
+  if (scene.shot_source === "user") return "You chose to be on screen in this scene.";
+  const reason = scene.shot_reason ?? "";
+  if (reason.includes("opens and closes")) {
+    return "You are on screen: a video opens and closes on the person speaking.";
+  }
+  if (reason.includes("beside it cuts away")) {
+    return "You are on screen: the scene next to this one cuts away to a picture.";
+  }
+  if (reason.includes("too long")) {
+    return "You are on screen: a picture held this long would hide you rather than illustrate what you say.";
+  }
+  if (reason.includes("already cover")) {
+    return "You are on screen: pictures already cover as much of the video as they should.";
+  }
+  return "You are on screen in this scene.";
+}
+
 export function SceneDetail({
   jobId,
   scene,
@@ -690,11 +720,53 @@ export function SceneDetail({
       ) : (
         <>
           <h3 style={{ marginTop: 16 }}>What is on screen</h3>
-          <p className="scene-detail-text">{explanation(scene)}</p>
+          {scene.footage_start != null && (
+            // The speaker or the picture (D-192): the first choice for a
+            // video made with "Use my video", so it comes first.
+            <fieldset className="choices shot-choice" disabled={busy}>
+              <legend className="sr-only">Show you or the picture</legend>
+              <Choice
+                name={`shot-${scene.index}`}
+                value="speaker"
+                checked={showsSpeaker(scene)}
+                onChange={() => void run(() => setShot(jobId, scene.index, "speaker"))}
+                title="You"
+                description="Your video, in sync with what you say."
+              />
+              <Choice
+                name={`shot-${scene.index}`}
+                value="picture"
+                checked={!showsSpeaker(scene)}
+                onChange={() => void run(() => setShot(jobId, scene.index, "picture"))}
+                title={scene.asset ? "The picture" : "A plain background"}
+                description={
+                  scene.asset
+                    ? "Cut away to the picture while you speak."
+                    : "No picture matched; choose one below to cut away to it."
+                }
+              />
+            </fieldset>
+          )}
+          {showsSpeaker(scene) ? (
+            <>
+              <img
+                className="scene-current"
+                src={sceneThumbnail(jobId, scene)}
+                alt="You, in this scene"
+              />
+              <p className="scene-detail-text">{speakerExplanation(scene)}</p>
+            </>
+          ) : (
+            <p className="scene-detail-text">{explanation(scene)}</p>
+          )}
 
           {error && <Notice tone="error">{error}</Notice>}
 
-          {scene.asset && (
+          {showsSpeaker(scene) && (scene.asset || scene.alternatives.length > 0 || scene.near_misses.length > 0) && (
+            <h3 style={{ marginTop: 16 }}>Pictures for this scene</h3>
+          )}
+
+          {scene.asset && !showsSpeaker(scene) && (
             <img
               className="scene-current"
               src={sceneThumbnail(jobId, scene)}
@@ -706,7 +778,7 @@ export function SceneDetail({
               This image shows printed text, which can clash with the captions.
             </p>
           )}
-          {scene.asset && scene.asset.kind !== "video" && (
+          {scene.asset && scene.asset.kind !== "video" && !showsSpeaker(scene) && (
             // Per-scene on/off only; direction is a future idea (D-152, D-154).
             <label className="toggle" style={{ marginTop: 12 }}>
               <input

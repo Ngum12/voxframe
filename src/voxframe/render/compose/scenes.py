@@ -27,6 +27,7 @@ from voxframe.config.style import MotionStyle
 from voxframe.plan.scene_plan import MotionKind, PlannedScene, ScenePlan
 from voxframe.render.compose.cards import Card, render_card_segment
 from voxframe.render.compose.clips import render_clip_segment
+from voxframe.render.compose.footage import render_footage_segment
 from voxframe.render.compose.segment_cache import SegmentCache, segment_key
 from voxframe.render.compose.transitions import (
     TransitionPlan,
@@ -154,6 +155,7 @@ def render_scene_segments(
                 motion_signature=_motion_signature(motion),
                 quality=quality.value,
                 background=background,
+                footage_signature=_footage_signature(plan, scene),
             )
             if cache.fetch(key, segment):
                 results.append(
@@ -182,6 +184,32 @@ def render_scene_segments(
                 font_path=_card_font(),
             )
             results.append(SegmentResult(scene.index, segment, frames, False))
+
+        elif plan.shows_speaker(scene) and plan.footage is not None:
+            # The speaker, cut to the frames the scene's words were spoken
+            # over (D-192). The plan's validation guarantees a start.
+            assert scene.footage_start is not None
+            if not Path(plan.footage.path).is_file():
+                # Moved or deleted since the plan was made: the scene falls
+                # back to its picture rather than failing the whole video.
+                log.warning("render.footage.missing", path=plan.footage.path)
+                _render_fallback(
+                    plan, scene, caps, segment, width, height, frames, motion, background
+                )
+                results.append(SegmentResult(scene.index, segment, frames, scene.asset is not None))
+            else:
+                render_footage_segment(
+                    caps,
+                    plan.footage,
+                    scene.footage_start,
+                    segment,
+                    width=width,
+                    height=height,
+                    fps=plan.fps,
+                    frames=frames,
+                    intermediate_args=_INTERMEDIATE_ARGS,
+                )
+                results.append(SegmentResult(scene.index, segment, frames, True))
 
         elif scene.asset is not None and scene.asset.is_video:
             # A clip supplies its own motion, so it takes a different path
@@ -272,6 +300,69 @@ def render_scene_segments(
     )
 
     return results
+
+
+def _footage_signature(plan: ScenePlan, scene: PlannedScene) -> str:
+    """What makes a speaker shot look as it does, or ``""`` for any other scene.
+
+    The file is identified by its size and modification time as well as its
+    path, so replacing the recording at the same path is a different picture.
+    """
+    if not plan.shows_speaker(scene) or plan.footage is None:
+        return ""
+    footage = plan.footage
+    source = Path(footage.path)
+    try:
+        stat = source.stat()
+        identity = f"{stat.st_size}:{stat.st_mtime_ns}"
+    except OSError:
+        identity = "missing"
+    return (
+        f"speaker:{footage.path}:{identity}:{footage.audio_offset:.6f}"
+        f":{footage.subject_x:.4f}:{scene.footage_start:.6f}"
+    )
+
+
+def _render_fallback(
+    plan: ScenePlan,
+    scene: PlannedScene,
+    caps: FFmpegCapabilities,
+    segment: Path,
+    width: int,
+    height: int,
+    frames: int,
+    motion: MotionStyle,
+    background: str,
+) -> None:
+    """A speaker shot whose footage is gone: its picture, else the background."""
+    if (
+        scene.asset is not None
+        and not scene.asset.is_video
+        and scene.motion is not MotionKind.NONE
+        and Path(scene.asset.path).is_file()
+    ):
+        asset_path = Path(scene.asset.path)
+        saliency = find_subject_center(asset_path)
+        fp = filter_path_context(asset_path)
+        run_ffmpeg(
+            caps.ffmpeg_path,
+            [
+                "-loglevel", "error",
+                "-loop", "1",
+                "-i", fp.name if fp.cwd else str(asset_path.resolve()),
+                "-vf", _scene_filter(
+                    scene, width, height, plan.fps, motion, background,
+                    saliency.center if saliency.is_confident else None,
+                ),
+                "-frames:v", str(frames),
+                "-r", str(plan.fps),
+                *_INTERMEDIATE_ARGS,
+                "-y", str(segment.resolve()),
+            ],
+            cwd=fp.cwd,
+        )
+        return
+    _render_background(caps, segment, width, height, plan.fps, frames, background)
 
 
 def _motion_signature(motion: MotionStyle) -> str:

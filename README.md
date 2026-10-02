@@ -30,6 +30,9 @@ every change.
 
 - **Word-by-word captions**, in English or French, burned into the video, plus
   SRT and VTT subtitles.
+- **You on screen**, from a video file: your picture in sync with your
+  voice, with the matching pictures cutting in when you mention what they
+  show, and a vertical crop kept on you.
 - **Pictures that fit**, matched by meaning from your own library — or, if you
   turn it on and add a free key, from Pexels, Pixabay and Openverse. Every
   picture is credited with its photographer and licence.

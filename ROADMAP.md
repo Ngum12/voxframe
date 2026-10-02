@@ -54,6 +54,44 @@ Three additions to the studio, built in this order.
   - **a clear note** that some openly licensed music is also registered with
     YouTube's Content ID, so a video using it may still get a claim.
 
+## Then: Shorts
+
+Short vertical videos with real editing, made from a recording **or a
+video**. Built in this order, each step usable on its own:
+
+### 1. Your video on screen
+
+- **Use the speaker's own footage.** A video you add is no longer reduced to
+  its sound: you are on screen, in sync to the frame, and the matched
+  pictures cut in as cutaways when you mention something they show.
+- **You choose:** "Use my video" or "Pictures only", and any scene can be
+  switched between you and its picture in the studio.
+- **Framed for the shape you chose.** A landscape recording made vertical
+  keeps you in the frame rather than the middle of the room.
+
+### 2. Framing that follows you
+
+- **Face tracking**, on your computer, so a 9:16 crop follows you as you
+  move, smoothly, without jitter. A download the first time it is used, like
+  the music component.
+- **Captions placed clear of your face.**
+
+### 3. Jump cuts
+
+- **Silences, "um"s and false starts removed**, cut on the word timestamps,
+  so sound and picture stay together. Every cut is shown and can be undone.
+- **Zoom punch-ins** on the words you stress.
+
+### 4. Clips from a long recording
+
+- **Suggested Shorts:** 15 to 60 seconds each, starting and ending on a
+  sentence, scored by the same plain signals as highlights. You preview,
+  trim and choose; nothing is posted or chosen for you.
+- **Bold Shorts captions** (from 0.3.0's caption styles), a hook title over
+  the first seconds, and a progress bar.
+- **Export presets** for YouTube Shorts, TikTok, Reels and WhatsApp Status:
+  length, loudness, and captions kept clear of each app's buttons.
+
 ## Later
 
 - **Music composed for your video.** A score written for each recording,

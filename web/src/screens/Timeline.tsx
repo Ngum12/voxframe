@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { type ScenePlan } from "../api";
-import { sceneThumbnail } from "./Filmstrip";
+import { sceneThumbnail, showsSpeaker } from "./Filmstrip";
 
 export interface TimedWord {
   text: string;
@@ -164,7 +164,7 @@ export function Timeline({
                     title={label}
                     onClick={() => onScene(scene.index)}
                   >
-                    {scene.asset && sceneWidth > 28 && (
+                    {(scene.asset || showsSpeaker(scene)) && sceneWidth > 28 && (
                       <img src={sceneThumbnail(jobId, scene)} alt="" loading="lazy" />
                     )}
                     {changed.has(scene.index) && <i className="timeline-changed" aria-hidden="true" />}

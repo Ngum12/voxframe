@@ -48,6 +48,7 @@ def segment_key(
     motion_signature: str,
     quality: str,
     background: str,
+    footage_signature: str = "",
 ) -> str:
     """A content hash identifying one rendered segment.
 
@@ -61,6 +62,9 @@ def segment_key(
         motion_signature: Stable description of the motion settings.
         quality: Quality preset name.
         background: Background colour for unmatched scenes.
+        footage_signature: For a speaker shot, what identifies its frames
+            (D-192); empty for every other scene, which keeps their keys as
+            they were.
 
     Returns:
         A short hex digest.
@@ -85,6 +89,8 @@ def segment_key(
         quality,
         background,
     ]
+    if footage_signature:
+        parts.append(footage_signature)
 
     return hashlib.sha256("\u0000".join(parts).encode()).hexdigest()[:20]
 

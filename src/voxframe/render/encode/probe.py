@@ -22,10 +22,12 @@ __all__ = [
     "INSTALL_HINT",
     "FFmpegCapabilities",
     "FFmpegNotFound",
+    "FootageInfo",
     "MediaInfo",
     "detect_silences",
     "find_ffmpeg",
     "probe_capabilities",
+    "probe_footage",
     "probe_media",
 ]
 
@@ -271,6 +273,148 @@ def probe_media(path: Path, caps: FFmpegCapabilities | None = None) -> MediaInfo
         width=int(streams[0].get("width") or 0),
         height=int(streams[0].get("height") or 0),
         duration=float((payload.get("format") or {}).get("duration") or 0.0),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class FootageInfo:
+    """What the renderer needs to show a recording's own picture, in sync.
+
+    Attributes:
+        width: Displayed width, after any rotation a phone recorded.
+        height: Displayed height, after rotation.
+        fps: The picture's average frame rate. Phones record a variable rate;
+            the renderer resamples to the video's grid either way.
+        duration: The file's length in seconds.
+        audio_offset: Seconds from the file's start to its first sound.
+            Transcription and the soundtrack count time from the first sound;
+            FFmpeg seeks the picture from the file's start. Seeking to a
+            word's time plus this offset shows the frame it was spoken over.
+    """
+
+    width: int
+    height: int
+    fps: float
+    duration: float
+    audio_offset: float
+
+
+def _rate(text: str | None) -> float:
+    """``30000/1001`` -> 29.97; anything unreadable -> 0.0."""
+    if not text:
+        return 0.0
+    numerator, _, denominator = text.partition("/")
+    try:
+        value = float(numerator) / float(denominator or 1)
+    except (ValueError, ZeroDivisionError):
+        return 0.0
+    return value if value > 0 else 0.0
+
+
+def _rotation(stream: dict[str, object]) -> int:
+    """Degrees a player rotates this stream by, from either place it is kept."""
+    side_data = stream.get("side_data_list")
+    for item in side_data if isinstance(side_data, list) else []:
+        if isinstance(item, dict) and "rotation" in item:
+            try:
+                return int(float(item["rotation"]))
+            except (TypeError, ValueError):
+                return 0
+    tags = stream.get("tags")
+    if isinstance(tags, dict) and "rotate" in tags:
+        try:
+            return int(float(tags["rotate"]))
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _start(entry: dict[str, object] | None) -> float:
+    if not entry:
+        return 0.0
+    try:
+        return float(entry.get("start_time") or 0.0)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def probe_footage(path: Path, caps: FFmpegCapabilities | None = None) -> FootageInfo | None:
+    """Read a recording's picture, or ``None`` when it has none worth showing.
+
+    A file with no video stream, or only a cover image (an MP3's album art is
+    a one-frame "video"), has nothing to show and returns ``None``.
+
+    Raises:
+        FFmpegNotFound: If ffprobe is unavailable.
+        OSError: If the file cannot be read.
+    """
+    capabilities = caps or probe_capabilities()
+    if not capabilities.ffprobe_path:
+        raise FFmpegNotFound(
+            "ffprobe is needed to read a video's picture but was not found. It "
+            "normally ships alongside ffmpeg."
+        )
+
+    completed = subprocess.run(
+        [
+            capabilities.ffprobe_path,
+            "-v", "error",
+            "-show_entries",
+            "stream=codec_type,width,height,avg_frame_rate,r_frame_rate,start_time"
+            ":stream_disposition=attached_pic:stream_tags=rotate:stream_side_data=rotation"
+            ":format=start_time,duration",
+            "-of", "json",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        creationflags=NO_WINDOW,
+    )
+    if completed.returncode != 0:
+        raise OSError(f"ffprobe failed on {path.name}: {completed.stderr.strip()[:120]}")
+    try:
+        payload = json.loads(completed.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        raise OSError(f"ffprobe returned invalid JSON for {path.name}: {exc}") from exc
+
+    streams = [s for s in payload.get("streams") or [] if isinstance(s, dict)]
+    video = next(
+        (
+            s for s in streams
+            if s.get("codec_type") == "video"
+            and not (s.get("disposition") or {}).get("attached_pic")
+        ),
+        None,
+    )
+    audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
+    if video is None:
+        return None
+
+    width, height = int(video.get("width") or 0), int(video.get("height") or 0)
+    fps = _rate(video.get("avg_frame_rate")) or _rate(video.get("r_frame_rate"))
+    if width <= 0 or height <= 0 or fps <= 0:
+        return None
+    if _rotation(video) % 180:
+        width, height = height, width
+
+    form = payload.get("format") or {}
+    try:
+        duration = float(form.get("duration") or 0.0)
+    except (TypeError, ValueError):
+        duration = 0.0
+    # FFmpeg seeks relative to the file's own start: the earliest stream.
+    file_start = _start(form) if form.get("start_time") is not None else min(
+        _start(video), _start(audio)
+    )
+    offset = (_start(audio) - file_start) if audio is not None else 0.0
+
+    return FootageInfo(
+        width=width,
+        height=height,
+        fps=round(fps, 6),
+        duration=duration,
+        audio_offset=round(max(0.0, offset), 6),
     )
 
 

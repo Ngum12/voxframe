@@ -36,6 +36,7 @@ from voxframe.render.version import RENDERER_VERSION
 
 __all__ = [
     "PLAN_VERSION",
+    "Footage",
     "MotionKind",
     "PlanAsset",
     "PlanError",
@@ -43,6 +44,7 @@ __all__ = [
     "PlannedScene",
     "QuerySource",
     "ScenePlan",
+    "Shot",
 ]
 
 #: Bumped when the plan format changes incompatibly, so an old plan is refused
@@ -77,6 +79,42 @@ class MotionKind(StrEnum):
     NONE = "none"
     KEN_BURNS = "ken_burns"
     PARALLAX = "parallax"
+
+
+class Shot(StrEnum):
+    """What a scene shows when the recording has a picture of its own."""
+
+    #: The matched picture, or the background when there is none: what every
+    #: scene showed before a recording's own picture could be used.
+    PICTURE = "picture"
+
+    #: The recording's own picture, the speaker, cut to the frame the scene's
+    #: words were spoken over.
+    SPEAKER = "speaker"
+
+
+class Footage(BaseModel):
+    """The recording's own picture, when it has one and the person chose it.
+
+    Recorded in the plan so the renderer still reads nothing else (D-011).
+    """
+
+    model_config = {"frozen": True}
+
+    path: str = Field(min_length=1)
+    #: Displayed size, after any rotation the camera recorded.
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    fps: float = Field(gt=0)
+    duration: float = Field(ge=0)
+    #: Seconds from the file's start to its first sound. A scene's
+    #: ``footage_start`` is on the sound's clock; adding this finds the frame.
+    audio_offset: float = Field(default=0.0, ge=0)
+    #: Where the speaker is across the frame, 0 (left) to 1 (right). Used when
+    #: the video is narrower than the footage, so the crop keeps them in.
+    subject_x: float = Field(default=0.5, ge=0, le=1)
+    #: Where it came from: ``motion``, ``centre`` or ``user``.
+    subject_source: str = Field(default="centre")
 
 
 class PlanAsset(BaseModel):
@@ -263,6 +301,17 @@ class PlannedScene(BaseModel):
     motion: MotionKind = Field(default=MotionKind.KEN_BURNS)
     motion_reason: str = Field(default="")
 
+    #: What this scene shows when the plan has footage. Ignored without it.
+    shot: Shot = Field(default=Shot.PICTURE)
+    #: ``user`` once a person has chosen the shot; nothing automatic changes it.
+    shot_source: str = Field(default="automatic")
+    shot_reason: str = Field(default="")
+    #: Where this scene starts in the recording, in seconds on the sound's
+    #: clock. Kept per scene rather than derived, so highlights and cuts that
+    #: move scenes on the video's clock still show the frames that were
+    #: spoken over. ``None`` for a card, or a plan without footage.
+    footage_start: float | None = Field(default=None, ge=0)
+
     match_score: float = Field(default=0.0)
     semantic_score: float = Field(default=0.0)
     match_reason: str = Field(default="")
@@ -385,6 +434,9 @@ class ScenePlan(BaseModel):
     #: A video has a person's own track or a score, never both.
     score: ScoreChoice | None = Field(default=None)
 
+    #: The recording's own picture (D-192). ``None`` shows pictures only.
+    footage: Footage | None = Field(default=None)
+
     #: The person's sound settings (D-171). Changing them re-renders only the
     #: sound; the pictures come from the cache.
     audio_mix: AudioMix = Field(default_factory=AudioMix)
@@ -405,6 +457,25 @@ class ScenePlan(BaseModel):
         if self.score is not None and self.music_path:
             raise PlanError("a plan has either a music track or a generated score, not both")
         return self
+
+    @model_validator(mode="after")
+    def _speaker_shots_have_footage(self) -> Self:
+        for scene in self.scenes:
+            if scene.shot is not Shot.SPEAKER:
+                continue
+            if self.footage is None:
+                raise PlanError(
+                    f"scene {scene.index} shows the speaker, but the plan has no footage"
+                )
+            if scene.is_card or scene.footage_start is None:
+                raise PlanError(
+                    f"scene {scene.index} shows the speaker but has no footage_start"
+                )
+        return self
+
+    def shows_speaker(self, scene: PlannedScene) -> bool:
+        """Whether ``scene`` renders from the footage."""
+        return self.footage is not None and scene.shot is Shot.SPEAKER
 
     @model_validator(mode="after")
     def _scenes_tile_the_timeline(self) -> Self:
@@ -455,6 +526,11 @@ class ScenePlan(BaseModel):
     @property
     def matched_scenes(self) -> int:
         return sum(1 for scene in self.scenes if scene.asset is not None)
+
+    @property
+    def speaker_scenes(self) -> int:
+        """Scenes showing the recording's own picture (D-192)."""
+        return sum(1 for scene in self.scenes if self.shows_speaker(scene))
 
     @property
     def unique_assets(self) -> int:
