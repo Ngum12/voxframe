@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import importlib
 import importlib.util
+import io
 import json
 import shutil
 import sys
@@ -47,7 +48,6 @@ log = structlog.get_logger(__name__)
 
 MUSIC_MANIFEST = "music.json"
 USER_AGENT = "voxframe (+https://github.com/Ngum12/voxframe)"
-_UNPACK_ATTEMPTS = 3
 
 
 class ComponentError(RuntimeError):
@@ -174,42 +174,27 @@ def install(manifest: Manifest, progress: Callable[[float, float], None] | None 
     if (home / ".complete").is_file():
         return home
     staging = home.with_name(home.name + ".partial")
-    total = manifest.megabytes
-    for attempt in range(1, _UNPACK_ATTEMPTS + 1):
-        shutil.rmtree(staging, ignore_errors=True)
-        staging.mkdir(parents=True)
-        done = 0.0
-        current = "<unknown wheel>"
-        try:
-            for wheel in manifest.wheels:
-                current = wheel.filename
-                data = _fetch(wheel)
-                with zipfile.ZipFile(_spool(data, staging / wheel.filename)) as archive:
-                    _check_names(archive, staging)
-                    archive.extractall(staging)
-                (staging / wheel.filename).unlink()
-                done += wheel.size / 1_000_000
-                if progress is not None:
-                    progress(done, total)
-            (staging / ".complete").write_text(manifest.digest, encoding="utf-8")
-            shutil.rmtree(home, ignore_errors=True)
-            staging.replace(home)
-            break
-        except (EOFError, zipfile.BadZipFile) as exc:
-            if attempt == _UNPACK_ATTEMPTS:
-                raise ComponentError(f"{current} could not be unpacked: {exc}") from exc
-            log.warning(
-                "components.unpack_retry",
-                name=manifest.name,
-                wheel=current,
-                attempt=attempt,
-                retries_left=_UNPACK_ATTEMPTS - attempt,
-                error=str(exc),
-            )
-        except BaseException:
-            shutil.rmtree(staging, ignore_errors=True)
-            raise
     shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True)
+    done = 0.0
+    total = manifest.megabytes
+    try:
+        for wheel in manifest.wheels:
+            # Unpacked from memory, never from a copy in ``staging``: a wheel
+            # may hold a file named like the wheel itself (scipy 1.18.1 for
+            # Windows does), and unpacking it would empty the zip being read.
+            with zipfile.ZipFile(io.BytesIO(_fetch(wheel))) as archive:
+                _check_names(archive, staging)
+                archive.extractall(staging)
+            done += wheel.size / 1_000_000
+            if progress is not None:
+                progress(done, total)
+        (staging / ".complete").write_text(manifest.digest, encoding="utf-8")
+        shutil.rmtree(home, ignore_errors=True)
+        staging.replace(home)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
     log.info(
         "components.installed", name=manifest.name, megabytes=round(total, 1), folder=str(home)
     )
@@ -227,11 +212,6 @@ def _fetch(wheel: Wheel) -> bytes:
     if actual != wheel.sha256:
         raise ComponentError(f"{wheel.filename} does not match its SHA-256; nothing was installed")
     return data
-
-
-def _spool(data: bytes, path: Path) -> Path:
-    path.write_bytes(data)
-    return path
 
 
 def _check_names(archive: zipfile.ZipFile, root: Path) -> None:
