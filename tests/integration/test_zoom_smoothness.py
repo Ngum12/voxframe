@@ -137,7 +137,7 @@ def _frame_deltas(
             "-loglevel", "error",
             "-i", str(video),
             "-vf", f"select='between(n\\,{start_frame}\\,{start_frame + count})'",
-            "-vsync", "0",
+            "-fps_mode", "passthrough",
             "-y", str(work_dir / "f%03d.png"),
         ],
     )

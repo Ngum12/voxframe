@@ -6119,3 +6119,43 @@ from edge to edge.
   and landscape sizes and measure the lit pixels: every caption stays inside
   the side margins. On the old code, every vertical case and `energetic`
   square failed; landscape passed.
+
+### D-195 · Checks on every pull request, on Linux, Windows and macOS
+
+Until now the only workflow was the release, run when a version tag is
+pushed: whatever broke an installer was found on release day (D-191), and
+merging a pull request ran nothing at all.
+
+`.github/workflows/checks.yml` runs on every pull request and every push to
+`main`:
+
+- **lint:** `ruff check src tests scripts`, which now passes on the whole
+  repository (one long line and seven unneeded `noqa` comments fixed);
+- **web:** rebuilds the web app and fails if the committed build differs
+  from it (D-117);
+- **tests:** the unit and integration suites on Linux (Python 3.11 and
+  3.13), Windows (3.13, as the installer is built) and Apple Silicon macOS
+  (3.12, as the Mac app is built), with the FFmpeg each one ships:
+  `scripts/ci_ffmpeg.py` takes the Windows and Mac builds and their SHA-256
+  from the installer scripts, so there is one place they are pinned. Linux
+  ships none, so it takes BtbN's static build of the same release branch
+  (9.0.2 today); that file is replaced as the branch gets fixes, so it is not
+  pinned by checksum, and it only runs tests. Whisper's models are kept
+  between runs;
+- **browser:** the Playwright tests in Chromium.
+
+Left out, and said so in the workflow: tests marked `needs_models` (the
+1.5 GB picture model), `tests/eval` (measurements, not checks), and mypy
+(many errors from before it was checked; its own piece of work).
+
+Fixed on the way, so the checks start green:
+
+- two tests used FFmpeg's `-vsync`, removed from current FFmpeg; they use
+  `-fps_mode passthrough`, its replacement since 5.1;
+- `test_loading_fails_once_and_is_remembered` failed in a full run but not
+  alone: it replaces a function for the whole process and counted every
+  call, including those from a render an earlier test left running. It now
+  counts only its own thread's calls.
+
+Run as the Linux job runs it, with FFmpeg 9.0.2: no failures; the only
+errors were Whisper downloads, which the machine it was run on cannot make.

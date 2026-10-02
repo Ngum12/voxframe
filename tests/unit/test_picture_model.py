@@ -95,10 +95,17 @@ class TestAModelThatCannotLoadSaysSo:
 
     def test_loading_fails_once_and_is_remembered(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """v0.1.0 tried to load the model again for every batch: 205 times."""
+        import threading
+
         checks: list[str] = []
+        this_test = threading.get_ident()
 
         def broken(model_key: str = "default") -> str:
-            checks.append(model_key)
+            # Only this test's own calls count. The function is replaced for
+            # the whole process, and a render left running by an earlier test
+            # can call it too, which made this fail in a full run only.
+            if threading.get_ident() == this_test:
+                checks.append(model_key)
             return "the Python module 'transformers' is missing"
 
         monkeypatch.setattr(embeddings, "stack_problem", broken)

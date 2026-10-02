@@ -234,7 +234,7 @@ class TestMotionIsApplied:
             [
                 "-loglevel", "error", "-i", str(result.video_path),
                 "-vf", "select='eq(n\\,10)+eq(n\\,60)+eq(n\\,110)'",
-                "-vsync", "0", "-y", str(frames_dir / "f%02d.png"),
+                "-fps_mode", "passthrough", "-y", str(frames_dir / "f%02d.png"),
             ],
         )
 

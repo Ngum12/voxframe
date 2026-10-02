@@ -110,7 +110,8 @@ video**. Built in this order, each step usable on its own:
 - **Install with `pip`** from PyPI.
 - **Silent installs** on Windows, documented for schools and organisations.
 - **A project website.**
-- **Always-on checks** for pull requests on GitHub, and issue templates.
+- **Issue templates** on GitHub. (Always-on checks for pull requests are
+  running: D-195.)
 
 ## Always
 
