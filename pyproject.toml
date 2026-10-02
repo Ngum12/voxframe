@@ -39,7 +39,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-transcribe = ["faster-whisper>=1.0"]
+transcribe = [
+    "faster-whisper>=1.0",
+    # PyAV 19 removed the `metadata_errors` option that faster-whisper 1.2.1
+    # (the latest) passes when it decodes audio, so every recording failed to
+    # transcribe in a fresh install (D-190). Lift the cap when faster-whisper
+    # stops passing it.
+    "av>=11,<19",
+]
 library = [
     "open_clip_torch>=2.24",
     # The default, multilingual model's tokenizer and text tower are Hugging

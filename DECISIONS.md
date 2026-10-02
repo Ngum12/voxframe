@@ -5924,3 +5924,28 @@ the plain backgrounds of an earlier render.
 - **The music lane** read "the music lane comes with the score's editing
   stage", a development note. It now says what the music is: no music, your
   own track, or the generated score and its style.
+
+### D-190 · PyAV is capped below 19: a fresh install could not read audio
+
+The v0.2.0 release build failed on macOS at its first transcription:
+
+- **The error:** faster-whisper's audio decoder raised `TypeError: open()
+  got an unexpected keyword argument 'metadata_errors'`.
+- **The cause:** faster-whisper 1.2.1, the latest release, opens every
+  recording with `av.open(..., metadata_errors="ignore")`. PyAV 19.0.0
+  removed that option; 18.0.0 still had it. Both wheels were downloaded and
+  inspected, not installed.
+- **Why only a fresh install saw it:** the build resolves its versions
+  fresh, so it got PyAV 19. This machine had 17.1.0, so the suite passed.
+
+**The fix:** the `transcribe` extra declares `av>=11,<19`, with a comment
+saying when to lift the cap. No package is added: PyAV was already there,
+through faster-whisper.
+
+**The tests:** a new unit test reads the sonnet through faster-whisper's own
+decoder, so the pair is checked wherever the suite runs, and checks the
+installed PyAV is under 19.
+
+**The release:** nothing was published from the failed tag. As the owner
+chose, the public repository gets the fix as a second commit, and `v0.2.0`
+is moved onto it. The owner deletes the old tag on GitHub and pushes again.
