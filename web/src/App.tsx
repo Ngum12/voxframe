@@ -30,8 +30,8 @@ import { GettingReady } from "./screens/GettingReady";
 import { Library } from "./screens/Library";
 import { Preferences } from "./screens/Preferences";
 import { Progress } from "./screens/Progress";
-import { Result } from "./screens/Result";
 import { Settings } from "./screens/Settings";
+import { Studio } from "./screens/Studio";
 import { Upload } from "./screens/Upload";
 
 type Screen =
@@ -44,10 +44,10 @@ type Screen =
   | "preferences";
 
 const STEPS = [
-  { id: "upload", label: "Upload" },
-  { id: "settings", label: "Settings" },
-  { id: "progress", label: "Render" },
-  { id: "result", label: "Download" },
+  { id: "upload", label: "Recording" },
+  { id: "settings", label: "Look and music" },
+  { id: "progress", label: "Making" },
+  { id: "result", label: "Studio" },
 ];
 
 export function App() {
@@ -203,8 +203,8 @@ export function App() {
         </nav>
       </header>
 
-      <main id="main">
-        {screen !== "preferences" && screen !== "plan" && screen !== "library" && (
+      <main id="main" className={screen === "result" ? "main-studio" : undefined}>
+        {screen !== "preferences" && screen !== "plan" && screen !== "library" && screen !== "result" && (
           <Steps steps={STEPS} current={screen} />
         )}
         {error && <Notice tone="error">{error}</Notice>}
@@ -243,6 +243,11 @@ export function App() {
               setUpload(result);
               setScreen("settings");
             }}
+            onOpen={(opened) => {
+              setJobId(opened.id);
+              setJob(opened);
+              setScreen("result");
+            }}
           />
         )}
 
@@ -270,9 +275,13 @@ export function App() {
           />
         )}
 
-        {screen === "result" && job && (
-          <Result
-            job={job}
+        {screen === "result" && job && jobId && (
+          // The studio (D-180): the video is edited in place, and updating it
+          // stays here rather than moving to the progress screen.
+          <Studio
+            jobId={jobId}
+            initialJob={job}
+            sourcingEnabled={sourcingEnabled}
             onShowPlan={() => setScreen("plan")}
             onAgain={() => {
               setUpload(null);
@@ -291,7 +300,7 @@ export function App() {
               style={{ padding: 0, marginBottom: 14 }}
               onClick={() => setScreen("result")}
             >
-              &larr; Back to the video
+              &larr; Back to the studio
             </button>
             <Filmstrip
               jobId={jobId}

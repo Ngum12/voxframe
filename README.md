@@ -20,10 +20,11 @@
 
 Give Voxframe a lesson, a talk or a podcast episode. It hears every word,
 captions each one as it is spoken, splits the recording into scenes, and finds a
-photograph or clip for each scene that fits what is said. Then it shows you every
-decision it made, so you can change any of them before you share the video.
+photograph or clip for each scene that fits what is said. Then you finish it in
+the studio: the video stays in view while you change anything, with undo for
+every change.
 
-![The scene plan: every scene, and why it looks the way it does](docs/phases/phase-8-07-filmstrip.png)
+![The studio: the video, its scenes and words on the timeline, and everything you can change](docs/images/studio-dark.png)
 
 ## What it does
 
@@ -33,9 +34,16 @@ decision it made, so you can change any of them before you share the video.
   turn it on and add a free key, from Pexels, Pixabay and Openverse. Every
   picture is credited with its photographer and licence.
 - **A finished look**: slow camera movement, crossfades, title and chapter
-  cards, and your own music lowered under the voice.
-- **You decide**: swap a picture, correct a caption, add a title, then update
-  the video — only the scenes you changed are made again.
+  cards, and your own music, edited to the speaker: cut on the beat, quieter
+  under every sentence, rising into pauses, and ending on the last word.
+- **Sound that is ready to share**: gentle voice polish, the music kept under
+  the voice, and the right loudness for YouTube, social media, WhatsApp or a
+  podcast. Every video's sound is checked.
+- **The studio**: swap a picture, correct a caption, add a title, change the
+  music, and see each change before you make it. Undo anything. When you
+  update the video, only what you changed is made again.
+- **Dark or light**, following your computer, and usable entirely from the
+  keyboard.
 - **Long recordings**: chapters at long pauses, a short highlights version, and
   a render that resumes if it is interrupted.
 
@@ -100,5 +108,6 @@ videos is not normally where those licences apply. *This is not legal advice.*
 ## Reporting a problem
 
 Bugs and ideas: [open an issue](https://github.com/Ngum12/voxframe/issues).
+What's planned: [ROADMAP.md](ROADMAP.md). To help: [CONTRIBUTING.md](CONTRIBUTING.md).
 Anything else: [the maintainer on LinkedIn](https://www.linkedin.com/in/ngum-dieudonne/).
 Security problems: privately, as [SECURITY.md](SECURITY.md) describes.

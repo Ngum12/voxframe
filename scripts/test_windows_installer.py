@@ -58,6 +58,16 @@ print("torch", torch.__version__, "faster-whisper", faster_whisper.__version__)
 from voxframe.selfcheck import picture_model, window
 print(window())
 print(picture_model())
+# The music component: not in the installer, fetched through its manifest
+# the first time, then used for real (D-172).
+from voxframe.components import activate_music, install_music, music_manifest, music_ready
+manifest = music_manifest()
+assert manifest is not None and not music_ready(), "the music component should be a download"
+install_music()
+assert activate_music()
+from voxframe.music.analysis import analyse_track
+tempo = analyse_track(sonnet).tempo
+print("music component", round(manifest.megabytes), "MB; analysis ran:", tempo > 0)
 from voxframe.config.settings import QualityPreset, get_settings
 from voxframe.config.style import get_template
 from voxframe.jobs.pipeline import JobOptions, run_pipeline

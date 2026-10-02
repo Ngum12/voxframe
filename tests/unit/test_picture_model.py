@@ -317,7 +317,7 @@ def _run_installed(
     def render(plan: Any, audio: Path, *args: object, **kwargs: object) -> Any:
         return SimpleNamespace(
             video_path=tmp_path / "out.mp4", elapsed_seconds=1.0, realtime_factor=0.1,
-            frame_count=plan.total_frames,
+            frame_count=plan.total_frames, music_note="", sound=None,
         )
 
     monkeypatch.setattr("voxframe.library.embeddings.Embedder", embedder)

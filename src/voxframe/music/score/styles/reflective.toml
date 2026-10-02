@@ -1,0 +1,57 @@
+# Reflective: sparse piano over low strings, in a minor key.
+# The format is described in README.md beside this file.
+
+name = "reflective"
+label = "Reflective"
+description = "Sparse piano over low strings, in a minor key."
+order = 3
+
+[key]
+tonics = ["C", "D", "F", "G", "Bb"]
+home = "vi"
+
+[tempo]
+min = 60
+max = 72
+
+[energy]
+offset = -0.4
+min = 0
+max = 3
+
+[harmony]
+progressions = [
+  ["vi", "IV", "I", "V"],
+  ["vi", "iii", "IV", "I"],
+  ["vi", "V", "IV", "V"],
+  ["IV", "vi", "V", "vi"],
+]
+chord_bars = [2, 2, 1]
+
+[rhythm]
+patterns = [
+  [0, 1, 2, 1, 3, 1, 2, 1],
+  [0, 2, 3, 2, 1, 2, 3, 2],
+  [0, 1, 3, 1, 2, 1, 3, 1],
+]
+accents = [1.0, 0.7, 0.82, 0.7, 0.92, 0.7, 0.82, 0.7]
+
+[instruments]
+leads = ["piano", "violins", "cellos"]
+arpeggio = "none"
+
+[layers]
+pad = 0
+melody = 0
+melody_until = 4
+string_pads = 1
+contrabass = 1
+sub_bass = 2
+lead_line = 2
+cello_ostinato = 2
+high_violins = 3
+viola_ostinato = 3
+chord_hits = 3
+section_swell = 3
+pause_roll = 2
+final_hit = false

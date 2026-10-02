@@ -72,7 +72,7 @@ function explainEmpty(scene: PlannedScene): string {
  * The scene's thumbnail URL is the same before and after a swap, so without
  * this the browser would keep showing the old picture from its own cache.
  */
-function sceneThumbnail(jobId: string, scene: PlannedScene): string {
+export function sceneThumbnail(jobId: string, scene: PlannedScene): string {
   return `${thumbnailUrl(jobId, scene.index)}?v=${encodeURIComponent(scene.asset?.id ?? "")}`;
 }
 
@@ -504,7 +504,7 @@ function CardEditor({
 }
 
 /** Add a title card to a video that has none. Only ever what the person types (D-092). */
-function TitleAdder({
+export function TitleAdder({
   busy,
   onAdd,
 }: {
@@ -581,7 +581,7 @@ function explanation(scene: PlannedScene): string {
   return "Nothing in your library resembled this scene, so it shows a plain background.";
 }
 
-function SceneDetail({
+export function SceneDetail({
   jobId,
   scene,
   fps,
@@ -591,10 +591,13 @@ function SceneDetail({
   canStartChapter,
   onEdited,
   onPlanEdited,
+  part = "all",
 }: {
   jobId: string;
   scene: PlannedScene;
   fps: number;
+  /** What to show: everything (the scene-plan page), or one tab's half in the studio. */
+  part?: "all" | "picture" | "caption";
   /** Whether a chapter may start before this scene (D-145). */
   canStartChapter: boolean;
   /** A card edit: the whole plan changes, and which scene to show next. */
@@ -657,7 +660,7 @@ function SceneDetail({
         </p>
       </header>
 
-      {caption && (
+      {caption && part !== "picture" && (
         <>
           <h3>What is said</h3>
           <CaptionEditor
@@ -668,7 +671,9 @@ function SceneDetail({
         </>
       )}
 
-      {scene.card_kind ? (
+      {part === "caption" ? (
+        error && <Notice tone="error">{error}</Notice>
+      ) : scene.card_kind ? (
         <>
           {error && <Notice tone="error">{error}</Notice>}
           <CardEditor
@@ -844,6 +849,7 @@ function SceneDetail({
         </>
       )}
 
+      {part !== "caption" && (
       <details className="scene-details">
         <summary>Details</summary>
         <dl className="detail-list">
@@ -900,6 +906,7 @@ function SceneDetail({
           </dd>
         </dl>
       </details>
+      )}
     </section>
   );
 }

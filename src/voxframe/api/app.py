@@ -17,8 +17,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import secrets
 import shutil
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -45,6 +46,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from voxframe import __version__
+from voxframe.api.plan_history import History, PlanHistory, replace_retrying
 from voxframe.api.security import (
     PathOutsideSandbox,
     SessionToken,
@@ -63,6 +65,7 @@ from voxframe.jobs.pipeline import JobOptions, PipelineOutcome, Stage
 from voxframe.jobs.store import Job, JobStore, ProgressEvent
 from voxframe.library.db import AssetLibrary
 from voxframe.model_downloads import Download
+from voxframe.plan.audio_mix import AudioMix
 from voxframe.plan.scene_plan import PlannedScene, ScenePlan
 from voxframe.sourcing.manual import SearchResults
 
@@ -201,6 +204,35 @@ class RenderRequest(BaseModel):
     #: with none is recorded as supplied by the person, never given an
     #: invented credit (D-091).
     music_credit: str = Field(default="", max_length=300)
+    #: Music generated for the video instead, in this style (D-176). A new
+    #: video gets its own variation; a track and a score are never both used.
+    score_style: str | None = Field(default=None, max_length=40)
+
+
+class MusicEdit(BaseModel):
+    """The video's music, changed after it was made (D-179).
+
+    ``score`` composes music in ``style``; ``new_variation`` asks for a new
+    piece in it. ``own`` goes back to the person's own track, if this video had
+    one, or uses a track uploaded now (``upload_id``), at any time after the
+    video was made (D-184). ``forget_track`` removes the person's track, so
+    it is no longer offered. Like every edit, it applies with "Update video",
+    which re-renders only the sound.
+    """
+
+    choice: Literal["none", "own", "score"]
+    #: A track uploaded with ``/api/uploads``, for ``own``. Never a path.
+    upload_id: str | None = Field(default=None, max_length=64)
+    #: The track's credit, as the person states it; never invented (D-091).
+    #: ``None`` keeps the credit it has.
+    credit: str | None = Field(default=None, max_length=300)
+    forget_track: bool = False
+    style: str | None = Field(default=None, max_length=40)
+    intensity: float = Field(default=0.0, ge=-1.0, le=1.0)
+    #: A particular variation (undo goes back to one); otherwise the video's
+    #: own, or a new one with ``new_variation``.
+    seed: int | None = Field(default=None, ge=0, lt=2**31)
+    new_variation: bool = False
 
 
 class SettingsUpdate(BaseModel):
@@ -208,6 +240,7 @@ class SettingsUpdate(BaseModel):
 
     sourcing_consent: bool | None = None
     api_keys: dict[str, str] | None = None
+    theme: Literal["system", "dark", "light"] | None = None
 
 
 class ImageEdit(BaseModel):
@@ -232,6 +265,19 @@ class FolderRequest(BaseModel):
     """One of Voxframe's own folders, by name. Never a path (D-115)."""
 
     which: Literal["library", "videos", "data"]
+
+
+class MixPreview(BaseModel):
+    """A short stretch of the mix at settings not yet applied (D-171)."""
+
+    mix: AudioMix
+    start: float = Field(default=0.0, ge=0.0)
+    seconds: float = Field(default=15.0, gt=0.0, le=30.0)
+    voice_only: bool = False
+    #: Hear a track in place of the video's music, before choosing it (D-184):
+    #: one uploaded now, or the person's track the video switched away from.
+    music_upload_id: str | None = Field(default=None, max_length=64)
+    kept_track: bool = False
 
 
 class MotionEdit(BaseModel):
@@ -348,8 +394,8 @@ def _install_frontend(app: FastAPI) -> None:
         app.mount("/assets", StaticFiles(directory=assets), name="assets")
 
     @app.get("/")
-    def index_page() -> FileResponse:
-        return FileResponse(index)
+    def index_page() -> HTMLResponse:
+        return _index_page(index)
 
     favicon = root / "favicon.svg"
     if favicon.is_file():
@@ -359,11 +405,25 @@ def _install_frontend(app: FastAPI) -> None:
             return FileResponse(favicon, media_type="image/svg+xml")
 
     @app.get("/{path:path}")
-    def catch_all(path: str) -> FileResponse:
+    def catch_all(path: str) -> HTMLResponse:
         # One known file, chosen without consulting `path`: a client-side route
         # must reload cleanly, and a path from a client must never select a
         # file. Anything under /api has already matched a real route above.
-        return FileResponse(index)
+        return _index_page(index)
+
+
+def _index_page(index: Path) -> HTMLResponse:
+    """The app's page, already in the chosen look (D-185).
+
+    The look is written into the page as it is served, so it is right from
+    the first frame: no flash of the other one while the script loads. "Follow
+    the system" writes nothing, and the stylesheet follows the computer.
+    """
+    page = index.read_text(encoding="utf-8")
+    theme = load_preferences().theme
+    if theme in ("dark", "light"):
+        page = page.replace("<html", f'<html data-theme="{theme}"', 1)
+    return HTMLResponse(page, headers={"Cache-Control": "no-cache"})
 
 
 # --- middleware ---------------------------------------------------------
@@ -697,6 +757,7 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 "current_version": CONSENT_VERSION,
             },
             "api_keys": preferences.masked_keys(),
+            "theme": preferences.theme,
             "adapters": sorted(KEY_FIELDS),
             "environment_keys": sorted(
                 name
@@ -720,6 +781,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         if update.sourcing_consent is not None:
             preferences.sourcing_consent = update.sourcing_consent
             preferences.consent_version = CONSENT_VERSION
+        if update.theme is not None:
+            preferences.theme = update.theme
 
         for name, value in (update.api_keys or {}).items():
             if name not in KEY_FIELDS:
@@ -740,6 +803,7 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 "enabled": sourcing_active(context.settings, preferences),
             },
             "api_keys": preferences.masked_keys(),
+            "theme": preferences.theme,
         }
 
     @app.post("/api/settings/check-key")
@@ -800,6 +864,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             "library": _library_summary(context.settings),
             "sourcing": _sourcing_summary(),
             "profile": str(context.settings.profile),
+            "music_component": _music_component_summary(),
+            "score": _score_summary(),
         }
 
     @app.post("/api/uploads")
@@ -876,7 +942,7 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         options = _job_options(request, audio, context)
 
         job = context.store.create(
-            audio_name=audio.name, options=request.model_dump()
+            audio_name=_upload_name(audio), options=request.model_dump()
         )
         context.store.submit(job, _renderer(context, options))
 
@@ -1051,10 +1117,142 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         except EditError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        _save_plan(edited, plan_path)
-        context.store.note_edit(job)
+        saved = _save_plan(edited, plan_path, "a picture")
+        context.store.set_pending(job, saved.pending)
         return {"scene": edited.scenes[index].model_dump(mode="json"),
                 "pending_edits": job.summary.get("pending_edits", 0)}
+
+    @app.get("/api/jobs/{job_id}/mix")
+    def get_mix(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        """The video's sound settings, the choices for them, and the last checks."""
+        job = context.store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="No such job.")
+        plan = _load_job_plan(context, job_id)
+        return _mix_state(job, plan.audio_mix, context)
+
+    @app.put("/api/jobs/{job_id}/mix")
+    def edit_mix(job_id: str, mix: AudioMix, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        """Save the video's sound settings (D-171).
+
+        Like every other edit, it waits for "Update video"; updating then
+        re-renders only the sound, because the pictures come from the cache.
+        """
+        job, plan_path, plan = _editable_plan(context, job_id)
+        saved = _save_plan(plan.model_copy(update={"audio_mix": mix}), plan_path, "the mix")
+        context.store.set_pending(job, saved.pending)
+        state = _mix_state(job, mix, context)
+        return {**state, "pending_edits": job.summary.get("pending_edits", 0)}
+
+    @app.put("/api/jobs/{job_id}/music")
+    def edit_music(
+        job_id: str, edit: MusicEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        """Change the video's music: none, a generated score, or the person's own track."""
+        from voxframe.music.score import styles
+        from voxframe.plan.score_choice import ScoreChoice, new_seed
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        if plan.music_path:
+            # Kept, so the Sound card can switch back to it.
+            context.store.remember(
+                job, "kept_track", {"path": plan.music_path, "credit": plan.music_credit}
+            )
+        update: dict[str, Any] = {"music_path": "", "music_credit": "", "score": None}
+        if edit.choice == "own" and edit.upload_id:
+            track = _named_for_credits(_upload_audio(context, edit.upload_id))
+            credit = " ".join((edit.credit or "").split())
+            update.update(music_path=str(track), music_credit=credit)
+            context.store.remember(job, "kept_track", {"path": str(track), "credit": credit})
+        elif edit.choice == "own":
+            kept = job.summary.get("kept_track")
+            if not isinstance(kept, dict) or not Path(str(kept.get("path", ""))).is_file():
+                raise HTTPException(
+                    status_code=409, detail="This video has no track of yours to go back to."
+                )
+            credit = str(kept.get("credit", ""))
+            if edit.credit is not None:
+                credit = " ".join(edit.credit.split())
+                context.store.remember(job, "kept_track", {"path": str(kept["path"]), "credit": credit})
+            update.update(music_path=str(kept["path"]), music_credit=credit)
+        elif edit.choice == "score":
+            if not edit.style or edit.style not in styles():
+                raise HTTPException(
+                    status_code=422, detail=f"No music style called {edit.style!r}."
+                )
+            if edit.seed is not None:
+                seed = edit.seed
+            elif plan.score is not None and not edit.new_variation:
+                seed = plan.score.seed
+            else:
+                seed = new_seed()
+            update["score"] = ScoreChoice(style=edit.style, seed=seed, intensity=edit.intensity)
+        if edit.forget_track:
+            if edit.choice == "own":
+                raise HTTPException(
+                    status_code=422, detail="A track cannot be both used and removed."
+                )
+            context.store.remember(job, "kept_track", None)
+        saved = _save_plan(plan.model_copy(update=update), plan_path, "the music")
+        context.store.set_pending(job, saved.pending)
+        state = _mix_state(job, plan.audio_mix, context)
+        return {**state, "pending_edits": job.summary.get("pending_edits", 0)}
+
+    @app.get("/api/score/styles/{name}/preview")
+    def score_preview(name: str, context: ApiContext = Depends(ctx)) -> FileResponse:
+        """A short sample of a score style, made once from the samples and kept (D-179)."""
+        from voxframe.music.score import ScoreUnavailable, style_preview, styles
+
+        if name not in styles():
+            raise HTTPException(status_code=404, detail="No such music style.")
+        try:
+            path = style_preview(name, context.settings.cache_path / "score-previews")
+        except ScoreUnavailable as exc:
+            raise HTTPException(
+                status_code=409, detail=f"The preview cannot be made: {exc}."
+            ) from exc
+        return FileResponse(path, media_type="audio/wav")
+
+    @app.post("/api/jobs/{job_id}/mix/preview")
+    def preview_mix(
+        job_id: str, request: MixPreview, context: ApiContext = Depends(ctx)
+    ) -> FileResponse:
+        """A few seconds of the mix at these settings, made from the kept stems."""
+        from voxframe.render.audio.mixdown import Stems, preview
+        from voxframe.render.compose.from_plan import stems_path
+
+        job = context.store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="No such job.")
+        video = context.store.artifact_path(job_id, "video")
+        stems_file = stems_path(video) if video is not None else None
+        if stems_file is None or not stems_file.is_file():
+            raise HTTPException(
+                status_code=409,
+                detail="Update this video once to hear previews of its sound.",
+            )
+        stems = Stems.load(stems_file)
+        if request.music_upload_id or request.kept_track:
+            stems = _with_track(stems, _preview_track(job, request, context), request, context)
+        kept = [stems.voice, stems.music, stems.voice_polished]
+        if any(path is not None and not path.is_file() for path in kept):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "This video's sound files were cleared; update the video to "
+                    "make them again."
+                ),
+            )
+        folder = stems_file.parent / ".previews"
+        folder.mkdir(exist_ok=True)
+        for old in folder.glob("*.wav"):
+            old.unlink(missing_ok=True)
+        output = folder / f"{secrets.token_hex(8)}.wav"
+        preview(
+            stems, request.mix, request.start, request.seconds, output,
+            voice_only=request.voice_only,
+        )
+        return FileResponse(output, media_type="audio/wav")
 
     @app.put("/api/jobs/{job_id}/scenes/{index}/motion")
     def edit_motion(
@@ -1072,8 +1270,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         except EditError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        _save_plan(edited, plan_path)
-        context.store.note_edit(job)
+        saved = _save_plan(edited, plan_path, "the camera movement")
+        context.store.set_pending(job, saved.pending)
         return {"scene": edited.scenes[index].model_dump(mode="json"),
                 "pending_edits": job.summary.get("pending_edits", 0)}
 
@@ -1098,8 +1296,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         except EditError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        _save_plan(edited, plan_path)
-        context.store.note_edit(job)
+        saved = _save_plan(edited, plan_path, "a caption")
+        context.store.set_pending(job, saved.pending)
         return {"scene": edited.scenes[index].model_dump(mode="json"),
                 "pending_edits": job.summary.get("pending_edits", 0)}
 
@@ -1180,16 +1378,16 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             target.unlink(missing_ok=True)
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        _save_plan(edited, plan_path)
-        context.store.note_edit(job)
+        saved = _save_plan(edited, plan_path, "your photo")
+        context.store.set_pending(job, saved.pending)
         return {"scene": edited.scenes[index].model_dump(mode="json"),
                 "pending_edits": job.summary.get("pending_edits", 0)}
 
     def _card_edit_response(
         context: ApiContext, job: Job, plan_path: Path, edited: ScenePlan
     ) -> dict[str, Any]:
-        _save_plan(edited, plan_path)
-        context.store.note_edit(job)
+        saved = _save_plan(edited, plan_path, "a card")
+        context.store.set_pending(job, saved.pending)
         return {"plan": json.loads(edited.to_json()),
                 "pending_edits": job.summary.get("pending_edits", 0)}
 
@@ -1357,8 +1555,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         except EditError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        _save_plan(edited, plan_path)
-        context.store.note_edit(job)
+        saved = _save_plan(edited, plan_path, "a picture")
+        context.store.set_pending(job, saved.pending)
         return {"scene": edited.scenes[index].model_dump(mode="json"),
                 "pending_edits": job.summary.get("pending_edits", 0)}
 
@@ -1562,11 +1760,44 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         if context.store.artifact_path(job_id, "plan") is None:
             raise HTTPException(status_code=409, detail="This job has no plan yet.")
 
+        plan_path = context.store.artifact_path(job_id, "plan")
+        assert plan_path is not None
         try:
             context.store.restart(job_id, _plan_renderer(context))
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        # The plan as it now stands is what the video will show (D-182).
+        PlanHistory(plan_path).rendered()
         return job.snapshot()
+
+    @app.get("/api/jobs/{job_id}/plan/history")
+    def plan_history(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        """Where the plan stands in its edits: undo, redo, and what is not yet in the video."""
+        job = context.store.get(job_id)
+        plan_path = context.store.artifact_path(job_id, "plan") if job else None
+        if job is None or plan_path is None:
+            raise HTTPException(status_code=404, detail="No such plan.")
+        return _history_state(plan_path)
+
+    @app.post("/api/jobs/{job_id}/plan/undo")
+    def plan_undo(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        """Undo the last saved edit, whatever it was (D-182)."""
+        job, plan_path, _ = _editable_plan(context, job_id)
+        state = PlanHistory(plan_path).undo()
+        if state is None:
+            raise HTTPException(status_code=409, detail="There is nothing to undo.")
+        context.store.set_pending(job, state.pending)
+        return _history_state(plan_path)
+
+    @app.post("/api/jobs/{job_id}/plan/redo")
+    def plan_redo(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        """Redo the edit last undone (D-182)."""
+        job, plan_path, _ = _editable_plan(context, job_id)
+        state = PlanHistory(plan_path).redo()
+        if state is None:
+            raise HTTPException(status_code=409, detail="There is nothing to redo.")
+        context.store.set_pending(job, state.pending)
+        return _history_state(plan_path)
 
     @app.post("/api/jobs/{job_id}/resume", status_code=202)
     def resume(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
@@ -1602,8 +1833,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
 
     @app.get("/api/jobs/{job_id}/artifacts/{name}")
     def artifact(
-        job_id: str, name: str, context: ApiContext = Depends(ctx)
-    ) -> FileResponse:
+        job_id: str, name: str, request: Request, context: ApiContext = Depends(ctx)
+    ) -> Response:
         """Download one output by name.
 
         The client sends a *name* the job published, never a path. The name is
@@ -1614,7 +1845,7 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         if path is None or not path.is_file():
             raise HTTPException(status_code=404, detail="No such artifact.")
         _check_sandbox(context, path)
-        return FileResponse(path, filename=path.name)
+        return _file_or_range(request, path)
 
 
 # --- helpers ------------------------------------------------------------
@@ -1755,6 +1986,165 @@ def _asset_file(context: ApiContext, raw_path: str) -> Path:
     return resolved
 
 
+def _preview_track(job: Job, request: MixPreview, context: ApiContext) -> Path:
+    """The track a preview plays in place of the video's music (D-184)."""
+    if request.music_upload_id:
+        return _upload_audio(context, request.music_upload_id)
+    kept = job.summary.get("kept_track")
+    plan_path = context.store.artifact_path(job.id, "plan")
+    current = ""
+    if plan_path is not None and plan_path.is_file():
+        current = ScenePlan.model_validate_json(plan_path.read_text(encoding="utf-8")).music_path
+    path = Path(current or (str(kept.get("path", "")) if isinstance(kept, dict) else ""))
+    if not path.is_file():
+        raise HTTPException(status_code=409, detail="This video has no track of yours to hear.")
+    return path
+
+
+def _with_track(stems: Any, track: Path, request: MixPreview, context: ApiContext) -> Any:
+    """The stems with ``track`` as the music, measured only where the preview plays.
+
+    The bed is the same looped, faded track a render makes, and kept, so a
+    second preview of it is quick.
+    """
+    import dataclasses
+
+    import soundfile as sf
+
+    from voxframe.render.audio.mixdown import speech_levels
+    from voxframe.render.audio.music import MusicSettings
+    from voxframe.render.compose.from_plan import _simple_bed
+    from voxframe.render.encode.probe import probe_capabilities
+
+    sound = context.settings.cache_path / "sound"
+    sound.mkdir(parents=True, exist_ok=True)
+    try:
+        bed = _simple_bed(MusicSettings(path=track), stems.video_end, probe_capabilities(), sound)
+    except Exception as exc:  # ffmpeg refused the file: say so, never a 500
+        log.warning("api.preview_track_failed", error=str(exc))
+        raise HTTPException(status_code=422, detail="That track could not be played.") from exc
+
+    window = (request.start, request.start + request.seconds)
+
+    def measured(spans: tuple[Any, ...], voice: Path | None) -> tuple[Any, ...]:
+        if voice is None or not spans:
+            return spans
+        heard = [s for s in spans if s.end > window[0] and s.start < window[1]]
+        fresh = {
+            (s.start, s.end): s
+            for s in speech_levels([(s.start, s.end) for s in heard], voice, bed, sf)
+        }
+        return tuple(fresh.get((s.start, s.end), s) for s in spans)
+
+    return dataclasses.replace(
+        stems,
+        music=bed,
+        spans=measured(stems.spans, stems.voice),
+        spans_polished=measured(stems.spans_polished, stems.voice_polished),
+        joins=(),
+        music_groups=(),
+        music_levels=(),
+        group_power=(),
+        play_groups=(),
+    )
+
+
+def _music_state(job: Job, plan: ScenePlan) -> dict[str, Any]:
+    """The video's music choice, as the Sound card shows and changes it (D-179)."""
+    from voxframe.music.score import styles
+
+    kept = job.summary.get("kept_track")
+    track = plan.music_path or (kept.get("path") if isinstance(kept, dict) else "")
+    credit = plan.music_credit if plan.music_path else (
+        kept.get("credit", "") if isinstance(kept, dict) else ""
+    )
+    return {
+        "choice": "own" if plan.music_path else "score" if plan.score else "none",
+        "style": plan.score.style if plan.score else None,
+        "intensity": plan.score.intensity if plan.score else 0.0,
+        "seed": plan.score.seed if plan.score else None,
+        "track_name": Path(track).name if track else None,
+        "track_credit": credit or "",
+        "styles": [
+            {"name": s.name, "label": s.label, "description": s.description}
+            for s in styles().values()
+        ],
+        "score_ready": _score_summary()["ready"],
+    }
+
+
+def _score_summary() -> dict[str, Any]:
+    """The generated score's styles, and whether its sounds are here (D-176)."""
+    from voxframe.music.score import samples_dir, styles
+    from voxframe.music.score.instruments import SampleLibrary, SamplesMissing
+
+    try:
+        SampleLibrary(samples_dir()).check()
+        ready, reason = True, ""
+    except SamplesMissing:
+        ready = False
+        reason = "The score's instrument sounds are not installed on this computer yet."
+    return {
+        "ready": ready,
+        "reason": reason,
+        "styles": [
+            {"name": s.name, "label": s.label, "description": s.description}
+            for s in styles().values()
+        ],
+    }
+
+
+def _music_component_summary() -> dict[str, Any]:
+    """Whether fitting music to speech needs a one-time download first (D-172)."""
+    from voxframe.components import music_manifest, music_ready
+
+    manifest = music_manifest()
+    return {
+        "ready": music_ready(),
+        "download_mb": round(manifest.megabytes) if manifest is not None else None,
+    }
+
+
+def _mix_state(job: Job, mix: AudioMix, context: ApiContext) -> dict[str, Any]:
+    """What the mix controls show: settings, choices, and the last checks."""
+    from voxframe.plan.audio_mix import LOUDNESS_TARGETS, MIN_COMFORTABLE_MARGIN_DB
+    from voxframe.render.audio.mixdown import Stems
+    from voxframe.render.compose.from_plan import stems_path
+
+    video = context.store.artifact_path(job.id, "video")
+    plan = _load_job_plan(context, job.id)
+    stems_file = stems_path(video) if video is not None else None
+    polish: dict[str, Any] | None = None
+    if stems_file is not None and stems_file.is_file():
+        try:
+            polish = Stems.load(stems_file).polish
+        except (OSError, ValueError, TypeError, KeyError):
+            polish = None
+    return {
+        "audio_mix": mix.model_dump(mode="json"),
+        "destinations": [
+            {
+                "id": key.value,
+                "label": target.label,
+                "lufs": target.lufs,
+                "true_peak": target.true_peak,
+            }
+            for key, target in LOUDNESS_TARGETS.items()
+        ],
+        "too_close": mix.too_close,
+        "comfortable_margin_db": MIN_COMFORTABLE_MARGIN_DB,
+        "has_music": bool(plan.music_path or plan.score),
+        "music": _music_state(job, plan),
+        "can_preview": stems_file is not None and stems_file.is_file(),
+        "last_check": job.summary.get("sound"),
+        # What voice polish measured and did (D-173); None before the first
+        # update with it, or when it could not be made.
+        "polish": polish,
+        # Music already in the recording: a track on top may clash with it.
+        "music_in_recording": bool(polish and polish.get("music_in_recording")),
+    }
+
+
 def _editable_plan(
     context: ApiContext, job_id: str
 ) -> tuple[Job, Path, ScenePlan]:
@@ -1777,15 +2167,115 @@ def _editable_plan(
     return job, plan_path, plan
 
 
-def _save_plan(plan: ScenePlan, path: Path) -> None:
-    """Write a plan atomically, so an interrupted save cannot corrupt it.
+def _file_or_range(request: Request, path: Path) -> Response:
+    """A file, or the byte range the browser asked for (D-182).
+
+    A video player seeks by asking for byte ranges; a server that ignores them
+    leaves the video stuck at its start. This Starlette's FileResponse does
+    not answer them, so ranges are answered here, without a new package.
+    """
+    import mimetypes
+    import re
+
+    size = path.stat().st_size
+    match = re.fullmatch(r"bytes=(\d*)-(\d*)", request.headers.get("range", "").strip())
+    if match is None or match.groups() == ("", ""):
+        whole = FileResponse(path, filename=path.name)
+        whole.headers["accept-ranges"] = "bytes"
+        return whole
+    first, last = match.groups()
+    if not first:  # the last N bytes
+        start, end = max(0, size - int(last)), size - 1
+    else:
+        start, end = int(first), min(int(last), size - 1) if last else size - 1
+    if start >= size or start > end:
+        return Response(status_code=416, headers={"content-range": f"bytes */{size}"})
+
+    def chunks() -> Iterator[bytes]:
+        with path.open("rb") as source:
+            source.seek(start)
+            remaining = end - start + 1
+            while remaining > 0:
+                data = source.read(min(1 << 16, remaining))
+                if not data:
+                    return
+                remaining -= len(data)
+                yield data
+
+    return StreamingResponse(
+        chunks(),
+        status_code=206,
+        media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+        headers={
+            "content-range": f"bytes {start}-{end}/{size}",
+            "content-length": str(end - start + 1),
+            "accept-ranges": "bytes",
+            "content-disposition": f'attachment; filename="{path.name}"',
+        },
+    )
+
+
+def _save_plan(plan: ScenePlan, path: Path, label: str = "a change") -> History:
+    """Write a plan atomically, so an interrupted save cannot corrupt it, and keep
+    the version so the edit can be undone (D-182).
 
     The plan is the only record of the person's edits; half a file would lose
     all of them rather than the last one.
     """
+    history = PlanHistory(path)
+    history.begin()
     temporary = path.with_suffix(path.suffix + ".partial")
     plan.save(temporary)
-    temporary.replace(path)
+    replace_retrying(temporary, path)
+    return history.record(label)
+
+
+def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
+    """Scenes that differ from what the video shows, and those whose picture does.
+
+    The studio previews a changed picture in the player; any change is marked.
+    """
+    rendered = PlanHistory(plan_path).rendered_version()
+    if rendered is None or not rendered.is_file():
+        return [], []
+    try:
+        now, shown = ScenePlan.load(plan_path), ScenePlan.load(rendered)
+    except Exception:
+        return [], []
+
+    def looks(scene: Any) -> tuple[Any, ...]:
+        return (
+            scene.asset.id if scene.asset else None,
+            scene.motion,
+            scene.caption_text,
+            scene.card_kind,
+            scene.card_text,
+            scene.start_frame,
+            scene.end_frame,
+        )
+
+    changed, pictures = [], []
+    for position, scene in enumerate(now.scenes):
+        before = shown.scenes[position] if position < len(shown.scenes) else None
+        if before is None or looks(scene) != looks(before):
+            changed.append(scene.index)
+        if before is None or looks(scene)[0] != looks(before)[0]:
+            pictures.append(scene.index)
+    return changed, pictures
+
+
+def _history_state(plan_path: Path) -> dict[str, Any]:
+    state = PlanHistory(plan_path).state()
+    changed, pictures = _changed_scenes(plan_path)
+    return {
+        "can_undo": state.can_undo,
+        "can_redo": state.can_redo,
+        "pending": state.pending,
+        "undo_label": state.undo_label,
+        "redo_label": state.redo_label,
+        "changed_scenes": changed,
+        "changed_pictures": pictures,
+    }
 
 
 def _plan_renderer(context: ApiContext) -> Callable[[Job], None]:
@@ -1887,6 +2377,14 @@ def _upload_audio(context: ApiContext, upload_id: str) -> Path:
     return candidates[0]
 
 
+def _upload_name(stored: Path) -> str:
+    """The recording's name as the person knows it: recent videos and saved files show it."""
+    record = stored.parent / "name.txt"
+    if record.is_file():
+        return _display_name(record.read_text(encoding="utf-8"))
+    return stored.name
+
+
 def _display_name(name: str) -> str:
     """A filename made safe to use as one: letters, digits and a few marks."""
     import re
@@ -1961,6 +2459,22 @@ def _job_options(
             credit=" ".join(request.music_credit.split()),
         )
 
+    score = None
+    if request.score_style:
+        from voxframe.music.score import styles
+        from voxframe.plan.score_choice import ScoreChoice, new_seed
+
+        if music is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Choose either your own music or a generated score, not both.",
+            )
+        if request.score_style not in styles():
+            raise HTTPException(
+                status_code=422, detail=f"No music style called {request.score_style!r}."
+            )
+        score = ScoreChoice(style=request.score_style, seed=new_seed())
+
     output_directory = audio.parent / "output"
     output_directory.mkdir(parents=True, exist_ok=True)
 
@@ -1979,6 +2493,7 @@ def _job_options(
         languages=tuple(request.languages),
         source_imagery=source_imagery,
         music=music,
+        score=score,
     )
 
 
@@ -2053,6 +2568,10 @@ def _record_outcome(context: ApiContext, job: Job, outcome: PipelineOutcome) -> 
                 if scene.asset_source == "atmospheric"
             ) if outcome.plan else 0,
             "pending_edits": 0,
+            # The sound's measurements and checks, and the settings behind
+            # them, for the mix controls (D-171).
+            "sound": outcome.result.sound,
+            "audio_mix": outcome.plan.audio_mix.model_dump(mode="json") if outcome.plan else None,
             "saved_to": _place_in_videos(context, job, outcome.result.video_path),
         },
     )

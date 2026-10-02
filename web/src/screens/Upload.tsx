@@ -1,26 +1,89 @@
 /**
- * Screen 1 — upload.
+ * Screen 1 — upload, in the studio's identity (D-181).
  *
- * One drop zone, and the two facts a person needs before committing: how long
- * the recording is, and roughly how long the render will take. The estimate
- * uses Phase 6's measured factors, not a guess.
+ * One drop zone, the promises that are true of every video (on this
+ * computer, online search only if turned on, captions in English and French
+ * as D-070 and D-169 scope them, captions you can correct), and the recent
+ * videos, which open in the studio.
  */
 
-import { useCallback, useRef, useState } from "react";
-import { ApiError, uploadAudio, type Capabilities, type UploadResult } from "../api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ApiError,
+  listJobs,
+  thumbnailUrl,
+  uploadAudio,
+  type Capabilities,
+  type Job,
+  type UploadResult,
+} from "../api";
 import { Notice, formatBytes, formatDuration } from "../components";
 
 const ACCEPTED = ".wav,.mp3,.m4a,.aac,.flac,.ogg,.opus,.mp4,.mov,.mkv";
+
+function RecentVideos({ onOpen }: { onOpen: (job: Job) => void }) {
+  const [jobs, setJobs] = useState<Job[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listJobs()
+      .then(({ jobs: all }) => {
+        if (!cancelled) {
+          setJobs(all.filter((job) => job.state === "succeeded" && job.artifacts.includes("video")).slice(0, 6));
+        }
+      })
+      .catch(() => !cancelled && setJobs([]));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!jobs || jobs.length === 0) return null;
+  return (
+    <section className="recent" aria-labelledby="recent-title">
+      <h2 id="recent-title">Recent videos</h2>
+      <ul>
+        {jobs.map((job) => (
+          <li key={job.id}>
+            <button type="button" className="recent-video" onClick={() => onOpen(job)}>
+              <span className="recent-thumb" aria-hidden="true">
+                <img
+                  src={thumbnailUrl(job.id, 1)}
+                  alt=""
+                  loading="lazy"
+                  onError={(event) => {
+                    event.currentTarget.style.visibility = "hidden";
+                  }}
+                />
+              </span>
+              <span className="recent-text">
+                <strong>{job.audio_name}</strong>
+                <small>
+                  {job.summary?.scenes ?? 0} scenes
+                  {" · "}
+                  {new Date(job.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                </small>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 export function Upload({
   capabilities,
   sourcingEnabled,
   onUploaded,
+  onOpen,
 }: {
   capabilities: Capabilities | null;
   /** Whether renders will search online, which changes what the notice says. */
   sourcingEnabled: boolean;
   onUploaded: (result: UploadResult, file: File) => void;
+  /** Open a finished video in the studio. */
+  onOpen: (job: Job) => void;
 }) {
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -50,11 +113,15 @@ export function Upload({
   const ffmpegMissing = capabilities && !capabilities.ffmpeg.available;
 
   return (
-    <>
-      <header style={{ marginBottom: 20 }}>
-        <h1>Turn a recording into a video</h1>
-        <p className="muted" style={{ marginTop: 4 }}>
-          Everything runs on this machine. Your audio is not uploaded anywhere.
+    <div className="welcome">
+      <div className="welcome-main">
+      <header className="hero">
+        <h1>
+          Turn a recording into a <em>video</em>
+        </h1>
+        <p className="lead">
+          Voxframe listens to what is said, finds pictures for it and writes the captions, on
+          this computer. Then you finish it in the studio. Your audio is not uploaded anywhere.
         </p>
       </header>
 
@@ -67,7 +134,7 @@ export function Upload({
 
       {error && <Notice tone="error">{error}</Notice>}
 
-      <div className="card">
+      <div className="card welcome-drop">
         <div
           className="dropzone"
           data-over={over}
@@ -103,6 +170,11 @@ export function Upload({
             </>
           ) : (
             <>
+              <span className="drop-icon" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
+                </svg>
+              </span>
               <strong>Drop an audio file here</strong>
               <span>or click to choose one</span>
             </>
@@ -133,6 +205,13 @@ export function Upload({
         </p>
       </div>
 
+      <ul className="promises" aria-label="What is true of every video">
+        <li>Runs on your computer</li>
+        <li>Online image search only if you turn it on</li>
+        <li>Captions in English and French</li>
+        <li>Captions you can correct</li>
+      </ul>
+
       {capabilities && capabilities.library.assets === 0 && sourcingEnabled && (
         <Notice tone="info">
           Your image library is empty, so Voxframe will search online for images
@@ -149,7 +228,10 @@ export function Upload({
           can also add your own photo to any scene.
         </Notice>
       )}
-    </>
+      </div>
+
+      <RecentVideos onOpen={onOpen} />
+    </div>
   );
 }
 

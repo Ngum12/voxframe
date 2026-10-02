@@ -19,6 +19,14 @@ export interface Capabilities {
   library: { present: boolean; assets: number; path: string };
   sourcing: { adapters: string[]; available: boolean };
   profile: string;
+  /** Fitting a person's own music needs a one-time download first (D-172). */
+  music_component?: { ready: boolean; download_mb: number | null };
+  /** The generated score's styles, and whether its sounds are installed (D-176). */
+  score?: {
+    ready: boolean;
+    reason: string;
+    styles: { name: string; label: string; description: string }[];
+  };
 }
 
 export interface SourcingSettings {
@@ -29,9 +37,13 @@ export interface SourcingSettings {
   current_version?: number;
 }
 
+export type Theme = "system" | "dark" | "light";
+
 export interface UserSettings {
   sourcing: SourcingSettings;
   api_keys: Record<string, string>;
+  /** The app's look (D-185). */
+  theme: Theme;
   adapters: string[];
   environment_keys: string[];
 }
@@ -66,6 +78,99 @@ export interface JobSummary {
   close_match_scenes?: number;
   /** Scenes showing a calm image on the recording's theme, not a match. */
   atmospheric_scenes?: number;
+  /** The sound's measurements and checks at the last render (D-171). */
+  sound?: SoundCheck | null;
+  audio_mix?: AudioMix | null;
+}
+
+/** The person's sound settings, stored in the scene plan (D-171). */
+export interface AudioMix {
+  voice_db: number;
+  music_db: number;
+  speech_margin_db: number;
+  destination: string;
+  /** Voice polish (D-173); off, the voice is exactly the recording. */
+  voice_polish: boolean;
+  /** A generated score's group levels, dB (D-179). */
+  score_levels: ScoreLevels;
+}
+
+/** A generated score's instrument groups (D-179). */
+export const SCORE_GROUPS = ["piano", "strings", "percussion", "bass", "pads"] as const;
+export type ScoreGroup = (typeof SCORE_GROUPS)[number];
+export type ScoreLevels = Record<ScoreGroup, number>;
+
+/** The video's music as the Sound card changes it (D-179). */
+export interface MusicDraft {
+  choice: "none" | "own" | "score";
+  style: string | null;
+  intensity: number;
+  seed: number | null;
+  /** A track uploaded in the studio, not yet applied (D-184), and its name. */
+  upload_id?: string | null;
+  upload_name?: string | null;
+  /** The own track's credit, as the person states it. */
+  credit?: string;
+  /** Remove the person's track, so it is no longer offered. */
+  forget_track?: boolean;
+}
+
+export interface MusicState extends MusicDraft {
+  /** The person's own track, if this video had one to go back to. */
+  track_name: string | null;
+  track_credit: string;
+  styles: { name: string; label: string; description: string }[];
+  score_ready: boolean;
+}
+
+/** What voice polish measured and did (D-173). */
+export interface PolishReport {
+  noise_floor_db: number;
+  reduction_db: number;
+  reduction_note: string;
+  boxiness_cut: boolean;
+  room_tone_db: number;
+  pause_floor_db: number;
+  high_change_db: number;
+  music_in_recording: boolean;
+  problems: string[];
+}
+
+export interface Destination {
+  id: string;
+  label: string;
+  lufs: number;
+  true_peak: number;
+}
+
+/** What the last render measured, and whether it passed. */
+export interface SoundCheck {
+  destination: string;
+  target_lufs: number;
+  target_true_peak: number;
+  integrated_lufs: number;
+  true_peak: number;
+  min_speech_margin_db: number | null;
+  speech_margin_setting_db: number;
+  clicks_at: number[];
+  clipped: boolean;
+  problems: string[];
+  passed: boolean;
+}
+
+export interface MixState {
+  audio_mix: AudioMix;
+  destinations: Destination[];
+  too_close: boolean;
+  comfortable_margin_db: number;
+  has_music: boolean;
+  can_preview: boolean;
+  last_check: SoundCheck | null;
+  music: MusicState;
+  polish: PolishReport | null;
+  /** The recording already has music under the voice. */
+  music_in_recording: boolean;
+  pending_edits?: number;
 }
 
 export interface Job {
@@ -97,6 +202,8 @@ export interface RenderOptions {
   music_upload_id?: string | null;
   /** Attribution for the track, for the credits. */
   music_credit?: string;
+  /** Compose music for the video in this style instead (D-176). */
+  score_style?: string | null;
 }
 
 
@@ -164,6 +271,8 @@ export interface ScenePlan {
   embed_model: string;
   music_path: string;
   music_credit: string;
+  /** Music generated for the video (D-176). */
+  score?: { style: string; seed: number; intensity: number } | null;
   created_at: string;
   scenes: PlannedScene[];
 }
@@ -253,6 +362,7 @@ export const getSettings = () => request<UserSettings>("/api/settings");
 export const saveSettings = (body: {
   sourcing_consent?: boolean;
   api_keys?: Record<string, string>;
+  theme?: Theme;
 }) => request<unknown>("/api/settings", { method: "PUT", body: JSON.stringify(body) });
 
 export const checkKey = (adapter: string, key: string) =>
@@ -608,6 +718,108 @@ export const applySearchResult = (
   );
 
 /** Render the plan again, as edited. Same job, same id. */
+export const getMix = (jobId: string) => request<MixState>(`/api/jobs/${jobId}/mix`);
+
+export const saveMix = (jobId: string, mix: AudioMix) =>
+  request<MixState>(`/api/jobs/${jobId}/mix`, { method: "PUT", body: JSON.stringify(mix) });
+
+export const saveMusic = (jobId: string, music: MusicDraft) =>
+  request<MixState>(`/api/jobs/${jobId}/music`, {
+    method: "PUT",
+    body: JSON.stringify({
+      choice: music.choice,
+      style: music.style,
+      intensity: music.intensity,
+      seed: music.seed,
+      upload_id: music.choice === "own" ? music.upload_id ?? null : null,
+      credit: music.choice === "own" ? music.credit ?? null : null,
+      forget_track: music.forget_track ?? false,
+    }),
+  });
+
+/**
+ * A short sample of a music style (D-179), as a playable URL. The first one
+ * for a style takes a few seconds to make; after that it is kept.
+ */
+export async function previewStyle(name: string): Promise<string> {
+  const response = await fetch(`/api/score/styles/${encodeURIComponent(name)}/preview`, {
+    credentials: "same-origin",
+    headers: { Accept: "audio/wav" },
+  });
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try {
+      const body = await response.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      // A non-JSON error body is not worth a second failure.
+    }
+    throw new ApiError(response.status, detail);
+  }
+  return URL.createObjectURL(await response.blob());
+}
+
+/**
+ * A few seconds of the mix at settings not yet applied, as a playable URL.
+ * The caller revokes it when done with it.
+ */
+export async function previewMix(
+  jobId: string,
+  mix: AudioMix,
+  start: number,
+  voiceOnly: boolean,
+  /** A track to hear in place of the video's music (D-184). */
+  track: { upload_id?: string | null; kept?: boolean } = {},
+): Promise<string> {
+  const response = await fetch(`/api/jobs/${jobId}/mix/preview`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", Accept: "audio/wav" },
+    body: JSON.stringify({
+      mix,
+      start,
+      seconds: 15,
+      voice_only: voiceOnly,
+      music_upload_id: track.upload_id ?? null,
+      kept_track: track.kept ?? false,
+    }),
+  });
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try {
+      const body = await response.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      // A non-JSON error body is not worth a second failure.
+    }
+    throw new ApiError(response.status, detail);
+  }
+  return URL.createObjectURL(await response.blob());
+}
+
+/** Where the plan stands in its edit history (D-182). */
+export interface PlanHistory {
+  can_undo: boolean;
+  can_redo: boolean;
+  /** Changes not yet in the video: the distance from the version last rendered. */
+  pending: number;
+  undo_label: string;
+  redo_label: string;
+  /** Scenes that differ from what the video shows, for previews in the player. */
+  changed_scenes: number[];
+  /** Of those, the scenes whose picture changed: the player shows the new one. */
+  changed_pictures: number[];
+}
+
+export const getPlanHistory = (jobId: string) =>
+  request<PlanHistory>(`/api/jobs/${jobId}/plan/history`);
+
+export const undoPlan = (jobId: string) =>
+  request<PlanHistory>(`/api/jobs/${jobId}/plan/undo`, { method: "POST" });
+
+export const redoPlan = (jobId: string) =>
+  request<PlanHistory>(`/api/jobs/${jobId}/plan/redo`, { method: "POST" });
+
 export const rerenderJob = (jobId: string) =>
   request<Job>(`/api/jobs/${jobId}/render`, { method: "POST" });
 

@@ -32,6 +32,7 @@ import structlog
 from voxframe.config.settings import AspectRatio, QualityPreset, Settings
 from voxframe.config.style import StyleTemplate
 from voxframe.plan.scene_plan import PlanAsset, PlannedScene, ScenePlan
+from voxframe.plan.score_choice import ScoreChoice
 from voxframe.render.audio.music import MusicSettings
 from voxframe.render.compose.captioned import RenderResult
 from voxframe.render.encode.probe import FFmpegCapabilities
@@ -98,6 +99,8 @@ class JobOptions:
     chapters: bool = True
     highlights_seconds: float | None = None
     music: MusicSettings | None = None
+    #: Music generated for the video instead of a track (D-176).
+    score: ScoreChoice | None = None
     model: str | None = None
     language: str | None = None
     languages: tuple[str, ...] = ()
@@ -360,8 +363,11 @@ def run_pipeline(
                     "music_credit": options.music.credit,
                 }
             )
+        elif options.score is not None:
+            plan = plan.model_copy(update={"score": options.score})
 
     scene_total = len(plan.scenes) if plan is not None else len(scenes)
+    warnings.extend(_prepare_music(options.music, progress, score=options.score is not None))
     progress(Stage.RENDERING, f"Rendering {scene_total} scenes", None)
 
     if plan is not None:
@@ -388,6 +394,10 @@ def run_pipeline(
             quality=options.quality,
             height=options.height,
         )
+
+    if result.music_note:
+        warnings.append(result.music_note)
+    warnings.extend(sound_warnings(result))
 
     plan_path: Path | None = None
     if plan is not None:
@@ -468,6 +478,7 @@ def render_plan(
     if plan.music_path:
         music = MusicSettings(path=Path(plan.music_path), credit=plan.music_credit)
 
+    component_warnings = _prepare_music(music, progress, score=plan.score is not None)
     progress(Stage.RENDERING, f"Rendering {len(plan.scenes)} scenes", None)
     result = render_from_plan(
         plan,
@@ -497,7 +508,13 @@ def render_plan(
         language_probability=plan.language_probability,
         word_count=sum(len(scene.words) for scene in plan.scenes),
         scene_count=len(plan.scenes),
-        warnings=(*_plan_age_warnings(plan), *_imagery_warnings(plan, library=Path())),
+        warnings=(
+            *_plan_age_warnings(plan),
+            *_imagery_warnings(plan, library=Path()),
+            *component_warnings,
+            *((result.music_note,) if result.music_note else ()),
+            *sound_warnings(result),
+        ),
     )
 
 
@@ -685,6 +702,78 @@ class _SourcingOutcome:
 
     added: int
     warnings: tuple[str, ...]
+
+
+def _prepare_music(
+    music: MusicSettings | None, progress: ProgressCallback, *, score: bool = False
+) -> list[str]:
+    """Fetch the music tools the first time a video needs them.
+
+    They are a download on demand (D-172): about 91 MB nobody pays for unless
+    they use their own music, or a generated score (whose filters and sample
+    reading come from the same libraries, D-176). A failed download is said
+    plainly: own music then plays as the plain loop, and a score is left out.
+    """
+    from voxframe.components import ComponentError, install_music, music_manifest, music_ready
+
+    if music_ready():
+        return []
+    directed = music is not None and music.directed
+    if not score and not directed:
+        return []
+    from voxframe.config.settings import get_settings
+
+    if not score and get_settings().music_mode == "simple":
+        return []
+    manifest = music_manifest()
+    if manifest is None:
+        return []  # a pip install without the music extra: the director says so
+    doing = "Preparing the music score" if score else "Preparing to fit your music to the speech"
+    progress(
+        Stage.RENDERING,
+        f"{doing} (a one-time download of about {manifest.megabytes:.0f} MB)",
+        0.0,
+    )
+    try:
+        install_music(
+            lambda done, total: progress(
+                Stage.RENDERING,
+                f"{doing} ({done:.0f} of {total:.0f} MB)",
+                done / total if total else None,
+            )
+        )
+    except ComponentError as exc:
+        log.warning("components.music_failed", error=str(exc))
+        if score:
+            return [
+                f"The tools that make the music score could not be downloaded this time "
+                f"({exc}), so the video has no music. It will try again next time."
+            ]
+        return [
+            "The tools that fit music to the speech could not be downloaded this "
+            f"time ({exc}), so the music plays as a simple loop under it. It will "
+            "try again next time."
+        ]
+    return []
+
+
+def sound_warnings(result: RenderResult) -> list[str]:
+    """A failed sound check, said on the video rather than shipped silently (D-171)."""
+    sound = result.sound or {}
+    problems = sound.get("problems")
+    warnings = [f"Sound check: {p}" for p in problems] if isinstance(problems, list) else []
+    polish = sound.get("polish")
+    added_music = sound.get("min_speech_margin_db") is not None
+    if isinstance(polish, dict) and polish.get("music_in_recording") and added_music:
+        warnings.append(MUSIC_CLASH_WARNING)
+    return warnings
+
+
+#: Said when a music track is added to a recording that already has music.
+MUSIC_CLASH_WARNING = (
+    "Your recording already has music in it, so the added music plays on top: "
+    "two layers of music may clash. Choosing \"No music\" may sound better."
+)
 
 
 def _limit_warnings(sourced: SourcingPlan) -> list[str]:

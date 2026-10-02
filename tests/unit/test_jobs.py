@@ -416,6 +416,7 @@ class TestFrontEndParity:
             "output",      # the API chooses where a job writes
             "plan_out",    # derived from the output path
             "music",       # a file, uploaded separately (a later step)
+            "score",       # chosen as score_style; the seed is made per video (D-176)
             "no_cache",    # a debugging flag, not a user-facing option
             "want_plan",   # the web app always wants a plan: it edits it
             # Decided by the server from saved consent and keys; a request must

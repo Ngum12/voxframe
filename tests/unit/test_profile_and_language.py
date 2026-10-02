@@ -89,8 +89,13 @@ class TestLanguageSettings:
         """A config file written by hand should not need to be tidy."""
         assert Settings(languages=" EN , fr ,").allowed_languages == ("en", "fr")
 
-    def test_no_languages_means_unrestricted(self) -> None:
-        assert Settings().allowed_languages == ()
+    def test_english_and_french_by_default(self) -> None:
+        """Unrestricted detection heard accented English as Yoruba (D-068, D-169)."""
+        assert Settings().allowed_languages == ("en", "fr")
+
+    @pytest.mark.parametrize("value", ["any", "ANY", " all ", "*"])
+    def test_any_lifts_the_restriction(self, value: str) -> None:
+        assert Settings(languages=value).allowed_languages == ()
 
     def test_environment_variable_is_read(
         self, monkeypatch: pytest.MonkeyPatch

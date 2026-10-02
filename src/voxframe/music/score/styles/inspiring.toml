@@ -1,0 +1,65 @@
+# Inspiring: driving strings and percussion that lift with the speaker.
+# The format is described in README.md beside this file.
+
+name = "inspiring"
+label = "Inspiring"
+description = "Driving strings and percussion that lift with the speaker."
+order = 1
+
+[key]
+tonics = ["D", "E", "C", "F", "G"]
+home = "I"
+lift_last_section = true
+
+[tempo]
+min = 94
+max = 106
+
+[energy]
+offset = 1.4
+min = 1
+max = 4
+
+[harmony]
+progressions = [
+  ["I", "V", "vi", "IV"],
+  ["vi", "IV", "I", "V"],
+  ["IV", "I", "V", "vi"],
+  ["I", "iii", "IV", "V"],
+]
+chord_bars = [2, 2, 2, 1, 4]
+
+[rhythm]
+patterns = [
+  [0, 0, 1, 0, 0, 1, 0, 2],
+  [0, 2, 1, 2, 0, 2, 1, 2],
+  [0, 0, 0, 1, 0, 0, 2, 1],
+  [0, 1, 2, 3, 2, 1, 2, 1],
+]
+accents = [1.0, 0.62, 0.7, 0.95, 0.62, 0.7, 0.92, 0.66]
+
+[instruments]
+leads = ["piano", "violins", "cellos"]
+arpeggio = "piano"
+arpeggio_eighths_from = 3
+
+[layers]
+pad = 0
+melody = 0
+melody_until = 1
+string_pads = 1
+contrabass = 1
+sub_bass = 2
+arpeggio = 2
+lead_line = 2
+cello_ostinato = 2
+high_violins = 3
+viola_ostinato = 3
+chord_hits = 3
+section_swell = 3
+violin_ostinato = 4
+driving_percussion = 4
+gong = 4
+pause_roll = 2
+pause_riser = 2
+final_hit = true

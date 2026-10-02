@@ -76,6 +76,10 @@ class RenderResult:
     frame_count: int
     audio_duration: float
     elapsed_seconds: float
+    #: What happened to the music, when the person should know (D-170).
+    music_note: str = ""
+    #: The sound's measurements and checks (D-171), when it was mixed.
+    sound: dict[str, object] | None = None
 
     @property
     def realtime_factor(self) -> float:

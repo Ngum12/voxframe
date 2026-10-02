@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -245,11 +246,31 @@ class Settings(BaseSettings):
         ),
     )
     languages: str | None = Field(
+        # English and French by default (D-169): unrestricted detection heard
+        # an accented English talk as Yoruba and garbled its captions (D-068),
+        # and English and French are the languages Voxframe is tested in.
+        default="en,fr",
+        description=(
+            "Restrict detection to a comma-separated candidate set; the most "
+            "probable allowed language wins. 'en,fr' by default. 'any' lets "
+            "the model choose from every language it knows."
+        ),
+    )
+
+    # --- Music ---
+    score_samples_path: Path | None = Field(
         default=None,
         description=(
-            "Restrict detection to a comma-separated candidate set, e.g. "
-            "'en,fr'. The most probable allowed language wins. Narrower than "
-            "forcing one language, and it keeps multilingual detection working."
+            "Where the generated score's samples are (D-176). Unset, the "
+            "downloaded sample pack in the data folder."
+        ),
+    )
+    music_mode: Literal["directed", "simple"] = Field(
+        default="directed",
+        description=(
+            "'directed' edits a music track to the speaker: cut on bars, landing "
+            "on the last word, ducked by measurement, swelling into pauses "
+            "(D-170). 'simple' loops it under the speech as before."
         ),
     )
 
@@ -376,7 +397,7 @@ class Settings(BaseSettings):
     @property
     def allowed_languages(self) -> tuple[str, ...]:
         """The candidate language set, empty when detection is unrestricted."""
-        if not self.languages:
+        if not self.languages or self.languages.strip().lower() in {"any", "all", "*"}:
             return ()
         return tuple(
             code.strip().lower() for code in self.languages.split(",") if code.strip()

@@ -37,6 +37,9 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from component_manifest import pinned, split_music, write_music_manifest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORK = REPO_ROOT / "build" / "macos"
 
@@ -111,10 +114,30 @@ def assemble(wheel: Path) -> Path:
     print(f"  {shown.stdout.strip()}")
 
     step("Voxframe and its libraries")
+    # The app and the music-fitting libraries are resolved together, so the
+    # versions they share agree; the app is installed pinned to that
+    # resolution, and the rest becomes the music component's manifest,
+    # fetched the first time someone uses their own track (D-172).
+    combined, alone, music = (WORK / name for name in ("combined", "alone", "music"))
+    for folder in (combined, alone, music):
+        shutil.rmtree(folder, ignore_errors=True)
+    for extras, folder in (("app,music", combined), ("app", alone)):
+        subprocess.run(
+            [str(python), "-m", "pip", "download", "--quiet", "--only-binary=:all:",
+             f"{wheel}[{extras}]", "--dest", str(folder)],
+            check=True,
+        )
+    split_music(combined, alone, music)
+    constraints = WORK / "constraints.txt"
+    constraints.write_text(pinned(combined), encoding="utf-8")
     subprocess.run(
-        [str(python), "-m", "pip", "install", "--no-cache-dir", "--quiet", f"{wheel}[app]"],
+        [str(python), "-m", "pip", "install", "--no-cache-dir", "--quiet",
+         "--constraint", str(constraints), f"{wheel}[app]"],
         check=True,
     )
+    write_music_manifest(music, resources / "components" / "music.json")
+    print(f"  music component: {len(list(music.glob('*.whl')))} wheels, "
+          f"{sum(p.stat().st_size for p in music.glob('*.whl')) / 1e6:.0f} MB on demand")
 
     step("FFmpeg")
     ffmpeg = resources / "ffmpeg"
@@ -226,6 +249,16 @@ print("torch", torch.__version__, "faster-whisper", faster_whisper.__version__)
 from voxframe.selfcheck import picture_model, window
 print(window())
 print(picture_model())
+# The music component: not in the installer, fetched through its manifest
+# the first time, then used for real (D-172).
+from voxframe.components import activate_music, install_music, music_manifest, music_ready
+manifest = music_manifest()
+assert manifest is not None and not music_ready(), "the music component should be a download"
+install_music()
+assert activate_music()
+from voxframe.music.analysis import analyse_track
+tempo = analyse_track(Path({str(SONNET)!r})).tempo
+print("music component", round(manifest.megabytes), "MB; analysis ran:", tempo > 0)
 from voxframe.config.settings import QualityPreset, get_settings
 from voxframe.config.style import get_template
 from voxframe.jobs.pipeline import JobOptions, run_pipeline

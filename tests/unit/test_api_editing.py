@@ -573,3 +573,111 @@ class TestCaptionRoute:
         )
 
         assert response.status_code == 422
+
+
+# --- undo and redo (D-182) ---------------------------------------------------
+
+
+def _history(client: TestClient, job: str) -> dict:  # type: ignore[type-arg]
+    response = client.get(f"/api/jobs/{job}/plan/history")
+    assert response.status_code == 200
+    return response.json()
+
+
+class TestUndoRedo:
+    """Undo and redo through the API, across every kind of edit (D-182)."""
+
+    def test_a_fresh_video_has_nothing_to_undo(self, client: TestClient, finished_job: str) -> None:
+        state = _history(client, finished_job)
+
+        assert state == {
+            "can_undo": False, "can_redo": False, "pending": 0,
+            "undo_label": "", "redo_label": "", "changed_scenes": [], "changed_pictures": [],
+        }
+        assert client.post(f"/api/jobs/{finished_job}/plan/undo").status_code == 409
+
+    def test_edits_of_every_kind_undo_and_redo_in_order(
+        self, client: TestClient, context: ApiContext, finished_job: str
+    ) -> None:
+        job = f"/api/jobs/{finished_job}"
+        picture = {"action": "choose", "asset_id": "close"}
+        assert client.put(f"{job}/scenes/2/image", json=picture).status_code == 200
+        assert client.put(f"{job}/scenes/1/caption", json={"text": "a wide river"}).status_code == 200
+        assert client.put(f"{job}/mix", json={"voice_db": 3.0}).status_code == 200
+
+        state = _history(client, finished_job)
+        assert state["pending"] == 3 and state["undo_label"] == "the mix"
+        assert set(state["changed_scenes"]) == {1, 2}  # the mix changes no scene
+        assert state["changed_pictures"] == [2]  # the caption changed no picture
+
+        undone = client.post(f"/api/jobs/{finished_job}/plan/undo").json()
+        assert undone["pending"] == 2 and undone["redo_label"] == "the mix"
+        assert _saved_plan(context, finished_job).audio_mix.voice_db == 0.0
+        client.post(f"/api/jobs/{finished_job}/plan/undo")
+        assert _saved_plan(context, finished_job).scenes[1].caption_text != "a wide river"
+        client.post(f"/api/jobs/{finished_job}/plan/undo")
+        plan = _saved_plan(context, finished_job)
+        assert plan.scenes[2].asset is None
+        assert _history(client, finished_job)["pending"] == 0
+        assert context.store.get(finished_job).summary["pending_edits"] == 0  # type: ignore[union-attr]
+
+        client.post(f"/api/jobs/{finished_job}/plan/redo")
+        assert _saved_plan(context, finished_job).scenes[2].asset is not None
+        assert _history(client, finished_job)["changed_scenes"] == [2]
+
+    def test_undo_waits_for_a_render_to_finish(
+        self, client: TestClient, context: ApiContext, finished_job: str
+    ) -> None:
+        """The renderer is reading the plan: undo must not change it underneath."""
+        import threading
+
+        client.put(f"/api/jobs/{finished_job}/scenes/1/caption", json={"text": "a wide river"})
+        release = threading.Event()
+        context.store.restart(finished_job, lambda _job: release.wait(5))
+        try:
+            assert client.post(f"/api/jobs/{finished_job}/plan/undo").status_code == 409
+        finally:
+            release.set()
+
+    def test_the_version_rendered_counts_as_no_change(
+        self, client: TestClient, context: ApiContext, finished_job: str, tmp_path: Path
+    ) -> None:
+        from voxframe.api.plan_history import PlanHistory
+
+        client.put(f"/api/jobs/{finished_job}/scenes/1/caption", json={"text": "a wide river"})
+        plan_path = context.store.artifact_path(finished_job, "plan")
+        assert plan_path is not None
+        PlanHistory(plan_path).rendered()  # as the re-render route does
+
+        assert _history(client, finished_job)["pending"] == 0
+        client.post(f"/api/jobs/{finished_job}/plan/undo")
+        assert _history(client, finished_job)["pending"] == 1
+
+
+class TestVideoRanges:
+    """A player seeks by asking for byte ranges; they must be answered (D-182)."""
+
+    def test_a_range_is_answered_with_just_those_bytes(
+        self, client: TestClient, finished_job: str
+    ) -> None:
+        url = f"/api/jobs/{finished_job}/artifacts/video"  # the file holds b"video"
+
+        part = client.get(url, headers={"Range": "bytes=1-3"})
+        rest = client.get(url, headers={"Range": "bytes=2-"})
+        tail = client.get(url, headers={"Range": "bytes=-2"})
+
+        assert part.status_code == 206 and part.content == b"ide"
+        assert part.headers["content-range"] == "bytes 1-3/5"
+        assert rest.content == b"deo" and tail.content == b"eo"
+
+    def test_an_impossible_range_is_refused_and_no_range_is_the_whole_file(
+        self, client: TestClient, finished_job: str
+    ) -> None:
+        url = f"/api/jobs/{finished_job}/artifacts/video"
+
+        beyond = client.get(url, headers={"Range": "bytes=10-20"})
+        whole = client.get(url)
+
+        assert beyond.status_code == 416 and beyond.headers["content-range"] == "bytes */5"
+        assert whole.status_code == 200 and whole.content == b"video"
+        assert whole.headers["accept-ranges"] == "bytes"

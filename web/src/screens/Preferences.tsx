@@ -22,6 +22,7 @@ import {
   saveSettings,
   type FolderName,
   type Folders,
+  type Theme,
   type UpdateCheck,
   type UserSettings,
 } from "../api";
@@ -42,6 +43,63 @@ const ADAPTERS: Record<string, { label: string; url: string; note: string }> = {
 };
 
 type CheckState = { tone: "ok" | "error" | "busy"; text: string } | null;
+
+const THEMES: { id: Theme; label: string }[] = [
+  { id: "system", label: "Follow the system" },
+  { id: "dark", label: "Dark" },
+  { id: "light", label: "Light" },
+];
+
+/** Show a look at once; the server serves it from then on (D-185). */
+function applyTheme(theme: Theme) {
+  if (theme === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", theme);
+}
+
+/** Light, dark, or whatever the computer is set to (D-185). */
+function Appearance({ initial }: { initial: Theme }) {
+  const [theme, setTheme] = useState<Theme>(initial);
+  const [error, setError] = useState<string | null>(null);
+
+  const choose = async (next: Theme) => {
+    const previous = theme;
+    setTheme(next);
+    applyTheme(next);
+    setError(null);
+    try {
+      await saveSettings({ theme: next });
+    } catch {
+      setTheme(previous);
+      applyTheme(previous);
+      setError("The look could not be saved.");
+    }
+  };
+
+  return (
+    <div className="card">
+      <header>
+        <h2>Appearance</h2>
+        <p>Dark or light. “Follow the system” matches your computer’s setting as it changes.</p>
+      </header>
+      <div className="filters" role="radiogroup" aria-label="Theme">
+        {THEMES.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            role="radio"
+            className="chip"
+            aria-checked={theme === option.id}
+            aria-pressed={theme === option.id}
+            onClick={() => theme !== option.id && void choose(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {error && <Notice tone="error">{error}</Notice>}
+    </div>
+  );
+}
 
 /**
  * The version, and a button to check for a newer one (D-155). Nothing is
@@ -237,6 +295,8 @@ export function Preferences({ onChanged }: { onChanged: () => void }) {
       </header>
 
       {saved && <Notice tone="ok">Saved.</Notice>}
+
+      <Appearance initial={settings.theme ?? "system"} />
 
       <div className="card">
         <header>

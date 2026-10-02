@@ -54,21 +54,39 @@ calm background, and the page tells you how to add imagery.
 2. **Settings for this video** — style, shape (landscape, square, vertical),
    quality, an optional title card, chapter cards at long pauses (recordings
    over three minutes), a highlights version (recordings over five minutes),
-   and optional **music**: your own track, played under the voice and lowered
-   whenever someone speaks, with a credit if it needs one. Voxframe never adds
-   music of its own. An estimate of the render time is shown before you start.
+   and optional **music**: your own track, edited to the speaker (cut on the
+   beat, lowered whenever someone speaks, ending on the last word), with a
+   credit if it needs one. An estimate of the render time is shown before you
+   start.
 3. **Render** — progress stage by stage. You can stop it. If the app or the
    computer stops mid-render, the job is marked *interrupted* and can be
    resumed from where it was.
-4. **Download** — the video, its subtitles (SRT and VTT) and the scene plan, with
-   the credits for every image and track it used. The page tells you if scenes
-   are one click from an image, or show an *atmospheric* image rather than a
-   match.
+4. **The studio** — the finished video, with everything you can change beside
+   it. **Download** in its top bar has the video, its subtitles (SRT and VTT),
+   the scene plan and the credits for every image and track it used.
 
-## Changing the video: the scene plan
+## Changing the video: the studio
 
-**See how it was made** opens the scene plan: every scene in order, with what
-is said, what is on screen, and why. Choose a scene to change it:
+The video stays in view while you work, with a timeline of every scene and
+word under it. Clicking the timeline, a word or a scene moves the video
+there. Every change is kept and can be undone (**Ctrl+Z**) or redone
+(**Ctrl+Shift+Z**). A changed picture shows over the video at once, marked
+"not yet in the video", until you click **Update video**. Press **?** for the
+keyboard shortcuts; `[` and `]` fold away the side panel and the timeline,
+whose edges can also be dragged.
+
+**Sound.** Voice polish (Polished, or Original exactly as recorded); the
+voice and music levels; how far the music drops while someone speaks; and
+the loudness for where the video is going. Moving a slider plays 15 seconds
+from where you paused. Your own track can be added, heard under the voice,
+credited, switched or removed at any time. A sound change remakes only the
+sound, and every video's sound is checked.
+
+![The Sound tab](images/studio-sound-dark.png)
+
+**Scenes and captions.** The studio's **Scenes** and **Captions** tabs, and
+the scene-by-scene plan (**Download → The scene plan, scene by scene**), offer the same
+changes. Choose a scene to change it:
 
 - **Use a close match** — an image that came just short of the bar for
   automatic use. Anything already shown elsewhere in the video, or showing
@@ -83,8 +101,11 @@ is said, what is on screen, and why. Choose a scene to change it:
 - **Cards** — change what a title or chapter card says, remove a card, add a
   title, or **start a chapter here** before any scene.
 
-Changes collect in a bar at the top; **Update the video** renders again, and
-only the scenes you changed are rendered — the rest are reused.
+**Update video** renders again, and only the scenes you changed are rendered —
+the rest are reused.
+
+**Appearance.** **Settings → Appearance** chooses Dark, Light, or Follow the
+system (the default).
 
 *Atmospheric* scenes are ones where nothing matched: they show a calm image on
 the recording's overall theme, labelled so it is never mistaken for a match.

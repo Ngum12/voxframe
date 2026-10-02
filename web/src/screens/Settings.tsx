@@ -30,23 +30,38 @@ const HIGHLIGHTS_FLOOR_SECONDS = 300;
 
 const MUSIC_ACCEPTED = ".mp3,.wav,.m4a,.aac,.flac,.ogg,.opus";
 
+export type MusicChoice = "none" | "own" | "score";
+
 /**
- * An optional music bed (D-148). Voxframe never supplies music of its own
- * (D-091); this is the person's own track, mixed under the voice and lowered
- * while anyone speaks.
+ * The video's music (D-176): none, the person's own track (D-148), or a score
+ * Voxframe composes for the speech in a chosen style. Either kind is mixed
+ * under the voice and lowered whenever anyone speaks.
  */
 function MusicPicker({
+  choice,
+  onChoice,
+  scoreStyle,
+  onScoreStyle,
+  score,
   music,
   credit,
   onMusic,
   onCredit,
   onBusy,
+  downloadMb,
 }: {
+  choice: MusicChoice;
+  onChoice: (choice: MusicChoice) => void;
+  scoreStyle: string;
+  onScoreStyle: (style: string) => void;
+  score: Capabilities["score"];
   music: UploadResult | null;
   credit: string;
   onMusic: (music: UploadResult | null) => void;
   onCredit: (credit: string) => void;
   onBusy: (busy: boolean) => void;
+  /** Megabytes still to fetch before music can be fitted to speech, if any. */
+  downloadMb: number | null;
 }) {
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,12 +85,67 @@ function MusicPicker({
       <header>
         <h2>Music</h2>
         <p>
-          Optional. Your own track, played under the voice and lowered whenever
-          someone speaks. Voxframe never adds music of its own.
+          Optional. Music plays under the voice and is lowered whenever someone speaks.
         </p>
       </header>
 
-      {music ? (
+      <fieldset className="choices">
+        <legend className="sr-only">Music</legend>
+        <Choice
+          name="music-choice"
+          value="none"
+          checked={choice === "none"}
+          onChange={() => onChoice("none")}
+          title="No music"
+          description="Just the voice."
+        />
+        <Choice
+          name="music-choice"
+          value="own"
+          checked={choice === "own"}
+          onChange={() => onChoice("own")}
+          title="Use my own track"
+          description="Fitted to the speech: cut on the beat, landing on the last word."
+        />
+        {/* Offered only where its sounds are installed (D-187). */}
+        {(score?.ready || choice === "score") && (
+          <Choice
+            name="music-choice"
+            value="score"
+            checked={choice === "score"}
+            onChange={() => onChoice("score")}
+            title="Let Voxframe score it"
+            description="Music composed for this recording, following the speaker."
+          />
+        )}
+      </fieldset>
+
+      {choice === "score" && (
+        <>
+          <Field label="Music style" htmlFor="score-style">
+            <select
+              id="score-style"
+              value={scoreStyle}
+              onChange={(event) => onScoreStyle(event.target.value)}
+            >
+              {(score?.styles ?? []).map((option) => (
+                <option key={option.name} value={option.name}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {score?.styles.find((option) => option.name === scoreStyle)?.description && (
+            <p className="muted">
+              {score.styles.find((option) => option.name === scoreStyle)?.description} Each
+              video gets its own variation.
+            </p>
+          )}
+          {score && !score.ready && <Notice tone="warn">{score.reason}</Notice>}
+        </>
+      )}
+
+      {choice !== "own" ? null : music ? (
         <p>
           <strong>{music.name}</strong>
           {music.duration_seconds ? ` · ${Math.round(music.duration_seconds)}s` : ""}{" "}
@@ -102,9 +172,15 @@ function MusicPicker({
       {progress !== null && (
         <p className="muted">Uploading… {Math.round(progress * 100)}%</p>
       )}
+      {choice === "own" && music && downloadMb !== null && (
+        <p className="muted">
+          The first time you use your own music, Voxframe downloads the tools that fit it to the
+          speech (about {downloadMb} MB, once). It happens while your video is being made.
+        </p>
+      )}
       {error && <Notice tone="error">{error}</Notice>}
 
-      {music && (
+      {choice === "own" && music && (
         <Field
           label="Credit"
           htmlFor="music-credit"
@@ -150,6 +226,8 @@ export function Settings({
   const [music, setMusic] = useState<UploadResult | null>(null);
   const [musicCredit, setMusicCredit] = useState("");
   const [musicBusy, setMusicBusy] = useState(false);
+  const [musicChoice, setMusicChoice] = useState<MusicChoice>("none");
+  const [scoreStyle, setScoreStyle] = useState("inspiring");
 
   const duration = upload.duration_seconds ?? 0;
   const longEnoughForHighlights = duration >= HIGHLIGHTS_FLOOR_SECONDS;
@@ -310,11 +388,21 @@ export function Settings({
       </div>
 
       <MusicPicker
+        choice={musicChoice}
+        onChoice={setMusicChoice}
+        scoreStyle={scoreStyle}
+        onScoreStyle={setScoreStyle}
+        score={capabilities?.score}
         music={music}
         credit={musicCredit}
         onMusic={setMusic}
         onCredit={setMusicCredit}
         onBusy={setMusicBusy}
+        downloadMb={
+          capabilities?.music_component && !capabilities.music_component.ready
+            ? capabilities.music_component.download_mb
+            : null
+        }
       />
 
       {capabilities && capabilities.library.assets === 0 && sourcingEnabled && (
@@ -381,7 +469,11 @@ export function Settings({
         <button
           type="button"
           className="btn btn-primary"
-          disabled={musicBusy}
+          disabled={
+            musicBusy ||
+            (musicChoice === "own" && music === null) ||
+            (musicChoice === "score" && !capabilities?.score?.ready)
+          }
           onClick={() =>
             onStart({
               aspect,
@@ -393,8 +485,9 @@ export function Settings({
               highlights_seconds:
                 highlights && longEnoughForHighlights ? highlightSeconds : null,
               use_library: true,
-              music_upload_id: music?.upload_id ?? null,
-              music_credit: musicCredit,
+              music_upload_id: musicChoice === "own" ? (music?.upload_id ?? null) : null,
+              music_credit: musicChoice === "own" ? musicCredit : "",
+              score_style: musicChoice === "score" ? scoreStyle : null,
             })
           }
         >

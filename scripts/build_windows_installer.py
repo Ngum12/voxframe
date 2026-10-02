@@ -39,6 +39,9 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from component_manifest import split_music, write_music_manifest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORK = REPO_ROOT / "build" / "windows"
 FFMPEG_VERSION = "9.0.2"
@@ -75,25 +78,46 @@ def build_wheel() -> Path:
 
 
 def download_wheels(wheel: Path, python_version: str) -> Path:
+    """The app's wheels, and the music component's manifest (D-172).
+
+    The app and the music-fitting libraries are resolved *together*, so the
+    versions they share (numpy above all) agree. The installer then bundles
+    only the app's share; the rest become ``components/music.json``, fetched
+    the first time someone uses their own music track.
+    """
     step("dependencies, as Windows wheels")
     wheels = WORK / "wheels"
-    shutil.rmtree(wheels, ignore_errors=True)
-    wheels.mkdir(parents=True)
+    music = WORK / "music-wheels"
+    for folder in (wheels, music):
+        shutil.rmtree(folder, ignore_errors=True)
+        folder.mkdir(parents=True)
     major_minor = ".".join(python_version.split(".")[:2])
+    target = [
+        "--only-binary=:all:",
+        "--platform", "win_amd64",
+        "--python-version", major_minor,
+        "--implementation", "cp",
+    ]
     subprocess.run(
-        [
-            sys.executable, "-m", "pip", "download", "--quiet",
-            f"{wheel}[app]",
-            "--dest", str(wheels),
-            "--only-binary=:all:",
-            "--platform", "win_amd64",
-            "--python-version", major_minor,
-            "--implementation", "cp",
-        ],
+        [sys.executable, "-m", "pip", "download", "--quiet", f"{wheel}[app,music]",
+         "--dest", str(wheels), *target],
         check=True,
     )
+    alone = WORK / "app-alone"
+    shutil.rmtree(alone, ignore_errors=True)
+    subprocess.run(
+        [sys.executable, "-m", "pip", "download", "--quiet", f"{wheel}[app]",
+         "--dest", str(alone), *target],
+        check=True,
+    )
+    split_music(wheels, alone, music)
+    shutil.rmtree(alone, ignore_errors=True)
+    write_music_manifest(music, WORK / "components" / "music.json")
+
     total = sum(path.stat().st_size for path in wheels.iterdir()) / 1_000_000
-    print(f"  {len(list(wheels.iterdir()))} wheels, {total:.0f} MB")
+    left = sum(path.stat().st_size for path in music.iterdir()) / 1_000_000
+    print(f"  {len(list(wheels.iterdir()))} wheels, {total:.0f} MB in the installer")
+    print(f"  {len(list(music.iterdir()))} music-fitting wheels, {left:.0f} MB on demand")
     return wheels
 
 
@@ -172,6 +196,7 @@ local_wheels={rel(wheels)}/*.whl
 packages=tkinter
     _tkinter
 files={rel(ffmpeg)} > $INSTDIR
+    {rel(WORK / "components")} > $INSTDIR
     {rel(REPO_ROOT / "THIRD_PARTY_LICENSES")} > $INSTDIR
 
 [Build]

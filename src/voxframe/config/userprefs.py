@@ -37,6 +37,7 @@ import structlog
 
 __all__ = [
     "KEY_FIELDS",
+    "THEMES",
     "UserPreferences",
     "config_path",
     "load_preferences",
@@ -48,6 +49,9 @@ log = structlog.get_logger(__name__)
 #: Keys the web app can set, mapped to the settings field each one feeds.
 #: Anything not listed here is refused, so a crafted request cannot write
 #: arbitrary configuration into the user's file.
+#: The looks the app can take (D-185).
+THEMES = ("system", "dark", "light")
+
 KEY_FIELDS: dict[str, str] = {
     "pexels": "pexels_api_key",
     "pixabay": "pixabay_api_key",
@@ -103,6 +107,9 @@ class UserPreferences:
     #: The model profile chosen on the Getting-ready screen: ``standard`` or
     #: ``lite`` (D-067, D-157). Empty until chosen; the environment wins.
     model_profile: str = ""
+    #: The app's look (D-185): ``system`` follows the computer's light or dark
+    #: setting; ``dark`` (Ember) and ``light`` (Paper) fix it.
+    theme: str = "system"
 
     @property
     def has_been_asked(self) -> bool:
@@ -138,6 +145,7 @@ class UserPreferences:
             "library_author": self.library_author,
             "library_path": self.library_path,
             "model_profile": self.model_profile,
+            "theme": self.theme,
         }
 
 
@@ -178,6 +186,7 @@ def load_preferences(path: Path | None = None) -> UserPreferences:
             if isinstance(payload.get("library_path"), str)
             else ""
         ),
+        theme=payload["theme"] if payload.get("theme") in THEMES else "system",
         library_author=(
             payload["library_author"][:120]
             if isinstance(payload.get("library_author"), str)

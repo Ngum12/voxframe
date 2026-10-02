@@ -252,6 +252,11 @@ def test_the_built_bundle_matches_the_committed_source(built_app: None) -> None:
     import re
 
     referenced = set(re.findall(r'(?:src|href)="\.?/?(assets/[^"]+)"', index))
+    # Files a built stylesheet names (the fonts, D-181) are referenced too.
+    for sheet in [name for name in referenced if name.endswith(".css")]:
+        css = (static_root() / sheet).read_text(encoding="utf-8")
+        for url in re.findall(r"url\(\s*[\"']?\.?/?([^\"')]+)[\"']?\s*\)", css):
+            referenced.add(url if url.startswith("assets/") else f"assets/{url.split('/')[-1]}")
     present = {
         path.relative_to(static_root()).as_posix()
         for path in (static_root() / "assets").glob("*")

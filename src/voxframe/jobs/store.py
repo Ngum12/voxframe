@@ -426,6 +426,31 @@ class JobStore:
                 raise ValueError("This job is still rendering.")
             return self._start_again(job, work, "Rendering your changes")
 
+    def remember(self, job: Job, key: str, value: Any) -> None:
+        """Keep a detail with the job across renders (its key starts with ``kept_``).
+
+        Used for a music track the person switched away from, so the Sound
+        card can switch back to it (D-179).
+        """
+        if not key.startswith("kept_"):
+            raise ValueError("remembered details are named kept_...")
+        with self._lock:
+            if value is None:
+                job.summary.pop(key, None)
+            else:
+                job.summary[key] = value
+            self._persist()
+
+    def set_pending(self, job: Job, count: int) -> None:
+        """How many changes the plan holds that the video does not show (D-182).
+
+        Read from the plan's history, so undoing back to what the video shows
+        leaves none.
+        """
+        with self._lock:
+            job.summary["pending_edits"] = max(0, int(count))
+            self._persist()
+
     def note_edit(self, job: Job) -> None:
         """Count an edit made to a job's plan since its last render.
 
@@ -583,7 +608,8 @@ class JobStore:
         with self._lock:
             job.artifacts = {name: str(path) for name, path in artifacts.items()}
             job.warnings = warnings
-            job.summary = summary
+            kept = {k: v for k, v in job.summary.items() if k.startswith("kept_")}
+            job.summary = {**kept, **summary}
             self._persist()
 
     def artifact_path(self, job_id: str, name: str) -> Path | None:

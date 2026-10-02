@@ -5175,3 +5175,752 @@ install stops with an error code instead of waiting. The release workflow
 proves it on GitHub's Windows machine: with the installed `pythonw.exe`
 running, the installer and the uninstaller must both refuse and change no
 file.
+
+## Towards v0.2.0
+
+### D-169 · Language detection is limited to English and French by default
+
+The installed app, on its Lite profile, detected an English talk as Yoruba
+(`language=yo` in its log), the failure D-068 measured: Whisper `small`,
+unrestricted, heard the owner's accented English as Yoruba and garbled it,
+while restricting the candidates to English and French gave a transcript
+identical to forcing English. English and French are the languages Voxframe is
+tested in (D-040), so `VOXFRAME_LANGUAGES` now defaults to `en,fr`. `any`
+restores unrestricted detection. The transcript cache key includes the
+candidate set, so earlier unrestricted transcripts are not reused.
+
+### D-170 · The music director, Stage 1: the person's own track, edited to the speaker
+
+Approved in the plan (`docs/MUSIC_DIRECTOR_PLAN.md`, private) with the owner's
+decisions: own tracks only (D-091 stays), librosa only, no torchaudio.
+
+**What it does.** A track is decoded once by FFmpeg and analysed by librosa:
+tempo, beats, bars (3 or 4 beats, the bar's first beat chosen from the
+accents), energy and harmony per bar, cached per file. The bed is then built
+from whole bars: a talk longer than the track repeats whole phrases (the loop
+whose harmony matches best, keeping the intro and the ending out of it); a
+shorter one drops whole phrases. Joins are 20 ms equal-power crossfades. A
+phrase-starting downbeat lands exactly on the frame where the last word ends,
+by shifting the start by less than a bar under the fade-in. Under each stretch
+of speech the music is lowered just enough to sit 15 dB below that stretch's
+measured voice; pauses of 1.5 s or more swell to full level and are back down
+before the next word. The bed is rendered in blocks (an hour-long track never
+sits in memory), cached, and mixed under the narration with no sidechain, which
+would duck a second time. `VOXFRAME_MUSIC_MODE=simple` keeps the old looped
+bed, as does any track the director cannot use, with a note saying why; music
+is never the reason a video fails.
+
+**Measured, and fixed on the way:**
+- Bar starts on a generated 4/4 track with known bars: librosa's beats are
+  frame-quantised (23 ms), measured -43 to +39 ms off. Each beat is refined to
+  the steepest rise in a 10 ms energy envelope, stepped every 2 ms (2 ms
+  windows rippled with a 55 Hz kick and landed inside the note), within a third
+  of a beat (the tracker's tempo was 117.5 against 118, so its grid drifts).
+  Result: 62 of 62 bar starts within 20 ms, median 4.4 ms.
+- Steadiness: the tracker forces an even grid onto anything, so its own beat
+  intervals look regular even for beats wandering by 40%. Local tempo variation
+  separates them: 0.00 on the steady track, 0.22 on the wandering one,
+  0.05-0.11 on the owner's three tracks (worship instrumental, piano hymns, a
+  song); the limit is 0.15. The hymns are the loosest; the listening test
+  decides whether they cut well.
+- Speech stretches were grouped separately in video and recording time; a gap
+  of 0.6 s less a rounding error merged in one and not the other, and every
+  later stretch was measured against the wrong voice. Grouped once now.
+- Whisper timed the sonnet's last words to 47.64 s of a 45.0 s recording, which
+  put the landing after the voice and past the end of the video. Word timings
+  are clamped to the recording.
+- On the sonnet with the owner's worship instrumental: the landing on frame
+  1519, the last word's; every stretch of speech 15.0 dB over the music; the
+  one long pause swelled to -24 dB and was back to -39 dB by the next word.
+  Analysis of ten minutes of music: about 4 s.
+
+**Dependencies.** The `music` extra (`librosa`) is in the installers' `app`
+extra. The owner approved about 45 MB; measured, it is about **91 MB** of
+wheels, because librosa brings SciPy (37 MB) and scikit-learn (8 MB), which
+the installers did not have. That difference is for the owner to decide before
+release. Development uses `.venv-music`, a virtual environment layered on the
+main Python (the owner's choice), so the main Python is unchanged.
+
+**Stage 1 ends with the owner's blind listening test**
+(`scripts/music_listening_test.py`); Stage 2 does not start until the owner
+approves its results.
+
+### D-171 · Mix controls: the sound is made from stems, to a loudness target, and checked
+
+The first stage of the approved music plan (`docs/MUSIC_DIRECTOR_PLAN.md`,
+section 8), built before the generated score because it is useful either way.
+
+**The render's last step is split in three.** The pictures -- segments joined,
+captions burned in, no sound -- are kept whole in the cache, keyed by the
+segments, transitions, captions and quality. The sound is mixed from two stems
+on the video's timeline: the voice (with the silences cards add) and the music
+bed at full level, cut on bars by the director or looped, but not ducked. Then
+the two are joined, the pictures copied, not encoded. A change to the sound
+alone re-renders no picture: on the sonnet, 14.8 s against 69.6 s for the full
+render, with the one cached pictures file reused.
+
+**The person's settings** are kept in the plan (`audio_mix`): voice level,
+music level, how far under the speech the music sits (15 dB by default, as
+D-170), and the destination. Ducking follows the words' timings to exactly
+that distance, measured per stretch of speech, so the music slider changes the
+music in the pauses and the margin holds. The destinations and their loudness
+are as the owner approved: YouTube and social -14 LUFS / -1 dBTP (the default),
+WhatsApp -15 / -1.5, podcast -16 / -1. Loudness is reached with FFmpeg's
+`loudnorm` in two passes, linear, then limited below the ceiling. The sidechain
+compressor is gone: word timings duck exactly, and a compressor on top would
+duck twice.
+
+**Every mix is checked** and a failure is flagged on the video, never passed
+silently: integrated loudness within 1 LU, true peak under the ceiling, no
+clipping, the music at least the chosen distance under every stretch of
+speech, and no click at any edit in the music.
+
+**The web app's Sound card**: sliders, a destination, undo and redo, a warning
+(not an override) when the music is set within 12 dB of the voice, the last
+checks, and "Apply to the video". Moving a slider plays 15 seconds of the mix
+from where the video is paused, made from the kept stems.
+
+**Measured on the owner's 17-minute talk:** stems 16 s (once, with the first
+render); a sound-only update 77 s (mix, two loudness passes, checks) plus the
+join; a preview 0.12 s. Result -16.0 LUFS, margin 15.0 dB, passed.
+
+**Found on the way:** the new mix module imported the plan package, which
+imports the renderer, which imports the mix module -- fine when the app loaded
+the renderer first, a crash when anything imported it first. It imports the
+settings type for annotations only; a test imports it on its own.
+
+### D-172 · Stage 1 approved; own-track analysis on demand; no RNNoise models — PROJECT OWNER'S DECISIONS
+
+- **Stage 1 is approved** on the owner's own listening to the Sound card on a
+  short recording ("the voice stays clear, and the music feels right"). The
+  formal blind ratings were not needed. **The director stays the default** for
+  a person's own track.
+- **Own-track analysis becomes a download-on-demand component.** librosa and
+  what it brings (SciPy, scikit-learn, numba, llvmlite and others, about 91 MB
+  of wheels) are left out of the installers. They are fetched, checked against
+  pinned SHA-256 values, and unpacked into the person's data folder the first
+  time someone uses their own music track. Everyone else keeps a small
+  installer. Until the component is there, own-track music plays as the plain
+  loop, ducked the same way.
+- **No RNNoise model files.** FFmpeg's `arnndn` filter needs a model, and the
+  usual source (`GregorR/rnnoise-models`) has no licence file, only the
+  statement that the models are "not subject to copyright". Its training
+  scripts use the McGill TSP speech database and unnamed cough and laughter
+  recordings, with no terms stated. The owner's rule: if the licence is
+  unclear, use FFmpeg's built-in noise reduction instead. Voice polish uses
+  `afftdn`, which needs no model.
+- **Three music choices** on the settings screen (No music, Use my own track,
+  Let Voxframe score it). No music stays the default until the generated score
+  passes the owner's listening check. They are recorded in the plan and built
+  with Stage 3.
+
+### D-173 · Voice polish: FFmpeg's own filters, measured, cached, with an exact "Original"
+
+Stage 2 of the music director plan. On by default, switched on the Sound card
+("Polished" / "Original"). Every step is an FFmpeg filter the app already
+ships, so nothing is downloaded and no model file is needed (D-172):
+
+1. Noise reduction (`afftdn`), set from the noise measured in the pauses
+   between words (gaps of 0.4 s or more in the transcript), 3 to 12 dB. Left
+   off when the room is already quiet (under -65 dBFS), and when what sounds
+   between the words is music: plainly tonal (spectral flatness under 0.05)
+   and audible, or tonal (under 0.2) and within 20 dB of the speech.
+   Reducing it would damage both.
+2. A high-pass at 75 Hz; a 2 dB presence lift at 3 kHz; a 2 dB cut at 320 Hz
+   only when the recording measures boxy.
+3. A mild de-esser and gentle compression (2.5:1).
+4. Room tone: the recording's own quietest two seconds, looped under the voice
+   at no more than -60 dBFS, so pauses are never dead digital silence.
+
+**Checked, not hoped:** the pauses must stay above -75 dB when noise was
+reduced, and the voice may lose at most 6 dB above 4 kHz against 1-4 kHz. A
+failure shows with the sound checks on the video.
+
+**Calibrated on two recordings**, and to revisit with more: the planned
+de-esser strength took 6.5 dB from the talk's high frequencies (music under
+the voice set it off); the milder one takes 0.06 dB. Boxiness measured 13.1
+and 14.5 dB on two ordinary voices, so the planned 8 dB threshold would have
+cut everyone's; it is 18 dB. Measuring noise in the quietest windows gave
+-25.6 dB on the 17-minute talk -- speech, not noise -- hence the pauses.
+
+**Two measuring faults found by the full suite**, both in the first version:
+the public-domain sonnet, a plain reading, was reported as having music in
+it. Whisper's word timings run short, so the transcript's gaps held the ends
+of words: they measured -26.5 dB over a -50 dB room. The floor is now the
+quiet end of the gaps (their 20th percentile), and never above the
+recording's quietest tenth. And a 16 kHz recording at 48 kHz is empty above
+8 kHz, which read as tonal (flatness near 0, against 0.39 at its own rate):
+flatness is now measured only up to where the recording has sound. The level
+rule alone was then fragile on the talk (its music 20.1 dB under the speech,
+against the 20 dB limit), hence the plainly-tonal rule. After the fixes: the
+sonnet, -50.4 dB and 0.23, not music, 12 dB of reduction; the talk, 0.00,
+music, reduction off.
+
+**Measured:** the owner's 17-minute talk, flatness 0.00: music is in the
+recording, so noise reduction stays off; polishing took 15 s. A phone
+recording: the first version read its background at -58 dB and reduced it by
+12 dB (high frequencies changed by -0.7 dB). Measured in its real pauses it
+is -69 dB -- the phone gates its own noise -- so it now gets no reduction,
+only the tone, de-esser and compression. To confirm by listening.
+
+**Cached like the other stems:** the polished voice is made once per voice
+stem and polish version, with what polishing did kept beside it, so changing
+the mix, or switching between Polished and Original, never polishes again.
+Both are kept, so the preview compares them instantly. A failed polish leaves
+the original voice in use and the video still made.
+
+**"Original" is exactly the recording:** with polish off the mix reads the
+voice stem itself -- the recording decoded at 48 kHz, placed on the timeline --
+with no filter at all. Tested sample for sample against the mix, and against
+the recording decoded separately.
+
+**Music already in the recording** (the same measurement: tonal and close
+under the speech) is said on the Sound card. With no music added, it notes
+that "No music" is likely best. With a track added, the card and the video's
+warnings say two layers of music may clash. Nothing is changed for the person.
+The recording is only known once it has been through the app, so the note
+comes with the first video, not on the settings screen.
+
+### D-174 · The music component, as built (D-172)
+
+Both installer builds resolve the app with and without the `music` extra and
+ship the difference as a manifest (`components/music.json`): each wheel's
+PyPI address, SHA-256 and size, cross-checked against PyPI's own published
+digest at build time. The app itself is installed pinned to the same
+versions (a constraints file), so the component always fits the installed app.
+
+The first time a person's own track is used, the job's progress shows "a
+one-time download of about N MB" and its progress. Each wheel is checked
+against its SHA-256 and refused if any file would land outside its folder,
+unpacked into a staging folder, and marked complete only when all are in; a
+failure leaves nothing half-installed, and the video is still made, with the
+music as a simple loop and a warning that it will try again. Only PyPI's file
+host is contacted (listed in the privacy notes). A checkout, which has librosa
+from the `music` extra, has no manifest and never downloads.
+
+### D-175 · Voice polish approved — PROJECT OWNER'S DECISION
+
+The owner listened in the app, comparing Polished and Original on the Sound
+card with the phone recording and the 17-minute talk, and approved voice
+polish as built (D-173): "all is cool". So:
+
+- **Polish stays on by default**, with the Polished / Original switch on the
+  Sound card; Original remains the recording exactly.
+- **The phone recording keeps no noise reduction**: its pauses measure -69 dB
+  (the phone gates its own noise), and only the tone, de-esser and
+  compression apply.
+- **The music-in-the-recording note** behaves as asked: it suggests "No music"
+  when the recording already has music, and warns of two layers clashing when
+  a track is added.
+- The listening kit's voice mode is not built; the switch in the app is the
+  comparison.
+
+### D-176 · Generated score approved; build the full feature with variety at its core — PROJECT OWNER'S DECISION
+
+The owner listened to the prototype gate's round two (four clips, blind A/B
+against no music: inspiring, calm, reflective, and a 4:41 cinematic clip)
+and approved it: "it sounds really good". Round one had been judged right in
+timing, ducking, swells and endings but too thin ("a single piano"); round
+two's layered arrangement -- energy levels from the speech, string
+ostinatos, cinematic percussion, sections with their own progressions and
+leads, human variation -- is the sound to build on. Prototype scripts:
+branch `score-prototype` (`prototype/score/score2.py`).
+
+The full feature is to be built in stages, each approved by the owner, with
+**variety as a core requirement** so videos never all sound the same:
+
+1. **Variation within a style,** seeded per video and reproducible: key,
+   tempo, progressions, ostinato patterns, lead instruments, section order.
+   A "New variation" button re-renders only the audio.
+2. **About six styles for the first release** (for example inspiring, calm,
+   reflective, cinematic, hopeful, documentary), each with a short preview,
+   and a plan for more (tense, worship, ambient, acoustic, light electronic,
+   and the African palette: balafon, mbira, kalimba, hand percussion).
+3. **Styles as data files,** like the metaphor dictionary, so styles and
+   progressions are added without code changes.
+4. **More instruments:** further free sample libraries are searched and
+   listed (licence, size, quality) and added only with the owner's
+   approval; synthesis widens variety without downloads.
+5. **Editor controls:** a style picker with previews, instrument group levels
+   (piano, strings, percussion, bass, pads), overall intensity, and "New
+   variation".
+6. **Variety measured:** at least 20 scores across styles and recordings,
+   shown by analysis to be no two too similar.
+7. **A compressed, trimmed sample pack** downloaded on first use of "Let
+   Voxframe score it", like the models; per-style packs if that keeps
+   downloads smaller.
+8. **Every mix rule and check stays,** and the three music choices: no music,
+   my own track, let Voxframe score it.
+
+Nothing is added -- a sample library or a Python package -- without asking
+the owner first.
+
+### D-177 · The generated score, Stage 1: the engine in the app, styles as data, the third music choice
+
+Stage 1 of `docs/GENERATED_SCORE_PLAN.md` (D-176).
+
+**The engine** is `voxframe/music/score/`, ported from the approved round-two
+prototype and kept to its sound:
+
+- reading the speech (stretches, long pauses, energy from speaking rate and
+  loudness);
+- composing: sections every 45 to 90 seconds at a speech boundary, sooner
+  after a long pause, then chords on a breathing beat grid, each with an
+  energy level from 0 to 4;
+- arranging the layers;
+- sampled instruments and synthesis;
+- rendering and fitting under the voice.
+
+The composition becomes a list of events with every value fixed, including
+which of several equal recordings plays. The same speech, style and seed
+therefore give the same audio, sample for sample (tested; the file bytes can
+differ only because libsndfile stamps the time into a float WAV's header).
+Rendering is pure.
+
+**Long talks:**
+
+- The prototype held everything in memory, several GB for a 17-minute
+  talk. The engine renders in 20-second blocks, carrying each reverb's tail
+  across them, and finishes the score in streaming passes. A test checks
+  that 3-second blocks sound the same as 20-second ones.
+- Samples are loaded when a note first needs them and kept within a memory
+  budget.
+- The speech-band dip is now a peaking filter that follows the words,
+  instead of whole-signal STFT masking, so it streams too.
+
+**Styles are data:** `styles/*.toml`, one file per style, documented in
+`styles/README.md`.
+
+- A style sets its keys, tempo range, energy mapping, progressions, chord
+  lengths, ostinato patterns and accents, lead instruments and arpeggio,
+  the level at which each part enters, and group volumes.
+- The loader checks every value and names the file and field when one is
+  wrong.
+- The four approved styles are files: inspiring, calm, reflective,
+  cinematic. Instruments are data too (`instruments.toml`).
+
+**Variation per video:** the seed chooses the key (from the style's list),
+the tempo (within its range), the progression order (each used once before
+any repeats), the ostinato patterns, the leads and the voicing register. The
+seed is kept in the scene plan (`score: {style, seed}`). Twelve seeds of one
+style on the same speech gave twelve different event lists, at least three
+keys and six tempos (tested).
+
+**The third music choice:**
+
+- The settings screen offers "No music" (still the default, D-172), "Use my
+  own track" and "Let Voxframe score it" with a style list. A new video
+  gets a fresh seed.
+- The score becomes the music stem in the render's sound stage, cached by
+  the speech, style file, seed and engine version. The mix ducks and checks
+  it like any music, so a mix change never re-composes it (tested).
+- A plan holds a track or a score, never both.
+- The credits read "Music: generated by Voxframe, with samples from
+  Versilian Studios' VSCO 2 and VCSL libraries (CC0)".
+- A score that cannot be made leaves the video without music and says why.
+
+**Dependencies, as the owner decided:**
+
+- **soundfile** (BSD-3, with libsndfile LGPL-2.1, dynamically linked) is now
+  a direct dependency of the app. The mixer reads and writes stems with it
+  in every render (D-171), but it had arrived only with librosa, which D-172
+  made a download. So an installer built since then would have failed every
+  video for anyone without the music download. It is now declared, with
+  cffi (MIT) and pycparser (BSD-3) in the licence notices.
+- **SciPy** stays out of the installers. The score gets it from the existing
+  music download (D-172) on first use, and the progress says "Preparing the
+  music score (a one-time download of about N MB)". If that download fails,
+  the video is made without music, and the warning says so.
+
+**The samples, for Stage 1,** are read from `VOXFRAME_SCORE_SAMPLES_PATH`
+(the prototype's download in development). Without them the choice says the
+sounds aren't installed and can't be started. The installed app gets the
+pack in Stage 5.
+
+**Measured:** a 45-second sonnet video scored "inspiring", made from start
+to finish in 55 seconds (draft quality). The score alone for a 67-second
+clip took about 25 seconds, against about 54 seconds per minute of audio in
+round two, which included voice polish and two mixes.
+
+**Not in Stage 1:** the command line (`voxframe make`) builds its own
+pipeline, and gets the score choice later; the editor controls are Stage 2.
+
+
+### D-178 · Stage 1 of the generated score approved — PROJECT OWNER'S DECISION
+
+The owner tried "Let Voxframe score it" on the development server and
+approved Stage 1 (D-177): "it sounds great". Stage 2 follows as planned
+(docs/GENERATED_SCORE_PLAN.md): "New variation", changing the style after the
+video is made (re-rendering only the sound), and instrument group levels and
+intensity in the editor. No sample library or package is added without
+asking.
+
+### D-179 · The generated score, Stage 2: changing the music after the video is made
+
+Stage 2 of `docs/GENERATED_SCORE_PLAN.md`, after the owner approved Stage 1
+(D-178). Everything here re-renders only the sound; the pictures come from
+the cache (D-171), which a test checks after every kind of change.
+
+**The Sound card's Music section:**
+
+- The choice: "No music", "Let Voxframe score it", or "Your track" (shown
+  when the video had one; switching away keeps it with the job, so it can be
+  chosen again).
+- For a score:
+  - **a style list,** with "Hear this style": a 12-second sample of each
+    style, composed over a stand-in speech pattern (two phrases and a pause,
+    so it builds and swells), made once per style and engine version and
+    kept;
+  - **"New variation":** a new seed, so a new piece in the same style;
+  - **an intensity slider,** from much calmer to much more driving than the
+    speech alone (it moves the energy mapping by up to 1.2 levels either way);
+  - **levels for the five instrument groups:** piano, strings (with the
+    ostinatos), percussion (with the risers and impacts), bass and pads,
+    from off (-30 dB) to +6 dB.
+- Undo and redo cover the music as well as the mix. Variations are seeds, so
+  undo returns exactly to the previous piece, even after applying.
+
+**Group stems:**
+
+- The engine now renders the score as five group stems (24-bit FLAC, to keep
+  the cache small) and their sum.
+- Finishing is decided once, on the sum, and applied to every group alike:
+  the level, the bus compression's gain curve, the fit under the voice, the
+  pause ceiling and the speech-band dip, a linear filter.
+- So the groups add up to the finished score (tested to 24-bit rounding),
+  and a level change re-mixes them without composing again.
+- The 15-second preview mixes the groups at the new levels on the fly, with
+  each stretch's music level estimated from its groups' powers. Applying
+  sums them at those levels into a kept file, which the mix measures exactly
+  and checks like any music.
+
+**What costs what:** group levels re-mix (about 8 s for the 45-second
+sonnet). A new style, variation or intensity composes a new score, since
+each is part of the score's cache key.
+
+**Speed:** the pad is now synthesised at a quarter of the rate and
+upsampled. It is filtered below 3 kHz, so nothing it keeps changes (energy
+above 6 kHz: -71 dB). That made the engine faster even with five groups:
+back to back on the same 67-second clip, Stage 2 took 27.5 s against Stage
+1's 44.5 s, and 57.9 s against 94.0 s in a second round (the machine was
+busy with other work; absolute times swung about twofold).
+
+**Line endings:** every scripted edit now keeps each file's own line
+endings, and `tests/unit/test_line_endings.py` caught the one slip, a
+CRLF file written back as LF, before it was committed.
+
+### D-180 · Stage 2 of the generated score approved; a studio interface before 0.2.0 — PROJECT OWNER'S DECISION
+
+- **Stage 2 approved** (D-179): the owner tested changing the music after
+  the video is made, on the development server.
+- **Before 0.2.0, the interface is redesigned as a studio editor.** Today
+  the result page means scrolling down to edit and back up to watch. The
+  player is to stay fixed in view, with a tabbed side panel for every edit
+  (Scenes, Captions, Sound, Style), a timeline across the bottom (filmstrip
+  and transcript, aligned with the player, with room for the music lane),
+  keyboard shortcuts, changes previewed in place, and clear status while
+  something updates.
+- **Its identity:** a distinctive, professional visual style, for example a
+  dark studio theme with one signature accent colour, refined typography and
+  subtle motion. Two or three directions are proposed.
+- **Design first:** clickable static mockups of the editor and the upload
+  screen, for each direction, before anything is built. Everything that works
+  stays: accessibility, the honest notes and warnings, the upload, settings
+  and progress flow, and the library and preferences screens.
+- **Next after the interface:** caption animations and transitions.
+- The plan is `docs/INTERFACE_PLAN.md`.
+
+### D-181 · Voxframe's identity: Ember, with Paper as the light mode — PROJECT OWNER'S DECISION
+
+- **Ember is Voxframe's identity:** dark graphite with an ember-orange
+  accent. Lumen's smoother motion and slightly rounder panels are borrowed
+  where they fit, keeping Ember's calm, neutral look.
+- **Paper is an optional light mode,** switchable in Preferences and
+  following the system's light or dark setting by default. It may come in a
+  later step of the build. Both modes use the same colour roles, so they
+  share one layout. The light mode keeps Ember's type and shapes, so the two
+  are one identity.
+- **The upload screen keeps "Captions in English and French".** I had
+  removed it, thinking it overstated the app; the owner pointed out that it
+  is true. Voxframe's scope is English and French (D-070), and detection is
+  limited to them by default (D-169).
+- The updated mockups are in `demo_output/interface_mockups/`, and the build
+  plan (Stage B, six steps) is in `docs/INTERFACE_PLAN.md`, for the owner's
+  approval before the app changes.
+
+### D-182 · The studio: the video edited in place, with undo for every edit
+
+Steps B2 to B4 of `docs/INTERFACE_PLAN.md` (approved, D-181). They were built
+together, because the shell, the tabs and the timeline depend on one another,
+and committed together after the full suite.
+
+**The studio replaces the result page.** It fills the window under the
+header, with no page scrolling:
+
+- **The top bar:**
+  - the project and how it was made;
+  - the status, as text with a small mark;
+  - Undo and Redo;
+  - "Update video";
+  - Download: the video, captions, scene plan and videos folder, and the
+    scene-by-scene plan view, which stays;
+  - ?, for the keyboard shortcuts.
+- **The player:** fixed in view, with play, time, scrub, sound and full
+  screen. A test checks it never moves while every tab is used.
+- **The side panel's tabs:**
+  - **Scenes:** the scene at the playhead, with today's picture choices,
+    search, your own photo, camera movement, cards and adding a title;
+  - **Captions:** the scene's words, each jumping the player to it, and
+    caption correction;
+  - **Sound:** the Sound card;
+  - **Style:** how it was made, the credits, and plainly why the template
+    and shape cannot change here.
+- **The timeline:** a ruler, the scenes (with thumbnails, the current one
+  marked, changed ones dotted), the words in their own time slots on
+  alternating rows, and the music lane reserved. One playhead follows the
+  video. Clicking moves the video there, it zooms, and only the words in
+  view are drawn.
+
+**Updating stays in the studio.** The status reads "Updating your
+video… N%" from the job's own progress. The player reloads the new video
+at the same moment, and the status returns to "Your video is ready". The
+tests wait on those same words.
+
+**Previews in place.** A scene whose picture changed shows the new picture
+over the video while the playhead is in it. Any changed scene is marked
+"Preview · not yet in the video", and its clip on the timeline carries a
+dot.
+
+**Undo for every edit (new).** Every edit is saved to the plan at once, so
+the history is kept beside the plan:
+
+- every saved version is kept, with a pointer to the current one;
+- undo and redo restore a version exactly;
+- a new edit after undo drops the redo branch;
+- 60 versions are kept.
+
+Ctrl+Z therefore undoes whatever changed last: a picture, a caption, a card,
+the camera, the music or the mix. "Changes not yet in the video" became the
+distance from the version last rendered, so undoing back to what the video
+shows leaves none. The Sound card's own Undo still steps through sliders not
+yet applied.
+
+**Windows:** the stress test of the history found that rapid saves can be
+refused for a moment ("Access is denied") while a scanner or indexer holds
+the file. Replacing a file now retries briefly, for the history and for the
+plan's own save.
+
+**Keyboard:**
+
+- Space: play or pause, or press the focused control;
+- ← and →: the previous or next scene (back goes to this scene's start
+  first);
+- , and .: one second back or forward;
+- Ctrl+Z, and Ctrl+Shift+Z or Ctrl+Y: undo and redo;
+- 1 to 4: the tabs;
+- + and −: zoom the timeline;
+- ?: the list of shortcuts.
+
+None of them act while typing in a field.
+
+**Tests:**
+
+- the studio in a browser: the player stays in view, every shortcut, a word
+  and a scene seek to within a second, an edit is counted, previewed, undone
+  and redone, updating stays in the studio, and the Download menu;
+- the history (versions, the redo branch, pending against the rendered
+  version, the cap) and the API (every kind of edit undone and redone in
+  order, refused during a render);
+- the existing Sound card browser tests open the Sound tab first.
+
+### D-183 · The studio approved through B4; two additions; online music for the next release — PROJECT OWNER'S DECISION
+
+- **The studio is approved through step B4** (D-182): "excellent". Steps B5
+  and B6 continue as planned, with two additions in B5:
+  1. **Panels:** the side panel and the timeline collapse and expand, with a
+     button and a shortcut, to give the player more room, and resize by
+     dragging their edges. Each scrolls on its own, never the whole page.
+     Sizes and collapsed states are remembered between sessions.
+  2. **Your own track in the studio:** in the Sound tab, a music track can be
+     uploaded at any time after the video is made, heard in the 15-second
+     preview, switched between it, the generated score and no music, and
+     removed. Only the sound is made again.
+- **A plan for the release after 0.2.0**, for approval, with no building
+  yet: caption styles and animations, transitions, and a music library.
+- **D-091 is reversed for that music library, in the next release.** Until
+  now Voxframe never sourced music. Online search of openly licensed music
+  (Openverse audio) is allowed only under the same rules as images:
+  - it follows the online-search consent setting;
+  - it uses the existing licence policy: no NonCommercial, no NoDerivatives,
+    and ShareAlike off by default (D-071);
+  - it credits every track automatically;
+  - it never chooses online music without the person's action;
+  - it shows a note that some openly licensed music may still trigger
+    YouTube copyright claims.
+
+  The person's own uploaded tracks are saved for reuse, like the image
+  Library. Plan only for now.
+
+
+### D-184 · Step B5: the upload screen, panels that make room, and your own track in the studio
+
+Step B5 of `docs/INTERFACE_PLAN.md`, with the two additions from D-183.
+
+**The upload screen:**
+
+- a headline, one drop zone and the four promises that are true of every
+  video, including "Captions in English and French" (D-070, D-169);
+- **Recent videos** beside it, with a thumbnail, the person's own name for
+  the recording, the number of scenes and the date. Clicking one opens it in
+  the studio.
+
+The steps now read Recording, Look and music, Making, Studio. Jobs are now
+named after the file as the person named it, not "source.m4a". That name
+also names the copy saved to the videos folder.
+
+**Panels:**
+
+- **Collapse and expand.** The side panel and the timeline each fold away,
+  with a button in the top bar or a shortcut: `[` for the side panel, `]` for
+  the timeline. The player takes the room.
+- **Resize.** Each panel's edge is a handle that can be dragged. It is also
+  a keyboard separator: the arrow keys move it 24 px at a time. The
+  timeline's handle sets the height of the scenes lane.
+- **Scrolling.** The panel, the timeline and the stage each scroll on their
+  own; the page never does.
+- **Remembered.** Sizes and folded states are kept in the browser between
+  sessions, clamped to sensible limits. A blocked or corrupt store falls
+  back to the defaults.
+- **Narrow windows** stack as before, without the side handle.
+
+**Your own track, at any time after the video is made:**
+
+- **Adding a track.** The Sound tab offers "Add your own track…" (or "Use a
+  different track…"). The track uploads, is chosen in the card, and plays at
+  once in the 15-second preview, under the voice, at the card's settings.
+  Nothing is applied yet.
+- **The preview always plays the card's choice:**
+  - a new track;
+  - your earlier track;
+  - no music (the voice alone);
+  - the video's own music, fitted to the voice as rendered.
+
+  For a new track, the server builds the same looped, faded bed a render
+  makes, and keeps it. It measures the voice and music only over the
+  stretches of speech in the window, so a preview stays quick.
+- **Credit.** It is written into the credits exactly as typed, and never
+  invented (D-091). Left empty, the track is credited by its file name.
+- **Switching.** You can move freely between your track, the generated score
+  and no music. The track switched away from stays offered.
+- **Removing.** "Remove this track" stops offering it. Using and removing a
+  track at once is refused.
+- **Applying** saves to the plan, with undo like every edit, and re-renders
+  only the sound.
+- **Errors.** A file that is not sound is reported plainly ("That track
+  could not be played"), never as an error page.
+
+### D-185 · Step B6: light mode (Paper), and a Theme setting
+
+- **Paper** sets the same roles as Ember, in warm paper and a deeper ember:
+  - canvas #f4f1ea, card #fbfaf7, ink #1c1a16, accent #c8452a with white
+    labels;
+  - status colours darkened until every pair passes WCAG AA. Warn became
+    #8f5800 and OK #24693f, because the mock-up's values were 3.8:1 and
+    4.3:1 on their notices.
+
+  `tests/unit/test_contrast.py` now checks every pair in both modes.
+- **Settings → Appearance:**
+  - **Follow the system** (the default): it follows the computer's setting,
+    including while the app is open;
+  - **Dark**;
+  - **Light**.
+
+  A choice shows at once and is kept in the user's preferences file.
+- **No flash.** The server writes `data-theme` into the page as it serves it,
+  so a chosen look is right from the first frame, before any script runs.
+  "Follow the system" writes nothing, and the stylesheet's
+  `prefers-color-scheme` rule decides.
+  - A test keeps the chosen-light and followed-light blocks identical.
+  - Only the three known values are ever written into the page.
+- The pictures that stand for the video itself (the player, the scene card
+  previews) stay dark in both modes, as the video is.
+
+### D-186 · The next release's plan approved, and 0.2.0 prepared — PROJECT OWNER'S DECISION
+
+- **`docs/NEXT_RELEASE_PLAN.md` is approved**, with these answers to its four
+  questions:
+  1. **Order:** captions, then transitions, then the music library.
+  2. **Emphasis:** a suggest-emphasis button that marks the most stressed
+     words. Nothing changes until the person clicks.
+  3. **ShareAlike music** is off by default, like images (D-071).
+  4. **The release is 0.3.0.**
+- **B5 and B6 approved** after trying them ("they work well"). 0.2.0 is
+  prepared from master with everything approved:
+  - the language fix;
+  - mix controls;
+  - voice polish;
+  - the music director with on-demand download;
+  - the generated score, Stages 1 and 2;
+  - the studio, B1 to B6.
+
+  The public repository gets one commit and a local `v0.2.0` tag. The owner
+  pushes it.
+
+### D-187 · In 0.2.0 the generated score is offered only where its sounds are installed — PROJECT OWNER'S DECISION
+
+The score's instrument sounds reach an installed app only with the sample
+pack, which is score Stage 5 and is not built. A 0.2.0 installer would have
+shown "Let Voxframe score it" as a choice that cannot be made. The owner
+chose to hide it, rather than ship it disabled or hold the release for
+Stage 5.
+
+- The choice does not appear on the settings screen or in the Sound tab
+  until the sounds are present. It stays visible for a video that already
+  has a score.
+- The release notes do not offer the score; the roadmap lists it under
+  "Later".
+- The privacy note's download row names only the own-track music tools.
+- A browser test, with the server's answer changed to "sounds missing",
+  checks that the choice is not there.
+
+### D-188 · The captioned pictures were reused after an edit that changed only a picture
+
+Found while taking the 0.2.0 screenshots: a render with new pictures showed
+the plain backgrounds of an earlier render.
+
+- **The cause:** the whole captioned pictures (D-171) were cached under a key
+  made from the segments' file names, the transitions, the captions and the
+  quality. Segment files are named by position (`scene_00001.mp4`), not by
+  content. An edit that changes a segment but leaves the captions and
+  timing alone therefore matched the old key: a new picture, a card's text,
+  or the camera movement. "Update video" then made the old pictures again.
+- **The fix:** the key is made from each segment's content (SHA-256, read in
+  blocks), and `PICTURES_VERSION` is 2, so nothing cached under the old key
+  is reused.
+- **Tests:**
+  - A new integration test renders the sonnet, changes only the title
+    card's text, renders again, and compares frames. It failed on the old
+    code ("the updated video still shows the old title") and passes now.
+  - The sound-only update still reuses the pictures whole.
+- **Who it affected:** only builds since D-171. No release had it.
+
+### D-189 · The studio put every word late after a card; two small studio fixes
+
+- **Word times.** The studio added the cards' durations to every word's
+  time. The plan's word times are already on the video's clock, cards
+  included (D-144, `ScenePlan.card_seconds_before`), exactly as the burned
+  captions use them. So:
+  - after a title card, the timeline's words, clicking a word, and the
+    Captions tab's jumps were late by the length of the cards before them
+    (3 s on the sonnet with a title);
+  - the studio tests made videos without cards, so they could not see it.
+
+  The studio now uses the plan's times as they are. The studio browser test
+  makes its video with a title card, and a new test checks that clicking the
+  first word lands at that word's time in the plan, to 0.1 s.
+- **Scene labels over pictures** on the timeline were dark text on the
+  picture in the light look, unreadable on dark pictures. Over a picture, a
+  label is now white on a dark band, in both looks.
+- **The music lane** read "the music lane comes with the score's editing
+  stage", a development note. It now says what the music is: no music, your
+  own track, or the generated score and its style.

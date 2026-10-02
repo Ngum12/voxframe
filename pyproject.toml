@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "voxframe"
-version = "0.1.2"
+version = "0.2.0"
 description = "Turn audio into captioned, visually dynamic video. Offline, free, open source."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
@@ -33,6 +33,9 @@ dependencies = [
     "structlog>=24.1",
     "numpy>=1.26",
     "pillow>=10.3",
+    # Reads and writes the sound stems in every render (D-171). It arrived
+    # only with librosa, which D-172 made a download, so it is declared here.
+    "soundfile>=0.12",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +58,11 @@ web = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9"]
 # Everything the app needs to make a video: transcription, matching and the
 # web app. What the installer bundles, and what `pip install "voxframe[app]"`
 # gives a Mac or Linux user (D-158). `web` alone cannot transcribe or match.
+# The music director (D-170): beats, bars and energy from librosa (ISC), no
+# model. About 91 MB with its libraries, so the installers leave it out and
+# fetch it the first time someone uses their own track (D-172). pip users
+# add it themselves: pip install "voxframe[app,music]".
+music = ["librosa>=0.10"]
 app = ["voxframe[transcribe,library,web]"]
 dev = [
     "pytest>=8.1",
@@ -140,6 +148,8 @@ ignore = ["A003", "N818"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]
+# The listening-test page is an HTML template, clearer unwrapped.
+"scripts/music_listening_test.py" = ["E501"]
 # B008 flags function calls in argument defaults. `Depends(...)` and `File(...)`
 # in a signature is how FastAPI declares dependencies and uploads -- it is the
 # framework's designed usage, not an accident, and rewriting around it would
@@ -155,7 +165,14 @@ warn_unreachable = true
 disallow_untyped_defs = true
 # Third-party packages without bundled type stubs.
 [[tool.mypy.overrides]]
-module = ["cv2.*", "open_clip.*", "sqlite_vec.*", "faster_whisper.*", "transformers.*"]
+module = ["cv2.*", "open_clip.*", "sqlite_vec.*", "faster_whisper.*", "transformers.*", "soundfile.*", "scipy.*"]
+ignore_missing_imports = true
+
+# librosa 1.0 uses Python 3.12 syntax, which a 3.11 target cannot parse, and
+# ships no types for its public API anyway.
+[[tool.mypy.overrides]]
+module = ["librosa.*"]
+follow_imports = "skip"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

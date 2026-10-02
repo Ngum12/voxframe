@@ -30,17 +30,21 @@ Required at runtime:
   structlog                 Apache-2.0   Structured logging
   numpy                     BSD-3-Clause Array operations
   pillow                    MIT-CMU      Image loading and manipulation
+  soundfile                 BSD-3-Clause Sound stems: WAV reading and writing (D-171);
+                                         bundles libsndfile (LGPL-2.1, note 1)
 
 Pulled in transitively by the packages above. These ship to users just as
 the direct dependencies do, so they are audited on the same terms:
 
   annotated-doc             MIT          via pydantic
   annotated-types           MIT          via pydantic
+  cffi                      MIT          via soundfile
   click                     BSD-3-Clause via typer
   colorama                  BSD-3-Clause via click/rich (Windows ANSI support)
   markdown-it-py            MIT          via rich
   mdurl                     MIT          via markdown-it-py
   pydantic-core             MIT          via pydantic (compiled core)
+  pycparser                 BSD-3-Clause via cffi
   pygments                  BSD-2-Clause via rich
   python-dotenv             BSD-3-Clause via pydantic-settings
   shellingham               ISC          via typer
@@ -63,6 +67,10 @@ Bundled fonts, shipped inside the package (src/voxframe/assets/fonts/):
   Inter-Regular.ttf         OFL-1.1      Inter v4.0, upstream static build
   Inter-Bold.ttf            OFL-1.1      Inter v4.0, upstream static build
   Inter-LICENSE.txt         OFL-1.1      The license text, as OFL requires
+
+    The web app serves the same two Inter files (web/src/fonts, with the
+    licence beside them), so the studio looks the same everywhere and offline
+    (D-181).
 
     Fonts are bundled so caption rendering is identical on every machine;
     without them libass falls back to system fonts and golden-frame tests
@@ -118,6 +126,23 @@ Each is added to the "installed" section above as its phase lands.
     react-dom               MIT          UI library (DOM renderer)
     vite                    MIT          Build tool, static output
     tailwindcss             MIT          Styling
+
+  Music director, Stage 1 (D-170; the "music" extra, in the installers):
+    librosa                 ISC          Beats, bars, tempo, energy (no model)
+    numba                   BSD-2-Clause Compiles librosa's numeric code
+    llvmlite                BSD-2-Clause AND Apache-2.0 WITH LLVM-exception
+    scipy                   BSD-3-Clause Signal processing, via librosa
+    scikit-learn            BSD-3-Clause Via librosa
+    joblib                  BSD-3-Clause Via scikit-learn
+    threadpoolctl           BSD-3-Clause Via scikit-learn
+    soxr                    LGPL-2.1+    Resampling; dynamically linked and
+                                         unmodified, like libsndfile (note 1)
+    pooch                   BSD-3-Clause Via librosa (its example data is never
+                                         downloaded by Voxframe)
+    lazy_loader             BSD-3-Clause Via librosa
+    msgpack                 Apache-2.0   Via librosa
+    decorator               BSD-2-Clause Via librosa
+    platformdirs            MIT          Via pooch
 
   Bundled fonts (Phase 5 adds the rest):
     Montserrat              OFL-1.1

@@ -1,0 +1,57 @@
+# Calm: rolling harp and soft strings that stay out of the way.
+# The format is described in README.md beside this file.
+
+name = "calm"
+label = "Calm"
+description = "Rolling harp and soft strings that stay out of the way."
+order = 2
+
+[key]
+tonics = ["F", "Eb", "G", "D", "Bb"]
+home = "I"
+
+[tempo]
+min = 66
+max = 78
+
+[energy]
+offset = -0.5
+min = 0
+max = 2
+
+[harmony]
+progressions = [
+  ["I", "IVmaj7", "vi7", "IV"],
+  ["I", "vi7", "IVmaj7", "V"],
+  ["IVmaj7", "I", "ii7", "V"],
+  ["vi7", "IVmaj7", "I", "V"],
+]
+chord_bars = [2, 2, 1]
+
+[rhythm]
+patterns = [
+  [0, 1, 2, 1, 3, 1, 2, 1],
+  [0, 2, 3, 2, 1, 2, 3, 2],
+  [0, 1, 3, 1, 2, 1, 3, 1],
+]
+accents = [1.0, 0.7, 0.82, 0.7, 0.92, 0.7, 0.82, 0.7]
+
+[instruments]
+leads = ["piano", "harp"]
+arpeggio = "harp"
+
+[layers]
+pad = 0
+melody = 0
+melody_until = 1
+string_pads = 1
+contrabass = 1
+sub_bass = 2
+arpeggio = 2
+viola_ostinato = 2
+soft_section_roll = 0
+pause_roll = 2
+final_hit = false
+
+[levels]
+ostinato = 0.58

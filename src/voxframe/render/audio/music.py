@@ -28,7 +28,7 @@ from pathlib import Path
 
 import structlog
 
-__all__ = ["MusicSettings", "music_filter_chain"]
+__all__ = ["MusicSettings", "directed_mix_chain", "music_filter_chain", "simple_bed_chain"]
 
 log = structlog.get_logger(__name__)
 
@@ -90,6 +90,10 @@ class MusicSettings:
     fade_in: float = FADE_IN_SECONDS
     fade_out: float = FADE_OUT_SECONDS
     credit: str = ""
+    #: Edit the track to the speaker (D-170): cut on bars, land on the last
+    #: word, duck by measurement, swell into pauses. Off gives the plain
+    #: looped bed, which is also what a track without a steady beat gets.
+    directed: bool = True
 
     def attribution(self) -> str:
         """The credits line for this track."""
@@ -157,6 +161,46 @@ def music_filter_chain(
     parts.append(f"[speech][ducked]amix=inputs=2:normalize=0[{output_label}]")
 
     return ";".join(parts)
+
+
+def simple_bed_chain(
+    settings: MusicSettings,
+    video_seconds: float,
+    music_seconds: float,
+    *,
+    rate: int,
+    music_label: str = "0:a",
+    output_label: str = "bed",
+) -> str:
+    """The track as a bed on its own: looped or trimmed, faded, at full level.
+
+    No level and no ducking: the mix applies the person's settings to it and
+    ducks it by the words' timings (D-171).
+    """
+    parts: list[str] = []
+    length = _length_chain(music_label, music_seconds, video_seconds, parts)
+    parts.append(
+        f"[{length}]afade=t=in:st=0:d={settings.fade_in:.2f},"
+        f"afade=t=out:st={max(0.0, video_seconds - settings.fade_out):.2f}"
+        f":d={settings.fade_out:.2f},aresample={rate},"
+        f"aformat=channel_layouts=stereo[{output_label}]"
+    )
+    return ";".join(parts)
+
+
+def directed_mix_chain(
+    *, narration_label: str, music_label: str, output_label: str = "aout"
+) -> str:
+    """Mix a directed bed under the narration.
+
+    The bed arrives finished: the right length, faded, and ducked by its own
+    measured gain curve (D-170). A sidechain here would duck it a second time,
+    so there is none; that the music stays under the speech is tested instead.
+    """
+    return (
+        f"[{music_label}]aformat=channel_layouts=stereo[bed];"
+        f"[{narration_label}][bed]amix=inputs=2:normalize=0:duration=first[{output_label}]"
+    )
 
 
 def _length_chain(

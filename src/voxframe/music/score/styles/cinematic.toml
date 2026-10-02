@@ -1,0 +1,69 @@
+# Cinematic: a story score that ranges from a single piano to the full
+# orchestra, sometimes changing key between sections.
+# The format is described in README.md beside this file.
+
+name = "cinematic"
+label = "Cinematic"
+description = "A story score, from a single piano to the full orchestra."
+order = 4
+
+[key]
+tonics = ["D", "C", "E", "F", "A"]
+home = "I"
+modulate = 0.4
+modulations = [5, -2]
+
+[tempo]
+min = 82
+max = 94
+
+[energy]
+offset = 0.4
+min = 0
+max = 4
+
+[harmony]
+progressions = [
+  ["vi", "IV", "I", "V"],
+  ["I", "V", "vi", "IV"],
+  ["IV", "I", "V", "vi"],
+  ["vi", "V", "IV", "V"],
+  ["I", "iii", "IV", "V"],
+]
+chord_bars = [2, 2, 2, 1, 4]
+
+[rhythm]
+patterns = [
+  [0, 0, 1, 0, 0, 1, 0, 2],
+  [0, 2, 1, 2, 0, 2, 1, 2],
+  [0, 0, 0, 1, 0, 0, 2, 1],
+  [0, 1, 2, 3, 2, 1, 2, 1],
+  [0, 1, 2, 1, 3, 1, 2, 1],
+]
+accents = [1.0, 0.62, 0.7, 0.95, 0.62, 0.7, 0.92, 0.66]
+
+[instruments]
+leads = ["piano", "violins", "cellos"]
+arpeggio = "piano"
+arpeggio_eighths_from = 3
+
+[layers]
+pad = 0
+melody = 0
+melody_until = 1
+string_pads = 1
+contrabass = 1
+sub_bass = 2
+arpeggio = 2
+lead_line = 2
+cello_ostinato = 2
+high_violins = 3
+viola_ostinato = 3
+chord_hits = 3
+section_swell = 3
+violin_ostinato = 4
+driving_percussion = 4
+gong = 4
+pause_roll = 2
+pause_riser = 2
+final_hit = true

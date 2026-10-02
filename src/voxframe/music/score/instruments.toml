@@ -1,0 +1,95 @@
+# The generated score's instruments: where each one's samples are, and how
+# to read their file names (D-176).
+#
+# Every sample comes from two CC0 libraries by Versilian Studios: VSCO 2
+# Community Edition and the Versilian Community Sample Library (VCSL). The
+# folders are those of the sample pack (and, until Stage 5 of the plan, of
+# the prototype's download).
+#
+# HOW IT IS USED
+#   `folder` is under the sample folder. For a `pitched` instrument, each
+#   file name holds its note ("C4", "F#2"); Versilian names some sets with
+#   middle C as C3, so `octave` adds 12 to agree with MIDI. `layer` is a
+#   regular expression whose first group is the file's strength layer (1 is
+#   the softest); leave it out when a set has one strength. A `hits` set is
+#   one-shot percussion: `layers` maps a word in the file name to a strength,
+#   and `tuned` sets are retuned to the chord (timpani).
+#
+# TO ADD AN INSTRUMENT
+#   Copy a block, point it at its folder, and check its octave by ear on one
+#   note. Styles name instruments by the block's name.
+
+[instruments.piano]
+folder = "piano"
+kind = "pitched"
+octave = 12
+layer = '_v(\d)_'
+
+[instruments.harp]
+folder = "harp"
+kind = "pitched"
+octave = 0
+
+[instruments.violins]
+folder = "violins"
+kind = "pitched"
+octave = 12
+
+[instruments.violas]
+folder = "violas"
+kind = "pitched"
+octave = 12
+
+[instruments.cellos]
+folder = "cellos"
+kind = "pitched"
+octave = 12
+
+[instruments.contrabass]
+folder = "contrabass"
+kind = "pitched"
+octave = 12
+
+[instruments.violins_spic]
+folder = "violins_spic"
+kind = "pitched"
+octave = 12
+layer = '_v(\d)_'
+
+[instruments.violas_spic]
+folder = "violas_spic"
+kind = "pitched"
+octave = 12
+layer = '_v(\d)_'
+
+[instruments.cellos_spic]
+folder = "cellos_spic"
+kind = "pitched"
+octave = 12
+layer = '_v(\d)_'
+
+[instruments.timpani]
+folder = "timpani_hits"
+kind = "hits"
+layer = '_v(\d)_'
+tuned = true
+
+[instruments.timpani_rolls]
+folder = "timpani_rolls"
+kind = "hits"
+layer = '_v(\d)_'
+tuned = true
+
+[instruments.bass_drum]
+folder = "bass_drum"
+kind = "hits"
+layers = { pp = 1, mp = 2, mf = 3, f = 4, ff = 5 }
+
+[instruments.cymbal]
+folder = "cymbal"
+kind = "hits"
+
+[instruments.gong]
+folder = "gong"
+kind = "hits"
+layers = { p = 1, mf = 2, f = 3 }
