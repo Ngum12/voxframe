@@ -26,7 +26,10 @@ def hub(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
 def _hold(hub: Path, repo: str, megabytes: float) -> None:
     blob = hub / f"models--{repo.replace('/', '--')}" / "blobs" / "weights"
     blob.parent.mkdir(parents=True, exist_ok=True)
-    blob.write_bytes(b"\0" * int(megabytes * 1_000_000))
+    # Sized, not written: sizes are measured from st_size, and writing 750 MB
+    # of zeros took a slow CI disk past the wait below.
+    with blob.open("wb") as out:
+        out.truncate(int(megabytes * 1_000_000))
 
 
 def _lite() -> Settings:
@@ -69,7 +72,7 @@ class TestMeasuring:
             assert sum(n.megabytes for n in needs) == profile.approximate_download_mb
 
 
-def _wait(download: downloads.Download, timeout: float = 10.0) -> None:
+def _wait(download: downloads.Download, timeout: float = 60.0) -> None:
     deadline = time.monotonic() + timeout
     while download.state == "downloading" and time.monotonic() < deadline:
         time.sleep(0.05)
