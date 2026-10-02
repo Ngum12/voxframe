@@ -94,6 +94,27 @@ class TestInstall:
 
         assert not (tmp_path / "escaped.txt").exists()
 
+    def test_a_transient_zip_error_is_retried(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        served = tmp_path / "served"
+        served.mkdir()
+        manifest = _manifest(tmp_path, _wheel(served, "vfcomponentprobe"))
+        real_extractall = zipfile.ZipFile.extractall
+        failed_once = {"done": False}
+
+        def flaky_extractall(self, path, members=None, _ignored=None):  # type: ignore[no-untyped-def]
+            if not failed_once["done"]:
+                failed_once["done"] = True
+                raise EOFError("truncated archive")
+            return real_extractall(self, path, members=members)
+
+        monkeypatch.setattr(components.zipfile.ZipFile, "extractall", flaky_extractall)
+
+        home = install(manifest)
+
+        assert failed_once["done"]
+        assert (home / ".complete").is_file()
+
+
 
 class TestFindingTheManifest:
     @pytest.mark.parametrize(
