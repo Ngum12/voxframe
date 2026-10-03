@@ -422,6 +422,9 @@ class TestFrontEndParity:
             # Decided by the server from saved consent and keys; a request must
             # never be able to switch on network access (D-132).
             "source_imagery",
+            # The app always keeps the uncaptioned copy its studio plays; the
+            # command line has no studio (D-196).
+            "studio_copy",
         }
         expected = {field.name for field in JobOptions.__dataclass_fields__.values()}
         exposed = set(RenderRequest.model_fields) | internal
