@@ -70,6 +70,8 @@ class Projection:
     #: Plan scene index -> video scene index, for the scenes still there.
     scene_map: dict[int, int] = field(default_factory=dict)
     identity: bool = True
+    #: For each video scene, the plan's word positions of its words, in order.
+    story_words: dict[int, list[int]] = field(default_factory=dict)
 
     def story_to_video(self, story: float) -> float | None:
         """Where a moment of the plan plays in the video (not the cold open's
@@ -79,6 +81,16 @@ class Projection:
         for piece in self.pieces:
             if not piece.teaser and piece.story_start - 1e-6 <= story <= piece.story_end + 1e-6:
                 return piece.to_video(story)
+        return None
+
+    def video_to_story(self, video: float) -> float | None:
+        """Where a moment of the video is on the plan's clock, or ``None`` in
+        the cold open's copy."""
+        if self.identity:
+            return video
+        for piece in self.pieces:
+            if piece.video_start - 1e-6 <= video <= piece.video_start + piece.seconds + 1e-6:
+                return None if piece.teaser else piece.story_start + (video - piece.video_start)
         return None
 
     def source_pieces(self) -> list[tuple[float, float]]:
@@ -183,6 +195,7 @@ def project(plan: ScenePlan) -> Projection:
     all_pieces: list[Piece] = []
     scene_map: dict[int, int] = {}
     word_maps: dict[int, dict[int, int]] = {}
+    story_words: dict[int, list[int]] = {}
     for number, (position, teaser, _begin, _end, pieces) in enumerate(laid):
         start_frame, end_frame = boundaries[number], boundaries[number + 1]
         if end_frame <= start_frame:
@@ -198,6 +211,7 @@ def project(plan: ScenePlan) -> Projection:
         if not original.is_card:
             words, positions = _project_words(original, pieces)
             update["words"] = words
+            story_words[len(scenes)] = sorted(positions, key=positions.__getitem__)
             if not teaser:
                 word_maps[original.index] = positions
             if original.emphasis and len(positions) != len(original.words):
@@ -232,17 +246,17 @@ def project(plan: ScenePlan) -> Projection:
     for punch in pace.punch_ins:
         if not punch.on:
             continue
-        start = projection.story_to_video(punch.start)
-        end = projection.story_to_video(punch.end)
-        if start is None or end is None or end <= start:
+        punch_start = projection.story_to_video(punch.start)
+        punch_end = projection.story_to_video(punch.end)
+        if punch_start is None or punch_end is None or punch_end <= punch_start:
             continue
         for scene in scenes:
             scene_start = scene.start_frame / fps
-            if scene_start - 1e-6 <= start < scene.end_frame / fps and not scene.teaser:
+            if scene_start - 1e-6 <= punch_start < scene.end_frame / fps and not scene.teaser:
                 zooms.setdefault(scene.index, []).append(
                     Zoom(
-                        start=round(start - scene_start, 4),
-                        end=round(min(end, scene.end_frame / fps) - scene_start, 4),
+                        start=round(punch_start - scene_start, 4),
+                        end=round(min(punch_end, scene.end_frame / fps) - scene_start, 4),
                         factor=punch.zoom,
                     )
                 )
@@ -280,7 +294,8 @@ def project(plan: ScenePlan) -> Projection:
     # Checked whole, as a plan loaded from disk would be.
     ScenePlan.model_validate(video.model_dump())
     return Projection(
-        plan=video, pieces=tuple(all_pieces), scene_map=scene_map, identity=False
+        plan=video, pieces=tuple(all_pieces), scene_map=scene_map, identity=False,
+        story_words=story_words,
     )
 
 

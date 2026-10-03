@@ -351,6 +351,41 @@ class ProgressEdit(BaseModel):
     on: bool
 
 
+class FindCuts(BaseModel):
+    """How tight to cut (D-199)."""
+
+    keep_pause: float = Field(default=0.25, ge=0.05, le=1.0)
+    fillers: bool = True
+    repeats: bool = True
+    edges: bool = True
+
+
+class SwitchEdit(BaseModel):
+    on: bool
+
+
+class VideoSpan(BaseModel):
+    """A stretch, in seconds on the video's clock, as the studio shows it."""
+
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+
+
+class StorySpan(BaseModel):
+    """A stretch, in seconds on the plan's clock, as hook lines give it."""
+
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+
+
+class ColdOpenEdit(BaseModel):
+    span: StorySpan | None = None
+
+
+class HookTitleEdit(BaseModel):
+    text: str = Field(default="", max_length=200)
+
+
 class SceneCaptionsEdit(BaseModel):
     """One scene's own caption animation and emphasised words (D-196)."""
 
@@ -1588,12 +1623,16 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         return {**_overlays_state(plan), **_history_state(plan_path)}
 
     def _overlays_state(plan: ScenePlan) -> dict[str, Any]:
+        from voxframe.plan.projection import project
+
+        video = project(plan).plan
         return {
             "overlays": [o.model_dump(mode="json") for o in plan.overlays],
             "progress_bar": plan.progress_bar,
-            # When each is on screen: the studio previews stickers and
-            # pictures itself, libass draws the rest (D-198).
-            "times": {o.id: list(plan.overlay_times(o)) for o in plan.overlays},
+            # When each is on screen in the video, after its cuts (D-199):
+            # the studio previews stickers and pictures itself, libass draws
+            # the rest (D-198). A pop-up on a word cut away has no time.
+            "times": {o.id: list(video.overlay_times(o)) for o in video.overlays},
         }
 
     @app.get("/api/jobs/{job_id}/overlays")
@@ -1756,6 +1795,197 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         job, plan_path, plan = _editable_plan(context, job_id)
         label = "the progress bar" if edit.on else "no progress bar"
         return _overlay_response(job, plan_path, set_progress_bar(plan, edit.on), label)
+
+    # --- the hook and the pace (D-199) --------------------------------------
+
+    def _pace_state(plan: ScenePlan) -> dict[str, Any]:
+        from dataclasses import asdict
+
+        from voxframe.plan.pace_finder import find_hooks, find_stillness
+        from voxframe.plan.projection import project
+
+        projection = project(plan)
+        video = projection.plan
+        audio = Path(plan.audio_path)
+        hooks = find_hooks(plan, audio if audio.is_file() else None)
+
+        def at(story: float) -> float | None:
+            mapped = projection.story_to_video(story)
+            return None if mapped is None else round(mapped, 3)
+
+        return {
+            "cuts": [
+                {**cut.model_dump(mode="json"), "index": number, "video_at": at(cut.start)}
+                for number, cut in enumerate(plan.pace.cuts)
+            ],
+            "cold_open": list(plan.pace.cold_open) if plan.pace.cold_open else None,
+            "punch_ins": [
+                {**punch.model_dump(mode="json"), "index": number, "video_at": at(punch.start)}
+                for number, punch in enumerate(plan.pace.punch_ins)
+            ],
+            "alternate_zoom": plan.pace.alternate_zoom,
+            "hook_title": plan.hook_title,
+            "recording_seconds": round(plan.total_frames / plan.fps, 3),
+            "video_seconds": round(video.total_frames / video.fps, 3),
+            "hooks": [asdict(hook) for hook in hooks],
+            "stillness": [asdict(still) for still in find_stillness(video)],
+        }
+
+    def _pace_saved(job: Job, plan_path: Path, plan: ScenePlan, label: str) -> dict[str, Any]:
+        saved = _save_plan(plan, plan_path, label)
+        context.store.set_pending(job, saved.pending)
+        return {**_pace_state(plan), **_history_state(plan_path)}
+
+    @app.get("/api/jobs/{job_id}/timeline")
+    def job_timeline(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        """The video as it will be made: the plan with its pace applied
+        (D-199). Each scene says which scene of the plan it is
+        (``story_index``), for the studio's edits."""
+        from voxframe.plan.projection import project
+
+        plan = _load_job_plan(context, job_id)
+        projection = project(plan)
+        payload: dict[str, Any] = json.loads(projection.plan.to_json())
+        for scene in payload["scenes"]:
+            if scene.get("story_index") is None:
+                scene["story_index"] = scene["index"]
+            # Which of the plan's words each of its words is: a cut word is
+            # gone from the video, so the positions can differ.
+            scene["story_words"] = projection.story_words.get(
+                scene["index"], list(range(len(scene.get("words", []))))
+            )
+        return payload
+
+    @app.get("/api/jobs/{job_id}/pace")
+    def job_pace(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        return _pace_state(_load_job_plan(context, job_id))
+
+    @app.post("/api/jobs/{job_id}/pace/cuts/find")
+    def find_cuts_route(
+        job_id: str, settings: FindCuts, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        """Find the pauses, filler words and restarts to cut, and cut them;
+        every one is listed, and can be undone on its own."""
+        from voxframe.plan.editing import set_found_cuts
+        from voxframe.plan.pace_finder import find_cuts
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        found = find_cuts(
+            plan, keep_pause=settings.keep_pause, fillers=settings.fillers,
+            repeats=settings.repeats, edges=settings.edges,
+        )
+        return _pace_saved(job, plan_path, set_found_cuts(plan, found), "the jump cuts")
+
+    @app.put("/api/jobs/{job_id}/pace/cuts/{index}")
+    def switch_cut_route(
+        job_id: str, index: int, edit: SwitchEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError, switch_cut
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            edited = switch_cut(plan, index, edit.on)
+        except EditError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _pace_saved(job, plan_path, edited, "a cut" if edit.on else "a cut undone")
+
+    @app.post("/api/jobs/{job_id}/pace/cuts")
+    def add_cut_route(
+        job_id: str, span: VideoSpan, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        """Cut a stretch chosen in the studio, given in the video's time."""
+        from voxframe.plan.editing import EditError, add_cut
+        from voxframe.plan.projection import project
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        projection = project(plan)
+        start = projection.video_to_story(span.start)
+        end = projection.video_to_story(span.end)
+        if start is None or end is None or end <= start:
+            raise HTTPException(
+                status_code=422, detail="Choose a stretch within one part of the video."
+            )
+        try:
+            edited = add_cut(plan, start, end)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _pace_saved(job, plan_path, edited, "your cut")
+
+    @app.delete("/api/jobs/{job_id}/pace/cuts/{index}")
+    def remove_cut_route(
+        job_id: str, index: int, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError, remove_cut
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            edited = remove_cut(plan, index)
+        except EditError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _pace_saved(job, plan_path, edited, "a cut taken out")
+
+    @app.put("/api/jobs/{job_id}/pace/cold-open")
+    def cold_open_route(
+        job_id: str, edit: ColdOpenEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        """Open on a line from later in the video: the hook (D-199)."""
+        from voxframe.plan.editing import EditError, set_cold_open
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        span = (edit.span.start, edit.span.end) if edit.span else None
+        try:
+            edited = set_cold_open(plan, span)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _pace_saved(job, plan_path, edited, "the cold open" if span else "no cold open")
+
+    @app.post("/api/jobs/{job_id}/pace/punch-ins/find")
+    def find_punch_ins_route(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        """Zoom in on the words said with most weight, where you are on screen."""
+        from voxframe.plan.editing import set_punch_ins
+        from voxframe.plan.pace_finder import find_stressed_words
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        audio = Path(plan.audio_path)
+        if not audio.is_file():
+            raise HTTPException(status_code=404, detail="The recording is missing.")
+        punches = find_stressed_words(plan, audio)
+        return _pace_saved(job, plan_path, set_punch_ins(plan, punches), "the punch-ins")
+
+    @app.put("/api/jobs/{job_id}/pace/punch-ins/{index}")
+    def switch_punch_route(
+        job_id: str, index: int, edit: SwitchEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError, switch_punch_in
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            edited = switch_punch_in(plan, index, edit.on)
+        except EditError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _pace_saved(job, plan_path, edited, "a punch-in")
+
+    @app.put("/api/jobs/{job_id}/pace/alternate-zoom")
+    def alternate_zoom_route(
+        job_id: str, edit: SwitchEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import set_alternate_zoom
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        return _pace_saved(job, plan_path, set_alternate_zoom(plan, edit.on), "the zoom on cuts")
+
+    @app.put("/api/jobs/{job_id}/hook-title")
+    def hook_title_route(
+        job_id: str, edit: HookTitleEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError, set_hook_title
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            edited = set_hook_title(plan, edit.text)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _pace_saved(job, plan_path, edited, "the hook title")
 
     @app.put("/api/jobs/{job_id}/scenes/{index}/caption")
     def edit_caption(

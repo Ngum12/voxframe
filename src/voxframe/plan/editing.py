@@ -23,6 +23,7 @@ import structlog
 from voxframe.config.style import CaptionAnimation
 from voxframe.plan.caption_choice import CaptionChoice
 from voxframe.plan.overlays import Overlay, OverlayKind, counter_parts
+from voxframe.plan.pace import Cut, CutKind, PunchIn
 from voxframe.plan.scene_layout import SceneLayout
 from voxframe.plan.scene_plan import MotionKind, PlanAsset, PlannedScene, ScenePlan, Shot
 
@@ -652,3 +653,107 @@ def remove_overlay(plan: ScenePlan, overlay_id: str) -> ScenePlan:
 def set_progress_bar(plan: ScenePlan, on: bool) -> ScenePlan:
     """Show a bar along the bottom that fills as the video plays, or not."""
     return plan.model_copy(update={"progress_bar": on})
+
+
+# --- the hook and the pace (D-199) ----------------------------------------------
+
+#: A cold open shorter than this is a blip; longer, it is no longer a hook.
+COLD_OPEN_SECONDS = (0.8, 12.0)
+
+
+def set_found_cuts(plan: ScenePlan, found: tuple[Cut, ...]) -> ScenePlan:
+    """Replace the cuts found automatically with ``found``; cuts a person made
+    stay, and a found cut a person switched off stays off."""
+    switched_off = {(c.start, c.end) for c in plan.pace.cuts if not c.on}
+    manual = tuple(c for c in plan.pace.cuts if c.kind is CutKind.MANUAL)
+    found = tuple(
+        c.model_copy(update={"on": False}) if (c.start, c.end) in switched_off else c
+        for c in found
+    )
+    log.info("plan.edit.cuts_found", cuts=len(found))
+    return _with_pace(plan, cuts=tuple(sorted((*manual, *found), key=lambda c: c.start)))
+
+
+def _with_pace(plan: ScenePlan, **changes: object) -> ScenePlan:
+    return plan.model_copy(update={"pace": plan.pace.model_copy(update=changes)})
+
+
+def switch_cut(plan: ScenePlan, index: int, on: bool) -> ScenePlan:
+    """Make a cut, or undo it, on its own.
+
+    Raises:
+        EditError: There is no such cut.
+    """
+    if not 0 <= index < len(plan.pace.cuts):
+        raise EditError("That cut is no longer there.")
+    cuts = list(plan.pace.cuts)
+    cuts[index] = cuts[index].model_copy(update={"on": on})
+    return _with_pace(plan, cuts=tuple(cuts))
+
+
+def add_cut(plan: ScenePlan, start: float, end: float) -> ScenePlan:
+    """Cut a stretch a person chose, on the plan's clock.
+
+    Raises:
+        EditError: It is too short to see, or it would cut the whole video.
+    """
+    total = plan.total_frames / plan.fps
+    start, end = max(0.0, start), min(total, end)
+    if end - start < 0.05:
+        raise EditError("Choose a longer stretch to cut.")
+    cut = Cut(start=round(start, 3), end=round(end, 3), kind=CutKind.MANUAL, label="your cut")
+    edited = _with_pace(plan, cuts=tuple(sorted((*plan.pace.cuts, cut), key=lambda c: c.start)))
+    from voxframe.plan.projection import project
+
+    try:
+        project(edited)
+    except Exception as exc:
+        raise EditError("That would cut everything there is.") from exc
+    return edited
+
+
+def remove_cut(plan: ScenePlan, index: int) -> ScenePlan:
+    if not 0 <= index < len(plan.pace.cuts):
+        raise EditError("That cut is no longer there.")
+    return _with_pace(plan, cuts=plan.pace.cuts[:index] + plan.pace.cuts[index + 1 :])
+
+
+def set_cold_open(plan: ScenePlan, span: tuple[float, float] | None) -> ScenePlan:
+    """Play a line first, before the video begins: its hook. ``None`` takes
+    it away.
+
+    Raises:
+        EditError: It is too short or too long to hook.
+    """
+    if span is not None:
+        start, end = span
+        shortest, longest = COLD_OPEN_SECONDS
+        if not shortest <= end - start <= longest:
+            raise EditError(
+                f"A cold open is a single line: between {shortest:g} and {longest:g} seconds."
+            )
+    log.info("plan.edit.cold_open", on=span is not None)
+    return _with_pace(plan, cold_open=span)
+
+
+def set_punch_ins(plan: ScenePlan, punches: tuple[PunchIn, ...]) -> ScenePlan:
+    return _with_pace(plan, punch_ins=punches)
+
+
+def switch_punch_in(plan: ScenePlan, index: int, on: bool) -> ScenePlan:
+    if not 0 <= index < len(plan.pace.punch_ins):
+        raise EditError("That punch-in is no longer there.")
+    punches = list(plan.pace.punch_ins)
+    punches[index] = punches[index].model_copy(update={"on": on})
+    return _with_pace(plan, punch_ins=tuple(punches))
+
+
+def set_alternate_zoom(plan: ScenePlan, on: bool) -> ScenePlan:
+    return _with_pace(plan, alternate_zoom=on)
+
+
+def set_hook_title(plan: ScenePlan, text: str) -> ScenePlan:
+    cleaned = " ".join(text.split())
+    if len(cleaned) > 80:
+        raise EditError("A hook title is read in a second or two: keep it under 80 characters.")
+    return plan.model_copy(update={"hook_title": cleaned})
