@@ -157,6 +157,10 @@ def test_the_shortcuts(studio) -> None:  # type: ignore[no-untyped-def]
     studio.wait_for_function("document.querySelector('.studio video').paused", timeout=5_000)
 
     studio.keyboard.press("3")
+    studio.wait_for_function(
+        "document.getElementById('tab-sound')?.getAttribute('aria-selected') === 'true'",
+        timeout=5_000,
+    )
     assert studio.get_by_role("tab", name="Sound").get_attribute("aria-selected") == "true"
     studio.keyboard.press("1")
     studio.keyboard.press("?")
