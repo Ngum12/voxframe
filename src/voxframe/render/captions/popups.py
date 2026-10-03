@@ -31,6 +31,9 @@ POP_STYLE = "VoxframePop"
 #: Pop-ups sit above the captions: they are placed deliberately.
 _BOX_LAYER, _TEXT_LAYER = 10, 11
 
+#: How long the hook title stays, in seconds (D-199).
+HOOK_SECONDS = 2.6
+
 #: How long a pop-up takes to fade as it goes, in ms.
 _OUT_MS = 150
 
@@ -315,6 +318,18 @@ def popup_events(plan: ScenePlan, width: int, height: int) -> list[str]:
             _text_popup(overlay, timeline, width)
         else:
             _shape_popup(overlay, timeline, width)
+        events.extend(timeline.events)
+
+    if plan.hook_title.strip():
+        # The hook title (D-199): big words over the video's first seconds,
+        # whatever opens it, the cold open included.
+        hook = Overlay(
+            id="hook", kind=OverlayKind.TEXT, scene=0, text=plan.hook_title.strip(),
+            look=TextLook.BOLD, colour="white", size=0.62, x=0.5, y=0.2,
+        )
+        seconds = min(HOOK_SECONDS, plan.total_frames / plan.fps)
+        timeline = _Timeline(0.0, seconds, 0.5 * width, 0.2 * height, height, Entrance.POP)
+        _text_popup(hook, timeline, width)
         events.extend(timeline.events)
 
     if plan.progress_bar:

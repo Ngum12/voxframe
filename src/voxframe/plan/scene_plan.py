@@ -34,6 +34,7 @@ from voxframe.models.transcript import Word
 from voxframe.plan.audio_mix import AudioMix
 from voxframe.plan.caption_choice import CaptionChoice
 from voxframe.plan.overlays import Overlay
+from voxframe.plan.pace import PaceEdits
 from voxframe.plan.scene_layout import LayoutKind, SceneLayout
 from voxframe.plan.score_choice import ScoreChoice
 from voxframe.render.version import RENDERER_VERSION
@@ -146,6 +147,28 @@ class Footage(BaseModel):
         if any(b.t < a.t for a, b in zip(self.track, self.track[1:], strict=False)):
             raise PlanError("the footage's camera path must be in time order")
         return self
+
+
+class FootageSpan(BaseModel):
+    """One unbroken stretch of the recording within a scene, after cuts
+    (D-199): where it starts on the sound's clock, how long it plays, and how
+    close the camera is."""
+
+    model_config = {"frozen": True}
+
+    source: float = Field(ge=0)
+    seconds: float = Field(gt=0)
+    zoom: float = Field(default=1.0, ge=1.0, le=1.6)
+
+
+class Zoom(BaseModel):
+    """A punch-in on the speaker, in seconds from the scene's start (D-199)."""
+
+    model_config = {"frozen": True}
+
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+    factor: float = Field(ge=1.0, le=1.6)
 
 
 class PlanAsset(BaseModel):
@@ -347,6 +370,14 @@ class PlannedScene(BaseModel):
     #: a split screen or an inset. Full, the shot decides what fills it.
     layout: SceneLayout = Field(default_factory=SceneLayout)
 
+    #: Set only in the cut video (D-199): which scene of the plan this is,
+    #: the stretches of the recording it plays when cuts break it up, and
+    #: its punch-ins. ``teaser`` marks the cold open's copy.
+    story_index: int | None = Field(default=None)
+    footage_spans: tuple[FootageSpan, ...] = Field(default=())
+    zooms: tuple[Zoom, ...] = Field(default=())
+    teaser: bool = Field(default=False)
+
     #: This scene's own caption animation, when a person chose one (D-196).
     caption_animation: CaptionAnimation | None = Field(default=None)
     #: Words drawn larger and in colour: positions in ``caption_words()``.
@@ -489,6 +520,12 @@ class ScenePlan(BaseModel):
     overlays: tuple[Overlay, ...] = Field(default=())
     #: A bar along the bottom that fills as the video plays (D-198).
     progress_bar: bool = Field(default=False)
+
+    #: Cuts, a cold open and punch-ins (D-199): the video's pace. The scenes
+    #: and words stay the whole recording; the video is projected from both.
+    pace: PaceEdits = Field(default_factory=PaceEdits)
+    #: Big words over the first seconds of the video: its hook (D-199).
+    hook_title: str = Field(default="", max_length=80)
 
     #: Whether the language was detected or forced, and how confidently. Kept
     #: so a plan with a suspect transcript can be diagnosed later without

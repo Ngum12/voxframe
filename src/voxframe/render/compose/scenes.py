@@ -16,6 +16,7 @@ choice where a wrong image reads as a bug.
 
 from __future__ import annotations
 
+import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -211,17 +212,7 @@ def render_scene_segments(
                 )
                 results.append(SegmentResult(scene.index, segment, frames, scene.asset is not None))
             else:
-                render_footage_segment(
-                    caps,
-                    plan.footage,
-                    scene.footage_start,
-                    segment,
-                    width=width,
-                    height=height,
-                    fps=plan.fps,
-                    frames=frames,
-                    intermediate_args=_INTERMEDIATE_ARGS,
-                )
+                _render_speaker(plan, scene, caps, segment, width, height, frames)
                 results.append(SegmentResult(scene.index, segment, frames, True))
 
         else:
@@ -327,6 +318,59 @@ def _render_picture(
     return False, True
 
 
+def _render_speaker(
+    plan: ScenePlan,
+    scene: PlannedScene,
+    caps: FFmpegCapabilities,
+    segment: Path,
+    width: int,
+    height: int,
+    frames: int,
+) -> None:
+    """The speaker in a scene, at ``width`` by ``height``: one unbroken stretch
+    of the recording, or, where cuts break the scene up, each of its stretches
+    in turn, joined frame-exact (D-199). Punch-ins zoom toward the eye line.
+    """
+    from voxframe.plan.projection import frames_of
+    from voxframe.render.compose.footage import zoom_expression
+
+    assert plan.footage is not None and scene.footage_start is not None
+    zooms = [(z.start, z.end, z.factor) for z in scene.zooms]
+    if not scene.footage_spans:
+        render_footage_segment(
+            caps, plan.footage, scene.footage_start, segment,
+            width=width, height=height, fps=plan.fps, frames=frames,
+            intermediate_args=_INTERMEDIATE_ARGS, zoom=zoom_expression(1.0, zooms),
+        )
+        return
+
+    spans = scene.footage_spans
+    counts = frames_of([span.seconds for span in spans], plan.fps)
+    # Whatever rounding left over goes to the last stretch: the scene's frame
+    # count is the grid's, not the sum of its parts.
+    counts[-1] += frames - sum(counts)
+    parts: list[Path] = []
+    offset = 0.0
+    for number, (span, count) in enumerate(zip(spans, counts, strict=True)):
+        if count <= 0:
+            offset += span.seconds
+            continue
+        local = [(a - offset, b - offset, f) for a, b, f in zooms if b > offset]
+        part = segment.with_name(f"{segment.stem}.part{number:03d}.mp4")
+        render_footage_segment(
+            caps, plan.footage, span.source, part,
+            width=width, height=height, fps=plan.fps, frames=count,
+            intermediate_args=_INTERMEDIATE_ARGS, zoom=zoom_expression(span.zoom, local),
+        )
+        parts.append(part)
+        offset += span.seconds
+    listing = segment.with_name(f"{segment.stem}.parts.txt")
+    _concat_listed(parts, caps, segment, listing)
+    for part in parts:
+        part.unlink(missing_ok=True)
+    listing.unlink(missing_ok=True)
+
+
 def _render_shared(
     plan: ScenePlan,
     scene: PlannedScene,
@@ -359,12 +403,7 @@ def _render_shared(
     speaker = segment.with_name(f"{segment.stem}.speaker.mp4")
 
     def speaker_at(w: int, h: int) -> None:
-        assert plan.footage is not None and scene.footage_start is not None
-        render_footage_segment(
-            caps, plan.footage, scene.footage_start, speaker,
-            width=w, height=h, fps=plan.fps, frames=frames,
-            intermediate_args=_INTERMEDIATE_ARGS,
-        )
+        _render_speaker(plan, scene, caps, speaker, w, h, frames)
 
     if layout.kind is LayoutKind.SPLIT:
         picture_pane, speaker_pane = split_panes(width, height, layout)
@@ -429,6 +468,11 @@ def _footage_signature(plan: ScenePlan, scene: PlannedScene, frames: int) -> str
     # A split or inset is its layout as well (D-197); a full speaker shot's
     # key is as it was.
     layout = f":layout={scene.layout.model_dump_json()}" if shared else ""
+    # Cuts and punch-ins (D-199); an uncut scene's key is as it was.
+    if scene.footage_spans or scene.zooms:
+        layout += ":pace=" + json.dumps(
+            [[s.model_dump() for s in scene.footage_spans], [z.model_dump() for z in scene.zooms]]
+        )
     return (
         f"speaker:{footage.path}:{identity}:{footage.audio_offset:.6f}"
         f":{footage.subject_x:.4f}:{scene.footage_start:.6f}{path}{layout}"

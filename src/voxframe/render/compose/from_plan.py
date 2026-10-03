@@ -120,6 +120,56 @@ def _narration_graph(plan: ScenePlan) -> tuple[str, bool]:
     return ";".join(parts), True
 
 
+def _edited_recording(
+    projection: Any, audio_path: Path, caps: FFmpegCapabilities, folder: Path
+) -> Path:
+    """The recording with the cuts taken out and the cold open first (D-199):
+    its pieces in the video's order, each faded over 5 ms at its edges so a
+    join never clicks. Kept by what it is made of."""
+    import hashlib
+
+    folder.mkdir(parents=True, exist_ok=True)
+    stat = audio_path.stat()
+    key = hashlib.sha256(
+        json.dumps(
+            [str(audio_path.resolve()), stat.st_size, stat.st_mtime_ns,
+             projection.source_pieces(), 1]
+        ).encode()
+    ).hexdigest()[:24]
+    edited = folder / f"edited_{key}.wav"
+    if edited.is_file():
+        return edited
+
+    pieces = projection.source_pieces()
+    fade = 0.005
+    parts = [f"[0:a]asplit={len(pieces)}" + "".join(f"[s{i}]" for i in range(len(pieces)))]
+    for i, (start, end) in enumerate(pieces):
+        length = end - start
+        edge = min(fade, length / 4)
+        parts.append(
+            f"[s{i}]atrim=start={start:.6f}:end={end:.6f},asetpts=PTS-STARTPTS,"
+            f"afade=t=in:d={edge:.4f},afade=t=out:st={length - edge:.6f}:d={edge:.4f}[p{i}]"
+        )
+    parts.append(
+        "".join(f"[p{i}]" for i in range(len(pieces))) + f"concat=n={len(pieces)}:v=0:a=1[cut]"
+    )
+    partial = edited.with_suffix(".partial.wav")
+    run_ffmpeg(
+        caps.ffmpeg_path,
+        [
+            "-loglevel", "error",
+            "-i", str(audio_path.resolve()),
+            "-filter_complex", ";".join(parts),
+            "-map", "[cut]", "-c:a", "pcm_s16le",
+            "-y", str(partial.resolve()),
+        ],
+    )
+    partial.replace(edited)
+    log.info("render.pace.recording", pieces=len(pieces), seconds=round(sum(
+        end - start for start, end in pieces), 2))
+    return edited
+
+
 def _scenes_for_captions(plan: ScenePlan) -> tuple[Scene, ...]:
     """Rebuild caption-bearing scenes from the plan.
 
@@ -185,8 +235,11 @@ def plan_captions(plan: ScenePlan, style: StyleTemplate, width: int, height: int
     The studio's live preview draws this same document over the picture, so
     what a person sees while editing is what the video will show (D-196).
     """
+    from voxframe.plan.projection import project
     from voxframe.render.captions.popups import popup_events, popup_styles
 
+    # The video's own timing, after its cuts (D-199).
+    plan = project(plan).plan
     captions = plan.captions.apply(style.captions)
     extra = popup_events(plan, width, height)
     animations = {
@@ -333,6 +386,19 @@ def render_from_plan(
     width, out_height = _dimensions(plan.aspect, height)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     work_dir = output_path.parent / f".{output_path.stem}_segments"
+
+    # --- 0. the pace: cuts, a cold open, punch-ins (D-199) ---
+    #
+    # The video is projected from the plan and its pace; the recording is cut
+    # from the same list, so every word stays with its picture. Everything
+    # after this works on the projection as it always worked on the plan.
+    from voxframe.plan.projection import project
+
+    projection = project(plan)
+    if not projection.identity:
+        sounds = (cache_dir.parent if cache_dir is not None else work_dir) / "sound"
+        audio_path = _edited_recording(projection, audio_path, caps, sounds)
+        plan = projection.plan.model_copy(update={"audio_path": str(audio_path)})
 
     log.info(
         "render.plan.start",
