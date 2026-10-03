@@ -792,6 +792,8 @@ def build_ass(
     top_scenes: frozenset[int] = frozenset(),
     animations: Mapping[int, CaptionAnimation] | None = None,
     anchors: Mapping[int, float] | None = None,
+    extra_styles: tuple[str, ...] = (),
+    extra_events: tuple[str, ...] = (),
 ) -> str:
     """Build a complete ASS subtitle document.
 
@@ -808,6 +810,9 @@ def build_ass(
             the style's (D-196).
         anchors: Scenes whose captions sit at their own height, by index, as
             a fraction of the frame: a split screen's divider (D-197).
+        extra_styles: Further styles, as the values of a ``Style:`` line, and
+        extra_events: Dialogue lines drawn with the captions: the pop-ups
+            (D-198).
 
     Returns:
         The ASS document.
@@ -833,7 +838,9 @@ def build_ass(
     header_style = (
         style.model_copy(update={"animation": CaptionAnimation.POP}) if word_drawn else style
     )
-    parts = [_script_info(width, height), _styles_block(header_style, width, height)]
+    styles = _styles_block(header_style, width, height)
+    styles += "".join(f"Style: {line}\n" for line in extra_styles)
+    parts = [_script_info(width, height), styles]
 
     events = [f"[Events]\nFormat: {', '.join(_EVENT_FIELDS)}"]
     measure = _TextWidth.for_frame(style, height) if word_drawn else None
@@ -898,6 +905,7 @@ def build_ass(
                     )
                 )
 
+    events.extend(extra_events)
     parts.append("\n".join(events) + "\n")
     return "\n".join(parts)
 

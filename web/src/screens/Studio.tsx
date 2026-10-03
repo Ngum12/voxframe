@@ -17,6 +17,7 @@ import {
   ApiError,
   type CaptionLook,
   type EditResult,
+  type OverlaysState,
   type Job,
   type PlanEditResult,
   type PlanHistory,
@@ -28,6 +29,7 @@ import {
   getCaptionLook,
   getCaptions,
   getJob,
+  getOverlays,
   getPlan,
   getPlanHistory,
   openFolder,
@@ -35,16 +37,18 @@ import {
   rerenderJob,
   setCaptions,
   undoPlan,
+  updateOverlay,
 } from "../api";
 import { Notice } from "../components";
 import { CaptionStyle, SceneCaptionStyle } from "./CaptionStyle";
 import { SceneDetail, TitleAdder, sceneThumbnail, sharesFrame, showsSpeaker } from "./Filmstrip";
 import { LayoutPicker } from "./Layout";
+import { PopupLayer, PopupsPanel } from "./Popups";
 import { liveCaptionsSupported, useLiveCaptions } from "./LiveCaptions";
 import { SoundPanel } from "./Sound";
 import { Timeline, type TimedWord } from "./Timeline";
 
-type Tab = "scenes" | "captions" | "sound" | "style";
+type Tab = "scenes" | "captions" | "popups" | "sound" | "style";
 
 /** The studio's panel sizes and whether each is open, kept between sessions (D-183). */
 interface Layout {
@@ -128,6 +132,7 @@ function Resizer({
 const TABS: { id: Tab; label: string }[] = [
   { id: "scenes", label: "Scenes" },
   { id: "captions", label: "Captions" },
+  { id: "popups", label: "Pop-ups" },
   { id: "sound", label: "Sound" },
   { id: "style", label: "Style" },
 ];
@@ -206,6 +211,8 @@ export function Studio({
   const [liveFailed, setLiveFailed] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [dragAnchor, setDragAnchor] = useState<number | null>(null);
+  const [popups, setPopups] = useState<OverlaysState | null>(null);
+  const [selectedPopup, setSelectedPopup] = useState<string | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
   const frame = useRef<HTMLDivElement>(null);
   const shortcuts = useRef<HTMLDialogElement>(null);
@@ -250,10 +257,15 @@ export function Studio({
     let current = true;
     const timer = window.setTimeout(() => {
       // Both at once, so the drawn captions and the controls change together.
-      void Promise.all([getCaptionLook(jobId), live ? getCaptions(jobId) : Promise.resolve(null)])
-        .then(([loadedLook, document]) => {
+      void Promise.all([
+        getCaptionLook(jobId),
+        live ? getCaptions(jobId) : Promise.resolve(null),
+        getOverlays(jobId),
+      ])
+        .then(([loadedLook, document, overlays]) => {
           if (!current) return;
           setLook(loadedLook);
+          setPopups(overlays);
           if (document !== null) setCaptionsDoc(document);
         })
         .catch(() => current && live && setLiveFailed(true));
@@ -450,7 +462,7 @@ export function Studio({
       } else if (key === "?") shortcuts.current?.showModal();
       else if (key === "[" && !mod) togglePanel();
       else if (key === "]" && !mod) toggleTimeline();
-      else if (["1", "2", "3", "4"].includes(key) && !mod) setTab(TABS[Number(key) - 1].id);
+      else if (["1", "2", "3", "4", "5"].includes(key) && !mod) setTab(TABS[Number(key) - 1].id);
       else if ((key === "+" || key === "=") && !mod) window.dispatchEvent(new CustomEvent("voxframe:zoom", { detail: 1.5 }));
       else if (key === "-" && !mod) window.dispatchEvent(new CustomEvent("voxframe:zoom", { detail: 1 / 1.5 }));
     };
@@ -606,6 +618,23 @@ export function Studio({
               {(changed.has(scene.index) || history?.captions_changed) && (
                 <span className="studio-preview-badge">Preview · not yet in the video</span>
               )}
+              <PopupLayer
+                jobId={jobId}
+                showPictures={live}
+                state={popups}
+                time={time}
+                selected={tab === "popups" ? selectedPopup : null}
+                frame={frame}
+                onMoved={(moved) => {
+                  setPopups((current) => current && { ...current, overlays: current.overlays.map((o) => (o.id === moved.id ? moved : o)) });
+                  void updateOverlay(jobId, moved)
+                    .then((result) => {
+                      setPlan((current) => current && { ...current });
+                      setHistory(result);
+                    })
+                    .catch((caught: unknown) => setError(caught instanceof ApiError ? caught.message : "The pop-up could not be moved."));
+                }}
+              />
               {placing && look && (
                 <CaptionGuide
                   anchor={dragAnchor ?? look.effective.anchor_y}
@@ -807,6 +836,28 @@ export function Studio({
                 </>
               ))}
 
+            {tab === "popups" &&
+              (scene.card_kind ? (
+                <Notice tone="info">A card has no words for a pop-up to appear on: choose a spoken scene.</Notice>
+              ) : (
+                <PopupsPanel
+                  jobId={jobId}
+                  scene={scene}
+                  scenes={plan.scenes}
+                  state={popups}
+                  time={time}
+                  selected={selectedPopup}
+                  onSelect={setSelectedPopup}
+                  onSeek={seek}
+                  onSaved={(state, where) => {
+                    setPopups(state);
+                    setHistory(where);
+                    // The live document draws the text, shapes and counters.
+                    setPlan((current) => current && { ...current });
+                  }}
+                />
+              ))}
+
             {tab === "sound" && hasVideo && (
               <SoundPanel
                 key={planVersion}
@@ -899,7 +950,7 @@ export function Studio({
           <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Back or forward one second</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Undo the last change</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></dt><dd>Redo</dd>
-          <dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>Scenes, Captions, Sound, Style</dd>
+          <dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Scenes, Captions, Pop-ups, Sound, Style</dd>
           <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Zoom the timeline</dd>
           <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Hide or show the side panel, the timeline</dd>
           <dt><kbd>?</kbd></dt><dd>This list</dd>

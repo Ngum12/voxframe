@@ -326,6 +326,31 @@ class LayoutEdit(BaseModel):
     inset_y: float = 0.22
 
 
+class OverlayEdit(BaseModel):
+    """One pop-up, as the studio sends it (D-198). Checked again as an
+    ``Overlay`` before it reaches the plan."""
+
+    kind: Literal["text", "sticker", "shape", "counter", "image"]
+    scene: int
+    word: int = 0
+    seconds: float = 2.0
+    x: float = 0.5
+    y: float = 0.3
+    size: float = 0.3
+    entrance: Literal["pop", "slide", "bounce", "fade", "none"] = "pop"
+    colour: str = "accent"
+    text: str = ""
+    look: Literal["pill", "bold", "note"] = "pill"
+    sticker: str = ""
+    shape: Literal[
+        "arrow_down", "arrow_up", "arrow_left", "arrow_right", "ring", "underline"
+    ] = "arrow_down"
+
+
+class ProgressEdit(BaseModel):
+    on: bool
+
+
 class SceneCaptionsEdit(BaseModel):
     """One scene's own caption animation and emphasised words (D-196)."""
 
@@ -1533,6 +1558,204 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         context.store.set_pending(job, saved.pending)
         return {"scene": edited.scenes[index].model_dump(mode="json"),
                 **_history_state(plan_path)}
+
+    # --- pop-ups (D-198) ---------------------------------------------------
+
+    @app.get("/api/stickers")
+    def sticker_list() -> list[dict[str, Any]]:
+        """The bundled stickers, with the words that suggest each."""
+        from voxframe.render.compose.stickers import stickers
+
+        return [dict(entry) for entry in stickers()]
+
+    @app.get("/api/stickers/{name}")
+    def sticker_image(name: str) -> Response:
+        """One sticker's picture. Only a name in the set selects a file."""
+        from voxframe.render.compose.stickers import sticker_path
+
+        path = sticker_path(name.removesuffix(".png"))
+        if path is None:
+            raise HTTPException(status_code=404, detail="No such sticker.")
+        return FileResponse(
+            path, media_type="image/png", headers={"Cache-Control": "max-age=86400"}
+        )
+
+    def _overlay_response(
+        job: Job, plan_path: Path, plan: ScenePlan, label: str
+    ) -> dict[str, Any]:
+        saved = _save_plan(plan, plan_path, label)
+        context.store.set_pending(job, saved.pending)
+        return {**_overlays_state(plan), **_history_state(plan_path)}
+
+    def _overlays_state(plan: ScenePlan) -> dict[str, Any]:
+        return {
+            "overlays": [o.model_dump(mode="json") for o in plan.overlays],
+            "progress_bar": plan.progress_bar,
+            # When each is on screen: the studio previews stickers and
+            # pictures itself, libass draws the rest (D-198).
+            "times": {o.id: list(plan.overlay_times(o)) for o in plan.overlays},
+        }
+
+    @app.get("/api/jobs/{job_id}/overlays")
+    def job_overlays(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        return _overlays_state(_load_job_plan(context, job_id))
+
+    def _overlay_from(edit: OverlayEdit, overlay_id: str, image_path: str = "") -> Any:
+        from pydantic import ValidationError
+
+        from voxframe.plan.overlays import Overlay
+
+        try:
+            return Overlay.model_validate(
+                {**edit.model_dump(), "id": overlay_id, "image_path": image_path}
+            )
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail="That pop-up is out of range.") from exc
+
+    @app.get("/api/jobs/{job_id}/overlays/suggestions")
+    def overlay_suggestions(
+        job_id: str, context: ApiContext = Depends(ctx)
+    ) -> list[dict[str, Any]]:
+        """Pop-ups worth adding, each with the word that prompted it. Nothing
+        is added until the person chooses one."""
+        from dataclasses import asdict
+
+        from voxframe.plan.popup_suggestions import suggest_popups
+
+        plan = _load_job_plan(context, job_id)
+        return [asdict(suggestion) for suggestion in suggest_popups(plan)]
+
+    @app.post("/api/jobs/{job_id}/overlays")
+    def add_overlay_route(
+        job_id: str, edit: OverlayEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        import uuid
+
+        from voxframe.plan.editing import EditError, add_overlay
+
+        if edit.kind == "image":
+            raise HTTPException(status_code=422, detail="Add a picture by choosing its file.")
+        job, plan_path, plan = _editable_plan(context, job_id)
+        overlay = _overlay_from(edit, uuid.uuid4().hex[:10])
+        try:
+            edited = add_overlay(plan, overlay)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        result = _overlay_response(job, plan_path, edited, "a pop-up")
+        return {**result, "id": overlay.id}
+
+    @app.put("/api/jobs/{job_id}/overlays/{overlay_id}")
+    def update_overlay_route(
+        job_id: str, overlay_id: str, edit: OverlayEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError, update_overlay
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        current = next((o for o in plan.overlays if o.id == overlay_id), None)
+        if current is None:
+            raise HTTPException(status_code=404, detail="That pop-up is no longer there.")
+        if edit.kind != current.kind.value:
+            raise HTTPException(status_code=422, detail="A pop-up keeps its kind.")
+        overlay = _overlay_from(edit, overlay_id, current.image_path)
+        try:
+            edited = update_overlay(plan, overlay)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _overlay_response(job, plan_path, edited, "a pop-up")
+
+    @app.delete("/api/jobs/{job_id}/overlays/{overlay_id}")
+    def remove_overlay_route(
+        job_id: str, overlay_id: str, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError, remove_overlay
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            edited = remove_overlay(plan, overlay_id)
+        except EditError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _overlay_response(job, plan_path, edited, "a pop-up taken out")
+
+    @app.post("/api/jobs/{job_id}/overlays/image")
+    async def add_image_overlay(
+        job_id: str,
+        scene: int = Form(...),
+        word: int = Form(0),
+        file: UploadFile = File(...),
+        context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        """A picture of the person's own, popping up on a word. Stored in the
+        job's own folder under a name the server chooses, and checked to be a
+        real image first (D-198)."""
+        import uuid
+
+        from voxframe.plan.editing import EditError, add_overlay
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        suffix = Path(file.filename or "").suffix.lower()
+        if suffix not in IMAGE_SUFFIXES:
+            raise HTTPException(status_code=415, detail="Use a JPEG, PNG or WebP image.")
+        overlay_id = uuid.uuid4().hex[:10]
+        directory = context.store.job_directory(job.id) / "own"
+        directory.mkdir(parents=True, exist_ok=True)
+        target = directory / f"popup-{overlay_id}{suffix}"
+        written = 0
+        with target.open("wb") as handle:
+            while chunk := await file.read(UPLOAD_CHUNK_BYTES):
+                written += len(chunk)
+                if written > MAX_IMAGE_BYTES:
+                    handle.close()
+                    target.unlink(missing_ok=True)
+                    raise HTTPException(status_code=413, detail="Images are limited to 50 MB.")
+                handle.write(chunk)
+        try:
+            from PIL import Image
+
+            with Image.open(target) as image:
+                image.verify()
+        except Exception as exc:
+            target.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=415, detail="That file is not a readable image."
+            ) from exc
+        edit = OverlayEdit(kind="image", scene=scene, word=word, size=0.4, y=0.32)
+        overlay = _overlay_from(edit, overlay_id, str(target.resolve()))
+        try:
+            edited = add_overlay(plan, overlay)
+        except EditError as exc:
+            target.unlink(missing_ok=True)
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        result = _overlay_response(job, plan_path, edited, "a picture pop-up")
+        return {**result, "id": overlay_id}
+
+    @app.get("/api/jobs/{job_id}/overlays/{overlay_id}/image")
+    def overlay_image(
+        job_id: str, overlay_id: str, context: ApiContext = Depends(ctx)
+    ) -> Response:
+        """A picture pop-up's file, for the studio's preview."""
+        plan = _load_job_plan(context, job_id)
+        overlay = next((o for o in plan.overlays if o.id == overlay_id), None)
+        if overlay is None or not overlay.image_path:
+            raise HTTPException(status_code=404, detail="No such picture.")
+        try:
+            path = resolve_within(Path(overlay.image_path), context.allowed_paths)
+        except PathOutsideSandbox as exc:
+            raise HTTPException(
+                status_code=403, detail="That picture is outside the allowed directories."
+            ) from exc
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="The picture is missing.")
+        return FileResponse(path)
+
+    @app.put("/api/jobs/{job_id}/progress-bar")
+    def edit_progress_bar(
+        job_id: str, edit: ProgressEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import set_progress_bar
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        label = "the progress bar" if edit.on else "no progress bar"
+        return _overlay_response(job, plan_path, set_progress_bar(plan, edit.on), label)
 
     @app.put("/api/jobs/{job_id}/scenes/{index}/caption")
     def edit_caption(

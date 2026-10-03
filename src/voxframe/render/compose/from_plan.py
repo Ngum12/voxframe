@@ -185,7 +185,10 @@ def plan_captions(plan: ScenePlan, style: StyleTemplate, width: int, height: int
     The studio's live preview draws this same document over the picture, so
     what a person sees while editing is what the video will show (D-196).
     """
+    from voxframe.render.captions.popups import popup_events, popup_styles
+
     captions = plan.captions.apply(style.captions)
+    extra = popup_events(plan, width, height)
     animations = {
         scene.index: scene.caption_animation
         for scene in plan.scenes
@@ -196,6 +199,8 @@ def plan_captions(plan: ScenePlan, style: StyleTemplate, width: int, height: int
         top_scenes=_captions_above_face(plan, captions, width, height),
         animations=animations,
         anchors=_captions_on_divider(plan, captions, width, height),
+        extra_styles=tuple(popup_styles(width, height)) if extra else (),
+        extra_events=tuple(extra),
     )
 
 
@@ -398,6 +403,7 @@ def render_from_plan(
         plan, segments, transitions, ass_path, caps, work_dir, output_path,
         quality=quality, cache_root=cache_dir.parent if cache_dir is not None else None,
         want_clean=studio_copy,
+        size=(width, out_height),
     )
 
     # --- 5. the sound: stems, the person's mix, the loudness target, checks ---
@@ -516,6 +522,7 @@ def _pictures(
     quality: QualityPreset,
     cache_root: Path | None,
     want_clean: bool = False,
+    size: tuple[int, int] = (0, 0),
 ) -> tuple[Path, Path | None]:
     """The whole video's pictures with captions burned in, and no sound; and,
     when ``want_clean``, the same pictures without captions.
@@ -536,6 +543,11 @@ def _pictures(
     import hashlib
     import shutil
 
+    from voxframe.render.compose.stickers import overlay_graph, picture_overlays
+
+    width, height = size
+    laid = picture_overlays(plan, width, height) if width and height else []
+
     content = {
         "segments": [_content_digest(segment.path) for segment in segments],
         "transitions": [repr(t) for t in transitions],
@@ -545,7 +557,12 @@ def _pictures(
         "version": PICTURES_VERSION,
     }
     key_material = json.dumps(
-        {**content, "captions": hashlib.sha256(ass_path.read_bytes()).hexdigest()},
+        {
+            **content,
+            "captions": hashlib.sha256(ass_path.read_bytes()).hexdigest(),
+            # Stickers and images are burned in with the captions (D-198).
+            **({"overlays": [item.signature() for item in laid]} if laid else {}),
+        },
         sort_keys=True,
     )
     key = hashlib.sha256(key_material.encode()).hexdigest()[:24]
@@ -583,12 +600,23 @@ def _pictures(
     caption_filter, cwd = ass_filter(ass_for_filter, fontsdir=font_directory)
 
     partial = cached.with_suffix(".partial.mp4")
+    if laid:
+        # Stickers and images under the captions, which must stay readable.
+        inputs, graph, last = overlay_graph(laid, plan.fps, height)
+        picture: list[str] = [
+            *inputs,
+            "-filter_complex",
+            f"[0:v]null[base];{graph};[{last}]{caption_filter},format=yuv420p[v]",
+            "-map", "[v]",
+        ]
+    else:
+        picture = ["-vf", f"{caption_filter},format=yuv420p"]
     run_ffmpeg(
         caps.ffmpeg_path,
         [
             "-loglevel", "error",
             "-i", str(clean.resolve()),
-            "-vf", f"{caption_filter},format=yuv420p",
+            *picture,
             "-an",
             "-frames:v", str(plan.total_frames),
             "-c:v", "libx264",

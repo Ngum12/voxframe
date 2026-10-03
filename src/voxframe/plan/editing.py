@@ -22,6 +22,7 @@ import structlog
 
 from voxframe.config.style import CaptionAnimation
 from voxframe.plan.caption_choice import CaptionChoice
+from voxframe.plan.overlays import Overlay, OverlayKind, counter_parts
 from voxframe.plan.scene_layout import SceneLayout
 from voxframe.plan.scene_plan import MotionKind, PlanAsset, PlannedScene, ScenePlan, Shot
 
@@ -302,7 +303,13 @@ def _retile(plan: ScenePlan, scenes: list[PlannedScene]) -> ScenePlan:
     """
     rebuilt: list[PlannedScene] = []
     cursor = 0
+    # Pop-ups follow their scene to its new number (D-198); a new card is
+    # not one of the old scenes.
+    old_index = {id(scene): scene.index for scene in plan.scenes}
+    renumbered: dict[int, int] = {}
     for position, scene in enumerate(scenes):
+        if id(scene) in old_index:
+            renumbered[old_index[id(scene)]] = position
         duration = scene.duration_frames
         shift = (cursor - scene.start_frame) / plan.fps
         update: dict[str, object] = {
@@ -319,7 +326,14 @@ def _retile(plan: ScenePlan, scenes: list[PlannedScene]) -> ScenePlan:
             )
         rebuilt.append(scene.model_copy(update=update))
         cursor += duration
-    return plan.model_copy(update={"scenes": tuple(rebuilt), "total_frames": cursor})
+    overlays = tuple(
+        overlay.model_copy(update={"scene": renumbered[overlay.scene]})
+        for overlay in plan.overlays
+        if overlay.scene in renumbered
+    )
+    return plan.model_copy(
+        update={"scenes": tuple(rebuilt), "total_frames": cursor, "overlays": overlays}
+    )
 
 
 def _new_card(plan: ScenePlan, kind: str, text: str, seconds: float) -> PlannedScene:
@@ -563,3 +577,78 @@ def set_layout(plan: ScenePlan, index: int, layout: SceneLayout) -> ScenePlan:
             raise EditError("This scene has no part of your recording to show.")
     log.info("plan.edit.layout", scene=index, layout=layout.kind.value)
     return _replace(plan, scene.model_copy(update={"layout": layout}))
+
+
+# --- pop-ups (D-198) ------------------------------------------------------------
+
+#: More than this many pop-ups on one video is a mistake, not an edit.
+MAX_OVERLAYS = 200
+
+
+def _check_overlay(plan: ScenePlan, overlay: Overlay) -> None:
+    if not 0 <= overlay.scene < len(plan.scenes) or plan.scenes[overlay.scene].is_card:
+        raise EditError("Choose a spoken scene for the pop-up to appear in.")
+    words = plan.scenes[overlay.scene].caption_words()
+    if words and overlay.word >= len(words):
+        raise EditError("That word is not in the scene's caption.")
+    if overlay.kind is OverlayKind.TEXT and not overlay.text.strip():
+        raise EditError("Write what the pop-up says.")
+    if overlay.kind is OverlayKind.COUNTER and counter_parts(overlay.text) is None:
+        raise EditError('A counter needs a number to count to, such as "3", "$1,200" or "90%".')
+    if overlay.kind is OverlayKind.STICKER:
+        from voxframe.render.compose.stickers import sticker_names
+
+        if overlay.sticker not in sticker_names():
+            raise EditError("Choose one of the stickers.")
+
+
+def add_overlay(plan: ScenePlan, overlay: Overlay) -> ScenePlan:
+    """Add a pop-up.
+
+    Raises:
+        EditError: It is not on a spoken scene's word, or is missing what its
+            kind needs, or the video has as many as it can take.
+    """
+    if len(plan.overlays) >= MAX_OVERLAYS:
+        raise EditError(f"A video can have up to {MAX_OVERLAYS} pop-ups.")
+    if any(existing.id == overlay.id for existing in plan.overlays):
+        raise EditError("That pop-up is already there.")
+    _check_overlay(plan, overlay)
+    log.info("plan.edit.overlay_added", kind=overlay.kind.value, scene=overlay.scene)
+    return plan.model_copy(update={"overlays": (*plan.overlays, overlay)})
+
+
+def update_overlay(plan: ScenePlan, overlay: Overlay) -> ScenePlan:
+    """Change a pop-up: what it is, when, where, how it comes on.
+
+    Raises:
+        EditError: There is no such pop-up, or the change is not valid.
+    """
+    if not any(existing.id == overlay.id for existing in plan.overlays):
+        raise EditError("That pop-up is no longer there.")
+    _check_overlay(plan, overlay)
+    return plan.model_copy(
+        update={
+            "overlays": tuple(
+                overlay if existing.id == overlay.id else existing for existing in plan.overlays
+            )
+        }
+    )
+
+
+def remove_overlay(plan: ScenePlan, overlay_id: str) -> ScenePlan:
+    """Take a pop-up out.
+
+    Raises:
+        EditError: There is no such pop-up.
+    """
+    remaining = tuple(o for o in plan.overlays if o.id != overlay_id)
+    if len(remaining) == len(plan.overlays):
+        raise EditError("That pop-up is no longer there.")
+    log.info("plan.edit.overlay_removed")
+    return plan.model_copy(update={"overlays": remaining})
+
+
+def set_progress_bar(plan: ScenePlan, on: bool) -> ScenePlan:
+    """Show a bar along the bottom that fills as the video plays, or not."""
+    return plan.model_copy(update={"progress_bar": on})

@@ -841,6 +841,96 @@ export interface PlanHistory {
   captions_changed?: boolean;
 }
 
+// --- pop-ups (D-198) -------------------------------------------------------------
+
+export type OverlayKind = "text" | "sticker" | "shape" | "counter" | "image";
+export type Entrance = "pop" | "slide" | "bounce" | "fade" | "none";
+export type ShapeKind = "arrow_down" | "arrow_up" | "arrow_left" | "arrow_right" | "ring" | "underline";
+
+export interface Overlay {
+  id: string;
+  kind: OverlayKind;
+  scene: number;
+  word: number;
+  seconds: number;
+  x: number;
+  y: number;
+  size: number;
+  entrance: Entrance;
+  colour: string;
+  text: string;
+  look: "pill" | "bold" | "note";
+  sticker: string;
+  shape: ShapeKind;
+  image_path?: string;
+}
+
+export interface OverlaysState {
+  overlays: Overlay[];
+  progress_bar: boolean;
+  /** When each is on screen, in seconds on the video's clock. */
+  times: Record<string, [number, number]>;
+}
+
+export interface Sticker {
+  name: string;
+  label: string;
+  words: string[];
+}
+
+export interface PopupSuggestion {
+  scene: number;
+  word: number;
+  kind: "sticker" | "counter";
+  value: string;
+  because: string;
+}
+
+export const stickerUrl = (name: string) => `/api/stickers/${encodeURIComponent(name)}`;
+export const overlayImageUrl = (jobId: string, id: string) => `/api/jobs/${jobId}/overlays/${id}/image`;
+
+export const getStickers = () => request<Sticker[]>("/api/stickers");
+export const getOverlays = (jobId: string) => request<OverlaysState>(`/api/jobs/${jobId}/overlays`);
+export const getPopupSuggestions = (jobId: string) =>
+  request<PopupSuggestion[]>(`/api/jobs/${jobId}/overlays/suggestions`);
+
+type OverlayFields = Omit<Overlay, "id" | "image_path">;
+
+export const addOverlay = (jobId: string, overlay: Partial<OverlayFields> & { kind: OverlayKind; scene: number }) =>
+  request<OverlaysState & PlanHistory & { id: string }>(`/api/jobs/${jobId}/overlays`, {
+    method: "POST",
+    body: JSON.stringify(overlay),
+  });
+
+export const updateOverlay = (jobId: string, overlay: Overlay) => {
+  const { id, image_path: _ignored, ...fields } = overlay;
+  void _ignored;
+  return request<OverlaysState & PlanHistory>(`/api/jobs/${jobId}/overlays/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(fields),
+  });
+};
+
+export const removeOverlay = (jobId: string, id: string) =>
+  request<OverlaysState & PlanHistory>(`/api/jobs/${jobId}/overlays/${id}`, { method: "DELETE" });
+
+export async function addImageOverlay(jobId: string, scene: number, word: number, file: File) {
+  const body = new FormData();
+  body.append("scene", String(scene));
+  body.append("word", String(word));
+  body.append("file", file);
+  return request<OverlaysState & PlanHistory & { id: string }>(`/api/jobs/${jobId}/overlays/image`, {
+    method: "POST",
+    body,
+  });
+}
+
+export const setProgressBar = (jobId: string, on: boolean) =>
+  request<OverlaysState & PlanHistory>(`/api/jobs/${jobId}/progress-bar`, {
+    method: "PUT",
+    body: JSON.stringify({ on }),
+  });
+
 // --- layouts (D-197) ------------------------------------------------------------
 
 export interface SceneLayout {

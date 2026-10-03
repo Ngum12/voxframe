@@ -33,6 +33,7 @@ from voxframe.models.asset import Asset, AssetKind
 from voxframe.models.transcript import Word
 from voxframe.plan.audio_mix import AudioMix
 from voxframe.plan.caption_choice import CaptionChoice
+from voxframe.plan.overlays import Overlay
 from voxframe.plan.scene_layout import LayoutKind, SceneLayout
 from voxframe.plan.score_choice import ScoreChoice
 from voxframe.render.version import RENDERER_VERSION
@@ -484,6 +485,11 @@ class ScenePlan(BaseModel):
     #: preview and in the video.
     captions: CaptionChoice = Field(default_factory=CaptionChoice)
 
+    #: Pop-ups, each appearing when its word is said (D-198).
+    overlays: tuple[Overlay, ...] = Field(default=())
+    #: A bar along the bottom that fills as the video plays (D-198).
+    progress_bar: bool = Field(default=False)
+
     #: Whether the language was detected or forced, and how confidently. Kept
     #: so a plan with a suspect transcript can be diagnosed later without
     #: re-running detection.
@@ -515,6 +521,33 @@ class ScenePlan(BaseModel):
                     f"scene {scene.index} shows the speaker but has no footage_start"
                 )
         return self
+
+    @model_validator(mode="after")
+    def _overlays_belong_to_spoken_scenes(self) -> Self:
+        seen: set[str] = set()
+        by_index = {scene.index: scene for scene in self.scenes}
+        for overlay in self.overlays:
+            if overlay.id in seen:
+                raise PlanError(f"two pop-ups are called {overlay.id!r}")
+            seen.add(overlay.id)
+            scene = by_index.get(overlay.scene)
+            if scene is None or scene.is_card:
+                raise PlanError(f"pop-up {overlay.id!r} is on scene {overlay.scene}, "
+                                "which is not a spoken scene")
+        return self
+
+    def overlay_times(self, overlay: Overlay) -> tuple[float, float]:
+        """When a pop-up is on screen, in seconds on the video's clock: from
+        its word, for as long as it stays, never past the end."""
+        scene = next(s for s in self.scenes if s.index == overlay.scene)
+        words = scene.caption_words()
+        if words:
+            start = words[min(overlay.word, len(words) - 1)].start
+        else:
+            start = scene.start_seconds(self.fps)
+        end_of_video = self.total_frames / self.fps
+        start = min(max(start, 0.0), end_of_video)
+        return start, min(start + overlay.seconds, end_of_video)
 
     def shows_speaker(self, scene: PlannedScene) -> bool:
         """Whether ``scene`` renders from the footage, filling the frame."""

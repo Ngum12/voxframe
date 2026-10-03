@@ -78,7 +78,7 @@ each step usable on its own:
 - **Per scene,** like the shot: full picture, full you, split or inset.
 - **Your own clips** as a scene's picture, playing above you in a split.
 
-### 3. Pop-ups on cue
+### 3. Pop-ups on cue (D-198) - done
 
 - **Text callouts, emoji and stickers, your own images, arrows and circles,
   number counters and a progress bar,** each tied to a word, so it appears

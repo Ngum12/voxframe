@@ -107,6 +107,11 @@ artifacts = [
     # licence: small, and needed offline, so it ships rather than downloads.
     "src/voxframe/assets/models/*.onnx",
     "src/voxframe/assets/models/*.txt",
+    # The pop-up stickers (D-198): Fluent Emoji, drawn to PNG, with their
+    # licence and the words that suggest each.
+    "src/voxframe/assets/stickers/*.png",
+    "src/voxframe/assets/stickers/*.json",
+    "src/voxframe/assets/stickers/*.txt",
     # The built web app. Committed and shipped for the same reason as the
     # fonts: `pip install voxframe[app]` must work on a machine with no Node
     # toolchain. Rebuilt by `npm run build` in web/ (D-117).

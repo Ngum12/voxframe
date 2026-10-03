@@ -6315,3 +6315,53 @@ whole; captions on the divider; the API (saving, refusing a sound-only video
 and out-of-range values, the composed preview, your own clip, a renamed file
 refused); and in Chromium, a scene split, previewed, reordered and made, the
 finished frames checked.
+
+### D-198 · Shorts that hook, step 3: pop-ups on cue
+
+The owner asked for elements that pop up at specific cues, and moving
+visuals. Each pop-up is **tied to a word, not a time** (`Overlay.scene`,
+`.word`): it appears when that word is said, and moves with it when cards
+are added or taken out (scenes are renumbered with them).
+
+**Kinds:**
+
+- **text:** a callout, as a pill (on the colour), bold (outlined) or a note
+  card;
+- **sticker:** one of 48 of Microsoft's Fluent Emoji (MIT), drawn to PNG at
+  512 px by `scripts/make_stickers.py` and shipped with their licence;
+- **shape:** an arrow (four ways), a ring to circle something, an underline
+  drawn on from left to right;
+- **counter:** a number counting up to its value, keeping what is written
+  round it ("$1,200", "90%") and easing as it arrives;
+- **picture:** one of the person's own, checked to be an image.
+
+Each has a place (its centre, dragged in the player), a size, how long it
+stays, a colour where it has one, and an entrance: pop in, slide up, drop
+in, fade, or just appear; all fade as they go. A video-wide **progress bar**
+fills along the bottom as the video plays.
+
+**Drawn where they can be seen live.** Text, shapes, counters and the
+progress bar are drawn by libass into the captions' own document (D-196), so
+the studio shows them exactly. Stickers and pictures are laid over the
+picture by FFmpeg as the captions are burned in, under the captions, which
+stay readable; their entrances are the same curves, in FFmpeg's expressions
+(scale and position by frame). The studio shows those over the player, with
+the same timing; and only there, since the burned video already has them.
+The burned pictures' cache key adds their files and places, so a change to
+a sticker burns again and nothing else is remade.
+
+**Suggestions you choose.** From the words, by plain signals: a word a
+sticker is for ("flood" for the wave, "money" for the bag; the word lists
+avoid common words), and a number, said as digits or as a word, for a
+counter (a year is not counted). At most one per scene, and none in a scene
+that already has a pop-up. Nothing is added until a person clicks.
+
+**Tests:** the API (adding, changing, removing, refusing what cannot be
+drawn, a picture of your own, a renamed file refused, the progress bar, a
+title added keeping pop-ups on their words, suggestions), the finished
+frames (a sticker appears on its word, pops in, slides from below and drops
+from above, and is gone after; text drawn from its word; the progress bar's
+fill matching the time to within 6%; a sticker change burning again over the
+same pictures), and in Chromium (a suggestion added and shown over the
+player on its word, text drawn live and dragged into place, the progress
+bar).

@@ -152,6 +152,11 @@ Each is added to the "installed" section above as its phase lands.
       Liberation Sans       OFL-1.1        JASSUB's fallback font
     abslink                 Apache-2.0   via jassub (worker messaging)
     throughput              MIT          via jassub
+  Pop-up stickers (D-198), bundled as PNGs in voxframe/assets/stickers:
+    Fluent Emoji (flat)     MIT          Microsoft; drawn to PNG from the
+                                         fluentui-emoji 1.3.0 npm package (MIT)
+                                         by scripts/make_stickers.py; the
+                                         licence ships beside them
     Excluded from the build: rvfc-polyfill (GPL-3.0), not needed by any
     supported browser; lfa-ponyfill's online font list, never used. The
     full notice is served with the app: live-captions-NOTICE.txt.
