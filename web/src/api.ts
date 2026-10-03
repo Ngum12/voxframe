@@ -262,6 +262,8 @@ export interface PlannedScene {
   shot_reason?: string;
   /** Where the scene starts in the recording; null for a card or no footage. */
   footage_start?: number | null;
+  /** How the scene shares the frame between you and its picture (D-197). */
+  layout?: SceneLayout;
   /** This scene's own caption animation, when chosen (D-196). */
   caption_animation?: CaptionAnimation | null;
   /** Emphasised words: positions in the scene's caption words. */
@@ -838,6 +840,40 @@ export interface PlanHistory {
   /** Whether the whole video's caption choices differ from the video's (D-196). */
   captions_changed?: boolean;
 }
+
+// --- layouts (D-197) ------------------------------------------------------------
+
+export interface SceneLayout {
+  kind: "full" | "split" | "inset";
+  /** Split: the picture's share of the frame. */
+  split: number;
+  speaker_first: boolean;
+  divider: boolean;
+  /** Inset: you in the small frame (else the picture). */
+  inset_speaker: boolean;
+  inset_shape: "circle" | "rounded";
+  inset_size: number;
+  inset_x: number;
+  inset_y: number;
+}
+
+export const DEFAULT_LAYOUT: SceneLayout = {
+  kind: "full",
+  split: 0.5,
+  speaker_first: false,
+  divider: true,
+  inset_speaker: true,
+  inset_shape: "circle",
+  inset_size: 0.36,
+  inset_x: 0.74,
+  inset_y: 0.22,
+};
+
+export const setLayout = (jobId: string, index: number, layout: SceneLayout) =>
+  request<{ scene: PlannedScene } & PlanHistory>(`/api/jobs/${jobId}/scenes/${index}/layout`, {
+    method: "PUT",
+    body: JSON.stringify(layout),
+  });
 
 // --- captions (D-196) ---------------------------------------------------------
 

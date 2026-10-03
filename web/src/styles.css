@@ -2690,3 +2690,58 @@ main:has(.welcome) {
     animation: none;
   }
 }
+
+/* --- layouts (D-197) ---------------------------------------------------- */
+
+.layout-picker {
+  margin-top: 12px;
+}
+
+.layout-kinds {
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+}
+
+.layout-kinds .choice {
+  padding: 10px;
+}
+
+.layout-sketch {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.layout-sketch .frame {
+  fill: var(--sunken);
+  stroke: var(--line-strong);
+}
+
+.layout-sketch .pic {
+  fill: var(--accent-soft);
+  stroke: var(--accent-line);
+}
+
+.layout-sketch .you {
+  fill: var(--ink-muted);
+}
+
+.layout-sketch .ring {
+  stroke: var(--paper);
+  stroke-width: 1.5;
+}
+
+.layout-controls {
+  display: grid;
+  gap: 12px;
+}
+
+.layout-controls .toggle {
+  margin: 0;
+}
+
+.layout-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--ink-soft);
+}

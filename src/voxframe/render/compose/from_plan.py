@@ -195,7 +195,27 @@ def plan_captions(plan: ScenePlan, style: StyleTemplate, width: int, height: int
         _scenes_for_captions(plan), captions, width, height, plan.fps,
         top_scenes=_captions_above_face(plan, captions, width, height),
         animations=animations,
+        anchors=_captions_on_divider(plan, captions, width, height),
     )
+
+
+def _captions_on_divider(
+    plan: ScenePlan, captions: CaptionStyle, width: int, height: int
+) -> dict[int, float]:
+    """Split scenes whose captions sit on the divider, between the picture and
+    the speaker, as these Shorts have them (D-197). Captions a person has
+    placed stay where they put them; a side-by-side split has no divider
+    across the frame to sit on."""
+    from voxframe.plan.scene_layout import LayoutKind
+    from voxframe.render.compose.layout import divider_position, stacked
+
+    if captions.anchor_y is not None or not stacked(width, height):
+        return {}
+    return {
+        scene.index: divider_position(width, height, scene.layout)
+        for scene in plan.scenes
+        if plan.shares_frame(scene) and scene.layout.kind is LayoutKind.SPLIT
+    }
 
 
 def _captions_above_face(

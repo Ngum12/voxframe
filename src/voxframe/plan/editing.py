@@ -22,6 +22,7 @@ import structlog
 
 from voxframe.config.style import CaptionAnimation
 from voxframe.plan.caption_choice import CaptionChoice
+from voxframe.plan.scene_layout import SceneLayout
 from voxframe.plan.scene_plan import MotionKind, PlanAsset, PlannedScene, ScenePlan, Shot
 
 __all__ = [
@@ -535,3 +536,30 @@ def set_scene_captions(
     return _replace(
         plan, scene.model_copy(update={"caption_animation": animation, "emphasis": marked})
     )
+
+
+# --- layout (D-197) -------------------------------------------------------------
+
+
+def set_layout(plan: ScenePlan, index: int, layout: SceneLayout) -> ScenePlan:
+    """Share one scene's frame between the speaker and its picture: a split
+    screen or an inset. Full gives the frame back to the shot.
+
+    Raises:
+        EditError: The scene is a card, or the video has no recording of the
+            speaker to show.
+    """
+    if 0 <= index < len(plan.scenes) and plan.scenes[index].is_card:
+        raise EditError("A title or chapter card fills the frame with its text.")
+    scene = _scene(plan, index)
+    if not layout.is_full:
+        if plan.footage is None:
+            raise EditError(
+                "This video was made from sound only, so there is no recording of you "
+                "to put beside the picture. Make it again from a video file with "
+                '"Use my video" on.'
+            )
+        if scene.footage_start is None:
+            raise EditError("This scene has no part of your recording to show.")
+    log.info("plan.edit.layout", scene=index, layout=layout.kind.value)
+    return _replace(plan, scene.model_copy(update={"layout": layout}))

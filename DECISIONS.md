@@ -6261,3 +6261,57 @@ WebAssembly (`'wasm-unsafe-eval'`); JavaScript still cannot be evaluated
 (tested). `.wasm`, `.js` and font files are served with their types set
 explicitly, since with `nosniff` a browser believes the type it is told, and
 Windows takes them from the registry.
+
+### D-197 · Shorts that hook, step 2: split screen and picture-in-picture
+
+The owner asked for the layout seen in many Shorts: what is being explained
+playing at the top (a video of a flood in Cameroon, or a picture), the
+speaker below, explaining it; adjustable in size and place; and, as well,
+screen masks and overlays.
+
+**Per scene, a layout** (`PlannedScene.layout`, `SceneLayout`):
+
+- **one at a time:** as before, the shot decides whether you or the picture
+  fills the frame;
+- **split screen:** the picture in one part and you in the other, stacked in
+  a vertical or square frame and side by side in a landscape one. The
+  picture's share is adjustable (25-75%), you can go first, and a thin line
+  divides them;
+- **picture in picture:** you in a small frame over the picture, or the
+  picture over you; a circle or a rounded rectangle (upright in a vertical
+  frame), any size from 15% to 60% of the width, anywhere, kept inside the
+  frame; with a white border and a soft shadow.
+
+**Rendered frame-exact** (`render/compose/layout.py`): each part is rendered
+on its own at its own size by the code that renders a whole frame (the
+picture with its camera movement or its clip; you, cut to the frames that
+were spoken and framed on your face for that part's shape, D-193), then put
+together in one FFmpeg pass that keeps every frame: stacked for a split,
+overlaid through an antialiased mask for an inset (masks drawn four times
+larger and reduced). Parts and places are on the 4:2:0 grid. The segment
+cache key adds the layout for these scenes only, so every other key is as it
+was.
+
+**Captions sit on the divider** of a vertical split, between the picture and
+you, as these Shorts have them, unless a person has placed them (D-196). A
+split or inset scene is not a full speaker shot, so captions are not moved
+for the face in it.
+
+**Your own clip.** "Use your own photo" now takes a video clip too (MP4,
+WebM, MOV, M4V, up to 1 GB), checked to be a playable video before it is
+accepted; it plays in its scene, trimmed or slowed to the scene's length
+(D-085), with its sound left out: the voice is yours.
+
+**In the studio:** a Layout card under the scene's picture, with a drawing of
+each layout in the video's shape; the player previews the scene as it will
+look (a still put together by the same geometry), and "Update video" makes
+it.
+
+**Tests:** the geometry (every part on the grid, filling the frame, insets
+inside it, masks antialiased); FFmpeg compositions measured pixel by pixel
+(each part in its place, the divider, the inset's shape and border, the base
+untouched, every frame kept); a plan with a split and an inset rendered
+whole; captions on the divider; the API (saving, refusing a sound-only video
+and out-of-range values, the composed preview, your own clip, a renamed file
+refused); and in Chromium, a scene split, previewed, reordered and made, the
+finished frames checked.

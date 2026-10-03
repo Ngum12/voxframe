@@ -38,7 +38,8 @@ import {
 } from "../api";
 import { Notice } from "../components";
 import { CaptionStyle, SceneCaptionStyle } from "./CaptionStyle";
-import { SceneDetail, TitleAdder, sceneThumbnail, showsSpeaker } from "./Filmstrip";
+import { SceneDetail, TitleAdder, sceneThumbnail, sharesFrame, showsSpeaker } from "./Filmstrip";
+import { LayoutPicker } from "./Layout";
 import { liveCaptionsSupported, useLiveCaptions } from "./LiveCaptions";
 import { SoundPanel } from "./Sound";
 import { Timeline, type TimedWord } from "./Timeline";
@@ -465,7 +466,8 @@ export function Studio({
   const summary = job.summary ?? {};
   const hasVideo = job.artifacts.includes("video");
   const position = plan.scenes.findIndex((s) => s.index === scene.index);
-  const previewing = changedPictures.has(scene.index) && (!!scene.asset || showsSpeaker(scene));
+  const previewing =
+    changedPictures.has(scene.index) && (!!scene.asset || showsSpeaker(scene) || sharesFrame(scene));
   const statusText =
     status.kind === "updating"
       ? `Updating your video… ${status.fraction !== null ? `${Math.round(status.fraction * 100)}%` : ""}`
@@ -732,6 +734,17 @@ export function Studio({
                   }}
                   part="picture"
                 />
+                {plan.footage && !scene.card_kind && scene.footage_start != null && (
+                  <LayoutPicker
+                    jobId={jobId}
+                    scene={scene}
+                    vertical={plan.aspect !== "16:9"}
+                    onSaved={(edited, where) => {
+                      setPlan((current) => current && { ...current, scenes: current.scenes.map((s) => (s.index === edited.index ? edited : s)) });
+                      setHistory(where);
+                    }}
+                  />
+                )}
               </>
             )}
 

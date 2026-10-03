@@ -96,6 +96,10 @@ IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".webp"})
 #: frame can show.
 MAX_IMAGE_BYTES = 50 * 1024 * 1024
 
+#: A clip of your own for a scene (D-197): a phone's few minutes of video.
+CLIP_SUFFIXES = frozenset({".mp4", ".webm", ".mov", ".m4v"})
+MAX_CLIP_BYTES = 1024 * 1024 * 1024
+
 #: Name of the session cookie. HttpOnly, so no script can read it -- including
 #: any script that might be injected into the page.
 SESSION_COOKIE = "voxframe_session"
@@ -306,6 +310,20 @@ class CaptionsEdit(BaseModel):
     anchor_y: float | None = Field(default=None, ge=0.05, le=0.95)
     size: float = Field(default=1.0, ge=0.6, le=1.8)
     uppercase: bool | None = None
+
+
+class LayoutEdit(BaseModel):
+    """How a scene shares the frame between the speaker and its picture (D-197)."""
+
+    kind: Literal["full", "split", "inset"] = "full"
+    split: float = 0.5
+    speaker_first: bool = False
+    divider: bool = True
+    inset_speaker: bool = True
+    inset_shape: Literal["circle", "rounded"] = "circle"
+    inset_size: float = 0.36
+    inset_x: float = 0.74
+    inset_y: float = 0.22
 
 
 class SceneCaptionsEdit(BaseModel):
@@ -1088,6 +1106,18 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             raise HTTPException(status_code=404, detail="No such scene.")
 
         footage = payload.get("footage")
+        layout = scenes[index].get("layout") or {}
+        if (
+            footage
+            and layout.get("kind", "full") != "full"
+            and scenes[index].get("footage_start") is not None
+        ):
+            # The speaker and the picture together, as the render puts them
+            # (D-197).
+            return FileResponse(
+                _layout_thumbnail(context, job_id, payload, index), media_type="image/jpeg"
+            )
+
         if (
             footage
             and scenes[index].get("shot") == "speaker"
@@ -1477,6 +1507,33 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         return {"scene": edited.scenes[index].model_dump(mode="json"),
                 **_history_state(plan_path)}
 
+    @app.put("/api/jobs/{job_id}/scenes/{index}/layout")
+    def edit_layout(
+        job_id: str,
+        index: int,
+        edit: LayoutEdit,
+        context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        """Split the frame, or inset one part in the other (D-197)."""
+        from pydantic import ValidationError
+
+        from voxframe.plan.editing import EditError, set_layout
+        from voxframe.plan.scene_layout import SceneLayout
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            layout = SceneLayout.model_validate(edit.model_dump())
+            edited = set_layout(plan, index, layout)
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail="That layout is out of range.") from exc
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        label = {"full": "a full frame", "split": "a split screen", "inset": "an inset"}
+        saved = _save_plan(edited, plan_path, label[layout.kind.value])
+        context.store.set_pending(job, saved.pending)
+        return {"scene": edited.scenes[index].model_dump(mode="json"),
+                **_history_state(plan_path)}
+
     @app.put("/api/jobs/{job_id}/scenes/{index}/caption")
     def edit_caption(
         job_id: str,
@@ -1510,24 +1567,30 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         file: UploadFile = File(...),
         context: ApiContext = Depends(ctx),
     ) -> dict[str, Any]:
-        """Use a photograph the person supplies for one scene.
+        """Use a photograph or a video clip the person supplies for one scene.
 
         Stored inside the job's own directory under a name the server chooses;
         the client's filename is used only for its suffix. Checked to be a real
-        image before it is accepted, since a renamed file of any kind would
-        otherwise reach FFmpeg. Provenance defaults to the person's own work
-        (owner's decision 4) and is never blank (D-035).
+        image, or a real video, before it is accepted, since a renamed file of
+        any kind would otherwise reach FFmpeg. Provenance defaults to the
+        person's own work (owner's decision 4) and is never blank (D-035). A
+        clip plays in the scene, above the speaker in a split screen (D-197).
         """
         from voxframe.plan.editing import EditError, use_image
 
         job, plan_path, plan = _editable_plan(context, job_id)
 
         suffix = Path(file.filename or "").suffix.lower()
-        if suffix not in IMAGE_SUFFIXES:
+        is_clip = suffix in CLIP_SUFFIXES
+        if suffix not in IMAGE_SUFFIXES and not is_clip:
             raise HTTPException(
                 status_code=415,
-                detail=f"Use a JPEG, PNG or WebP image (got {suffix or 'no extension'}).",
+                detail=(
+                    "Use a JPEG, PNG or WebP image, or an MP4, WebM or MOV clip "
+                    f"(got {suffix or 'no extension'})."
+                ),
             )
+        limit = MAX_CLIP_BYTES if is_clip else MAX_IMAGE_BYTES
 
         import uuid
 
@@ -1540,14 +1603,51 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         with target.open("wb") as handle:
             while chunk := await file.read(UPLOAD_CHUNK_BYTES):
                 written += len(chunk)
-                if written > MAX_IMAGE_BYTES:
+                if written > limit:
                     handle.close()
                     target.unlink(missing_ok=True)
                     raise HTTPException(
                         status_code=413,
-                        detail=f"Images are limited to {MAX_IMAGE_BYTES // (1024 * 1024)} MB.",
+                        detail=(
+                            f"{'Clips' if is_clip else 'Images'} are limited to "
+                            f"{limit // (1024 * 1024)} MB."
+                        ),
                     )
                 handle.write(chunk)
+
+        from voxframe.plan.scene_plan import PlanAsset
+
+        if is_clip:
+            from voxframe.models.asset import AssetKind
+            from voxframe.render.encode.probe import probe_footage
+
+            try:
+                info = probe_footage(target)
+            except Exception:
+                info = None
+            if info is None or info.duration <= 0:
+                target.unlink(missing_ok=True)
+                raise HTTPException(status_code=415, detail="That file is not a playable video.")
+            asset = PlanAsset(
+                id=asset_id,
+                path=str(target.resolve()),
+                width=info.width,
+                height=info.height,
+                kind=AssetKind.VIDEO,
+                duration=info.duration,
+                license_name="Own work",
+                license_author="You",
+                license_source="Your own video",
+            )
+            try:
+                edited = use_image(plan, index, asset)
+            except EditError as exc:
+                target.unlink(missing_ok=True)
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            saved = _save_plan(edited, plan_path, "your clip")
+            context.store.set_pending(job, saved.pending)
+            return {"scene": edited.scenes[index].model_dump(mode="json"),
+                    "pending_edits": job.summary.get("pending_edits", 0)}
 
         try:
             from PIL import Image
@@ -1561,8 +1661,6 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             raise HTTPException(
                 status_code=415, detail="That file is not a readable image."
             ) from exc
-
-        from voxframe.plan.scene_plan import PlanAsset
 
         asset = PlanAsset(
             id=asset_id,
@@ -2099,6 +2197,61 @@ def _probe_key(adapter: str, key: str) -> tuple[bool, str]:
 THUMBNAIL_PIXELS = 320
 
 
+def _layout_thumbnail(
+    context: ApiContext, job_id: str, payload: dict[str, Any], index: int
+) -> Path:
+    """A still of a split or inset scene: its picture and the speaker, put
+    together as the render puts them (D-197)."""
+    import hashlib
+
+    from PIL import Image
+
+    from voxframe.plan.scene_layout import SceneLayout
+    from voxframe.render.compose.layout import compose_still
+
+    scene = payload["scenes"][index]
+    footage = payload["footage"]
+    try:
+        recording = resolve_within(Path(footage["path"]), context.allowed_paths)
+    except PathOutsideSandbox as exc:
+        raise HTTPException(
+            status_code=403, detail="That scene's recording is outside the allowed directories."
+        ) from exc
+    if not recording.is_file():
+        raise HTTPException(status_code=404, detail="The recording is missing.")
+    seconds = (scene["end_frame"] - scene["start_frame"]) / float(payload.get("fps") or 30.0)
+    at = float(scene["footage_start"]) + float(footage.get("audio_offset") or 0.0) + min(
+        0.5, seconds / 2
+    )
+    speaker = _thumbnail_for(context, job_id, recording, at=at)
+
+    picture: Path | None = None
+    asset = scene.get("asset") or {}
+    if asset.get("path"):
+        try:
+            source = resolve_within(Path(asset["path"]), context.allowed_paths)
+        except PathOutsideSandbox:
+            source = None
+        if source is not None and source.is_file():
+            picture = _thumbnail_for(context, job_id, source)
+
+    layout = SceneLayout.model_validate(scene.get("layout") or {})
+    size = {"9:16": (360, 640), "1:1": (480, 480)}.get(str(payload.get("aspect")), (640, 360))
+    key = hashlib.sha1(
+        f"{speaker.name}|{picture.name if picture else ''}|{layout.model_dump_json()}|{size}"
+        f"|{footage.get('subject_x', 0.5)}".encode(),
+        usedforsecurity=False,
+    ).hexdigest()[:20]
+    out = context.store.job_directory(job_id) / "thumbnails" / f"layout-{key}.jpg"
+    if not out.is_file():
+        still = compose_still(
+            Image.open(picture) if picture else None, Image.open(speaker), *size, layout,
+            speaker_x=float(footage.get("subject_x", 0.5)),
+        )
+        still.save(out, quality=88)
+    return out
+
+
 def _thumbnail_for(
     context: ApiContext, job_id: str, source: Path, *, at: float | None = None
 ) -> Path:
@@ -2457,6 +2610,7 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
         return (
             # What is on screen: the speaker (D-192), else the picture.
             "speaker" if now.shows_speaker(scene) else (scene.asset.id if scene.asset else None),
+            scene.layout,
             scene.motion,
             scene.caption_text,
             scene.caption_animation,
@@ -2472,7 +2626,7 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
         before = shown.scenes[position] if position < len(shown.scenes) else None
         if before is None or looks(scene) != looks(before):
             changed.append(scene.index)
-        if before is None or looks(scene)[0] != looks(before)[0]:
+        if before is None or looks(scene)[:2] != looks(before)[:2]:
             pictures.append(scene.index)
     return changed, pictures
 

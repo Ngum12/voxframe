@@ -33,6 +33,7 @@ from voxframe.models.asset import Asset, AssetKind
 from voxframe.models.transcript import Word
 from voxframe.plan.audio_mix import AudioMix
 from voxframe.plan.caption_choice import CaptionChoice
+from voxframe.plan.scene_layout import LayoutKind, SceneLayout
 from voxframe.plan.score_choice import ScoreChoice
 from voxframe.render.version import RENDERER_VERSION
 
@@ -341,6 +342,10 @@ class PlannedScene(BaseModel):
     #: spoken over. ``None`` for a card, or a plan without footage.
     footage_start: float | None = Field(default=None, ge=0)
 
+    #: How the frame is shared between the speaker and the picture (D-197):
+    #: a split screen or an inset. Full, the shot decides what fills it.
+    layout: SceneLayout = Field(default_factory=SceneLayout)
+
     #: This scene's own caption animation, when a person chose one (D-196).
     caption_animation: CaptionAnimation | None = Field(default=None)
     #: Words drawn larger and in colour: positions in ``caption_words()``.
@@ -499,7 +504,7 @@ class ScenePlan(BaseModel):
     @model_validator(mode="after")
     def _speaker_shots_have_footage(self) -> Self:
         for scene in self.scenes:
-            if scene.shot is not Shot.SPEAKER:
+            if scene.shot is not Shot.SPEAKER and scene.layout.kind is LayoutKind.FULL:
                 continue
             if self.footage is None:
                 raise PlanError(
@@ -512,8 +517,16 @@ class ScenePlan(BaseModel):
         return self
 
     def shows_speaker(self, scene: PlannedScene) -> bool:
-        """Whether ``scene`` renders from the footage."""
-        return self.footage is not None and scene.shot is Shot.SPEAKER
+        """Whether ``scene`` renders from the footage, filling the frame."""
+        return (
+            self.footage is not None
+            and scene.shot is Shot.SPEAKER
+            and scene.layout.kind is LayoutKind.FULL
+        )
+
+    def shares_frame(self, scene: PlannedScene) -> bool:
+        """Whether ``scene`` shows the speaker and its picture together (D-197)."""
+        return self.footage is not None and scene.layout.kind is not LayoutKind.FULL
 
     @model_validator(mode="after")
     def _scenes_tile_the_timeline(self) -> Self:

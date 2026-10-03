@@ -59,7 +59,7 @@ each step usable on its own:
   (D-193); **captions that fit** the frame and stay clear of your face
   (D-193, D-194).
 
-### 1. Caption styles, seen live (D-196)
+### 1. Caption styles, seen live (D-196) - done
 
 - **Seven styles:** highlight, pop, bounce, spotlight, karaoke, typewriter
   and plain, every word moving exactly when it is said.
@@ -69,13 +69,14 @@ each step usable on its own:
 - **Seen live in the studio,** drawn by the same engine that burns them into
   the video, before the video is made again.
 
-### 2. Split screen and picture-in-picture
+### 2. Split screen and picture-in-picture (D-197) - done
 
 - **A screen divider:** the picture or video clip of what you are talking
   about on top, you below, explaining it; the divide where you choose.
 - **Picture-in-picture:** you in a rounded or circular frame over the
   picture, or the picture over you; any size, anywhere.
 - **Per scene,** like the shot: full picture, full you, split or inset.
+- **Your own clips** as a scene's picture, playing above you in a split.
 
 ### 3. Pop-ups on cue
 

@@ -791,6 +791,7 @@ def build_ass(
     *,
     top_scenes: frozenset[int] = frozenset(),
     animations: Mapping[int, CaptionAnimation] | None = None,
+    anchors: Mapping[int, float] | None = None,
 ) -> str:
     """Build a complete ASS subtitle document.
 
@@ -805,6 +806,8 @@ def build_ass(
             frame instead, clear of the speaker's face (D-193).
         animations: Scenes given their own animation, by index; the rest use
             the style's (D-196).
+        anchors: Scenes whose captions sit at their own height, by index, as
+            a fraction of the frame: a split screen's divider (D-197).
 
     Returns:
         The ASS document.
@@ -850,7 +853,10 @@ def build_ass(
             animation = CaptionAnimation.HIGHLIGHT
         top = scene.index in top_scenes
         style_name = TOP_STYLE if top else "Voxframe"
-        placement = _placement(style, width, height, top=top)
+        scene_style = style
+        if anchors and scene.index in anchors:
+            scene_style = style.model_copy(update={"anchor_y": anchors[scene.index]})
+        placement = _placement(scene_style, width, height, top=top)
 
         pages = _paginate(all_lines, style)
         scene_start = scene.start_seconds(fps)
@@ -883,11 +889,13 @@ def build_ass(
             if animation in WORD_ANIMATIONS:
                 assert measure is not None
                 events.extend(
-                    word_events(page, style, animation, placement, measure, width, height)
+                    word_events(page, scene_style, animation, placement, measure, width, height)
                 )
             else:
                 events.extend(
-                    _line_events(page, style, style_name, animation, placement, width, height)
+                    _line_events(
+                        page, scene_style, style_name, animation, placement, width, height
+                    )
                 )
 
     parts.append("\n".join(events) + "\n")
@@ -904,6 +912,7 @@ def write_ass(
     *,
     top_scenes: frozenset[int] = frozenset(),
     animations: Mapping[int, CaptionAnimation] | None = None,
+    anchors: Mapping[int, float] | None = None,
 ) -> Path:
     """Write an ASS subtitle file.
 
@@ -914,7 +923,8 @@ def write_ass(
         The path written.
     """
     content = build_ass(
-        scenes, style, width, height, fps, top_scenes=top_scenes, animations=animations
+        scenes, style, width, height, fps, top_scenes=top_scenes, animations=animations,
+        anchors=anchors,
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8", newline="\n")
