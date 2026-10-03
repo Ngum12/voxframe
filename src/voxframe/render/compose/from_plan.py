@@ -27,7 +27,7 @@ import structlog
 
 from voxframe.assets import FontsMissing, fonts_dir
 from voxframe.config.settings import QualityPreset
-from voxframe.config.style import StyleTemplate, TransitionKind
+from voxframe.config.style import CaptionStyle, StyleTemplate, TransitionKind
 from voxframe.models.scene import Scene
 from voxframe.models.transcript import Word
 from voxframe.plan.scene_plan import ScenePlan
@@ -41,7 +41,7 @@ from voxframe.render.audio.mixdown import (
     sum_groups,
     voice_loudness,
 )
-from voxframe.render.captions.ass import write_ass
+from voxframe.render.captions.ass import build_ass
 from voxframe.render.captions.subtitles import write_srt, write_vtt
 from voxframe.render.compose.captioned import (
     _CRF,
@@ -171,14 +171,35 @@ def _scenes_for_captions(plan: ScenePlan) -> tuple[Scene, ...]:
                 # Scene.text is derived from its words, so the corrected text
                 # arrives with them and must not be passed separately.
                 words=words,
+                # A correction can leave fewer words than were emphasised.
+                emphasis=tuple(i for i in planned.emphasis if 0 <= i < len(words)),
             )
         )
 
     return tuple(scenes)
 
 
+def plan_captions(plan: ScenePlan, style: StyleTemplate, width: int, height: int) -> str:
+    """The captions of a plan, as the ASS document burned into its video.
+
+    The studio's live preview draws this same document over the picture, so
+    what a person sees while editing is what the video will show (D-196).
+    """
+    captions = plan.captions.apply(style.captions)
+    animations = {
+        scene.index: scene.caption_animation
+        for scene in plan.scenes
+        if scene.caption_animation is not None
+    }
+    return build_ass(
+        _scenes_for_captions(plan), captions, width, height, plan.fps,
+        top_scenes=_captions_above_face(plan, captions, width, height),
+        animations=animations,
+    )
+
+
 def _captions_above_face(
-    plan: ScenePlan, style: StyleTemplate, width: int, height: int
+    plan: ScenePlan, captions: CaptionStyle, width: int, height: int
 ) -> frozenset[int]:
     """Speaker scenes whose captions go to the top, clear of the face (D-193).
 
@@ -190,10 +211,10 @@ def _captions_above_face(
     from voxframe.config.style import CaptionPosition
     from voxframe.render.compose.footage import face_extent
 
-    captions = style.captions
     if plan.footage is None or not plan.footage.track:
         return frozenset()
-    if captions.position is not CaptionPosition.BOTTOM:
+    # Captions a person has placed stay where they put them.
+    if captions.position is not CaptionPosition.BOTTOM or captions.anchor_y is not None:
         return frozenset()
     margin = captions.margin_vertical_px(width, height)
     # The tallest the caption block can be: every line, with line spacing.
@@ -336,9 +357,8 @@ def render_from_plan(
     # --- 3. captions ---
     ass_path = output_path.with_suffix(".ass")
     caption_scenes = _scenes_for_captions(plan)
-    write_ass(
-        ass_path, caption_scenes, style.captions, width, out_height, plan.fps,
-        top_scenes=_captions_above_face(plan, style, width, out_height),
+    ass_path.write_text(
+        plan_captions(plan, style, width, out_height), encoding="utf-8", newline="\n"
     )
 
     srt_path = vtt_path = None

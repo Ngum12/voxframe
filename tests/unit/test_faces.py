@@ -195,14 +195,14 @@ class TestCaptionsClearOfTheFace:
         # High in the first scene, low in the second.
         footage = _tracked((0, 0.5, 0.35, 0.15), (2.9, 0.5, 0.35, 0.15), (3.0, 0.5, 0.85, 0.15))
         moved = _captions_above_face(
-            _plan(footage), get_template("clean-educational"), self.WIDTH, self.HEIGHT
+            _plan(footage), get_template("clean-educational").captions, self.WIDTH, self.HEIGHT
         )
         assert moved == frozenset({1})
 
     def test_a_face_filling_the_frame_keeps_them_down(self) -> None:
         footage = _tracked((0, 0.5, 0.5, 0.7))
         assert _captions_above_face(
-            _plan(footage), get_template("clean-educational"), self.WIDTH, self.HEIGHT
+            _plan(footage), get_template("clean-educational").captions, self.WIDTH, self.HEIGHT
         ) == frozenset()
 
     def test_a_picture_scene_keeps_them_down(self) -> None:
@@ -211,7 +211,7 @@ class TestCaptionsClearOfTheFace:
             update={"scenes": tuple(s.model_copy(update={"shot": Shot.PICTURE}) for s in plan.scenes)}
         )
         assert _captions_above_face(
-            pictures, get_template("clean-educational"), self.WIDTH, self.HEIGHT
+            pictures, get_template("clean-educational").captions, self.WIDTH, self.HEIGHT
         ) == frozenset()
 
     def test_a_template_with_captions_elsewhere_is_left_alone(self) -> None:
@@ -220,7 +220,13 @@ class TestCaptionsClearOfTheFace:
             update={"captions": template.captions.model_copy(update={"position": CaptionPosition.CENTER})}
         )
         assert _captions_above_face(
-            _plan(_tracked((0, 0.5, 0.85, 0.15))), centred, self.WIDTH, self.HEIGHT
+            _plan(_tracked((0, 0.5, 0.85, 0.15))), centred.captions, self.WIDTH, self.HEIGHT
+        ) == frozenset()
+
+    def test_captions_a_person_placed_stay_where_they_are(self) -> None:
+        placed = get_template("clean-educational").captions.model_copy(update={"anchor_y": 0.5})
+        assert _captions_above_face(
+            _plan(_tracked((0, 0.5, 0.85, 0.15))), placed, self.WIDTH, self.HEIGHT
         ) == frozenset()
 
     def test_the_caption_file_uses_the_top_style_for_those_scenes(self) -> None:

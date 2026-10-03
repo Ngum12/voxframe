@@ -26,8 +26,10 @@ log = structlog.get_logger(__name__)
 
 __all__ = [
     "BUILTIN_TEMPLATES",
+    "CaptionAnimation",
     "CaptionPosition",
     "CaptionStyle",
+    "CaptionTransition",
     "MotionStyle",
     "PacingStyle",
     "StyleTemplate",
@@ -62,6 +64,49 @@ class CaptionPosition(StrEnum):
     BOTTOM = "bottom"
     CENTER = "center"
     TOP = "top"
+
+
+class CaptionAnimation(StrEnum):
+    """How the words of a caption move as they are spoken (D-196).
+
+    Every one is timed by each word's own timestamps, so none can drift from
+    the voice.
+    """
+
+    #: The line, with the spoken word coloured. The original style.
+    HIGHLIGHT = "highlight"
+    #: The line fills with colour as each word is spoken.
+    KARAOKE = "karaoke"
+    #: The line builds up word by word.
+    TYPEWRITER = "typewriter"
+    #: Each word pops in as it is spoken, growing from its own centre.
+    POP = "pop"
+    #: The whole line is shown; the spoken word jumps.
+    BOUNCE = "bounce"
+    #: A coloured box glides behind the spoken word.
+    SPOTLIGHT = "spotlight"
+    #: The line, with no animation.
+    PLAIN = "plain"
+
+
+#: The animations drawn word by word, each word placed by Voxframe rather than
+#: by libass's line layout, so one word can move without moving the others.
+WORD_ANIMATIONS = frozenset(
+    {CaptionAnimation.POP, CaptionAnimation.BOUNCE, CaptionAnimation.SPOTLIGHT}
+)
+
+
+class CaptionTransition(StrEnum):
+    """How a caption comes on screen and goes (D-196)."""
+
+    CUT = "cut"
+    FADE = "fade"
+    #: Grows in from slightly smaller.
+    POP = "pop"
+    #: Rises into place.
+    SLIDE = "slide"
+    #: Shrinks in from slightly larger.
+    ZOOM = "zoom"
 
 
 class TransitionKind(StrEnum):
@@ -152,6 +197,29 @@ class CaptionStyle(BaseModel):
         default=True, description="Highlight each word as it is spoken."
     )
     uppercase: bool = Field(default=False)
+
+    #: How the words move as they are spoken (D-196). ``highlight_enabled``
+    #: off still means no animation, as it always has.
+    animation: CaptionAnimation = Field(default=CaptionAnimation.HIGHLIGHT)
+
+    #: How each caption comes on screen and goes.
+    transition: CaptionTransition = Field(default=CaptionTransition.CUT)
+    transition_ms: int = Field(default=180, ge=40, le=600)
+
+    #: Where the middle of the caption block sits, as a fraction of the
+    #: frame's height, when a person has placed it. ``None`` keeps
+    #: ``position`` and the margins.
+    anchor_y: float | None = Field(default=None, ge=0.05, le=0.95)
+
+    #: How much larger an emphasised word is drawn.
+    emphasis_scale: float = Field(default=1.25, ge=1.0, le=2.0)
+
+    @property
+    def effective_animation(self) -> CaptionAnimation:
+        """The animation drawn: none when highlighting is turned off."""
+        if not self.highlight_enabled and self.animation is CaptionAnimation.HIGHLIGHT:
+            return CaptionAnimation.PLAIN
+        return self.animation
 
     @model_validator(mode="after")
     def _margins_leave_room(self) -> Self:

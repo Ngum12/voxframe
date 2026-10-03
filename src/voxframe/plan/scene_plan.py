@@ -28,9 +28,11 @@ import structlog
 from pydantic import BaseModel, Field, model_validator
 
 from voxframe.config.settings import AspectRatio
+from voxframe.config.style import CaptionAnimation
 from voxframe.models.asset import Asset, AssetKind
 from voxframe.models.transcript import Word
 from voxframe.plan.audio_mix import AudioMix
+from voxframe.plan.caption_choice import CaptionChoice
 from voxframe.plan.score_choice import ScoreChoice
 from voxframe.render.version import RENDERER_VERSION
 
@@ -339,6 +341,11 @@ class PlannedScene(BaseModel):
     #: spoken over. ``None`` for a card, or a plan without footage.
     footage_start: float | None = Field(default=None, ge=0)
 
+    #: This scene's own caption animation, when a person chose one (D-196).
+    caption_animation: CaptionAnimation | None = Field(default=None)
+    #: Words drawn larger and in colour: positions in ``caption_words()``.
+    emphasis: tuple[int, ...] = Field(default=())
+
     match_score: float = Field(default=0.0)
     semantic_score: float = Field(default=0.0)
     match_reason: str = Field(default="")
@@ -467,6 +474,10 @@ class ScenePlan(BaseModel):
     #: The person's sound settings (D-171). Changing them re-renders only the
     #: sound; the pictures come from the cache.
     audio_mix: AudioMix = Field(default_factory=AudioMix)
+
+    #: The person's caption choices (D-196): drawn the same in the studio's
+    #: preview and in the video.
+    captions: CaptionChoice = Field(default_factory=CaptionChoice)
 
     #: Whether the language was detected or forced, and how confidently. Kept
     #: so a plan with a suspect transcript can be diagnosed later without
