@@ -127,7 +127,9 @@ def _is_app_shell(path: str) -> bool:
 SECURITY_HEADERS = {
     "Content-Security-Policy": (
         "default-src 'self'; "
-        "script-src 'self'; "
+        # WebAssembly may be compiled (the live captions are libass, built
+        # for the browser: D-196); JavaScript still may not be evaluated.
+        "script-src 'self' 'wasm-unsafe-eval'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob:; "
         "media-src 'self' blob:; "
@@ -418,6 +420,18 @@ def _install_frontend(app: FastAPI) -> None:
 
     assets = root / "assets"
     if assets.is_dir():
+        # Served by extension, and with nosniff a browser believes the type it
+        # is told: a system that does not know these (Windows reads them from
+        # the registry) would break the live captions' WebAssembly and fonts.
+        import mimetypes
+
+        for media_type, extension in (
+            ("application/wasm", ".wasm"),
+            ("text/javascript", ".js"),
+            ("font/woff2", ".woff2"),
+            ("font/ttf", ".ttf"),
+        ):
+            mimetypes.add_type(media_type, extension)
         app.mount("/assets", StaticFiles(directory=assets), name="assets")
 
     @app.get("/")
@@ -1380,11 +1394,26 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
     @app.get("/api/jobs/{job_id}/captions/style")
     def job_caption_style(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
         """The captions' look as chosen, over the template's (D-196)."""
-        from voxframe.config.style import get_template
+        from voxframe.config.style import CaptionPosition, get_template
 
+        job = context.store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="No such job.")
         plan = _load_job_plan(context, job_id)
         template = get_template(plan.style or None).captions
         chosen = plan.captions.apply(template)
+        # Where the middle of a two-line caption sits when nobody has moved
+        # it: where the studio's handle starts.
+        width = job.summary.get("width") or 1080
+        height = job.summary.get("height") or 1920
+        anchor = chosen.anchor_y
+        if anchor is None:
+            margin = chosen.margin_vertical_px(width, height)
+            lines = chosen.font_size_px(height) * min(2, chosen.max_lines) / 2
+            anchor = {
+                CaptionPosition.TOP: (margin + lines) / height,
+                CaptionPosition.CENTER: 0.5,
+            }.get(chosen.position, (height - margin - lines) / height)
         return {
             "choice": plan.captions.model_dump(mode="json"),
             "template": {
@@ -1394,7 +1423,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             "effective": {
                 "animation": chosen.effective_animation.value,
                 "transition": chosen.transition.value,
-                "anchor_y": chosen.anchor_y,
+                "anchor_y": round(anchor, 4),
+                "placed": chosen.anchor_y is not None,
                 "uppercase": chosen.uppercase,
             },
         }

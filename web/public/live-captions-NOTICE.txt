@@ -1,0 +1,32 @@
+Voxframe's live captions (D-196)
+================================
+
+The studio draws captions over the video with JASSUB 2.5.16, which is libass
+(and the libraries it needs) compiled to WebAssembly. The files are:
+
+  assets/jassub-worker-*.wasm         libass and its libraries, built for the
+  assets/jassub-worker-modern-*.wasm  browser (two builds: with and without SIMD)
+  assets/jassub-worker-*.js           their loader
+  assets/worker-*.js                  JASSUB's worker
+  assets/default-*.woff2              JASSUB's fallback font (Liberation Sans)
+
+Their licenses (SPDX: LGPL-2.1-or-later AND (FTL OR GPL-2.0-or-later) AND MIT
+AND MIT-Modern-Variant AND ISC AND NTP AND Zlib AND BSL-1.0):
+
+  JASSUB             MIT                  jassub-LICENSE.txt, beside this file
+  libass             ISC
+  FriBidi            LGPL-2.1-or-later
+  FreeType           FTL (chosen of FTL OR GPL-2.0-or-later)
+  HarfBuzz           MIT-Modern-Variant
+  zlib               Zlib
+  Liberation Sans    OFL-1.1              (the fallback font; captions use Inter)
+  and parts of the Emscripten runtime under MIT, NTP and BSL-1.0.
+
+LGPL: FriBidi is part of the WebAssembly files, which are separate files
+served unmodified as published. You may replace them with your own build of
+the same JASSUB version. Its complete source, with every library above, is at
+https://github.com/ThaUnknown/jassub (tag 2.5.16, with its submodules).
+
+Left out, deliberately: JASSUB's dependency rvfc-polyfill (GPL-3.0), which no
+supported browser needs, and lfa-ponyfill's online font list, which Voxframe
+never uses (web/src/vendor).

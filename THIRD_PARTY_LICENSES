@@ -139,6 +139,22 @@ Each is added to the "installed" section above as its phase lands.
     react                   MIT          UI library
     react-dom               MIT          UI library (DOM renderer)
     vite                    MIT          Build tool, static output
+
+  Live captions in the studio (D-196), bundled into the web app:
+    jassub                  MIT          libass for the browser, as WebAssembly
+      libass                ISC            the caption renderer FFmpeg also uses
+      FriBidi               LGPL-2.1+      in the WebAssembly files, which are
+                                           separate and replaceable (note 1);
+                                           source: github.com/ThaUnknown/jassub
+      FreeType              FTL            (chosen of FTL OR GPL-2.0+)
+      HarfBuzz              MIT
+      zlib                  Zlib
+      Liberation Sans       OFL-1.1        JASSUB's fallback font
+    abslink                 Apache-2.0   via jassub (worker messaging)
+    throughput              MIT          via jassub
+    Excluded from the build: rvfc-polyfill (GPL-3.0), not needed by any
+    supported browser; lfa-ponyfill's online font list, never used. The
+    full notice is served with the app: live-captions-NOTICE.txt.
     tailwindcss             MIT          Styling
 
   Music director, Stage 1 (D-170; the "music" extra, in the installers):

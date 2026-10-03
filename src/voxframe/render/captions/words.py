@@ -129,6 +129,42 @@ def _rounded_rect(width: float, height: float, radius: float) -> str:
     )
 
 
+def _growing_box(
+    emitter: _Emitter,
+    line: _Line,
+    appears: dict[int, float],
+    end: float,
+    pad_x: float,
+    box_height: float,
+) -> None:
+    """A line's box that grows with its words as they pop in, rather than
+    stand empty waiting for them."""
+    left = line.x - line.width / 2 - pad_x
+    shown = [(appears[word.index], word) for word in line.words if word.index in appears]
+    previous: tuple[float, float] | None = None
+    for position, (start, word) in enumerate(shown):
+        until = shown[position + 1][0] if position + 1 < len(shown) else end
+        right = word.x + word.width / 2 + pad_x
+        box_width, centre = right - left, (left + right) / 2
+        move = scale = ""
+        if previous is not None:
+            before_width, before_centre = previous
+            move = (
+                f"\\move({_number(before_centre)},{_number(line.y)},"
+                f"{_number(centre)},{_number(line.y)},0,{_POP_GROW_MS})"
+            )
+            scale = (
+                f"\\fscx{_number(100 * before_width / box_width)}\\fscy100"
+                f"\\t(0,{_POP_GROW_MS},\\fscx100\\fscy100)"
+            )
+        emitter.emit(
+            start, until, layer=_BOX_LAYER, style_name=BOX_STYLE, x=centre, y=line.y,
+            scale=1.0, tags="", own_move=move, own_scale=scale,
+            text=f"{{\\p1}}{_rounded_rect(box_width, box_height, box_height * 0.22)}",
+        )
+        previous = (box_width, centre)
+
+
 class _Emitter:
     """Writes the Dialogue lines of one page, each taking up the caption's
     transition where it stands at that line's start."""
@@ -227,12 +263,16 @@ def word_events(
         box_start = spans[0][0]
         pad_x = measure.advance(_PAD_CHAR * style.box_padding_chars)
         pad_y = style.outline_width
+        appears = {index: start for start, _, index in spans}
         for line in lines:
+            box_height = line.height + 2 * pad_y
+            if animation is CaptionAnimation.POP and style.backing is CaptionBacking.BOX:
+                _growing_box(emitter, line, appears, page.end, pad_x, box_height)
+                continue
             if style.backing is CaptionBacking.BAND:
                 box_width = width - 2 * style.margin_horizontal_px(width)
             else:
                 box_width = line.width + 2 * pad_x
-            box_height = line.height + 2 * pad_y
             emitter.emit(
                 box_start, page.end, layer=_BOX_LAYER, style_name=BOX_STYLE,
                 x=line.x, y=line.y, scale=1.0, tags="",

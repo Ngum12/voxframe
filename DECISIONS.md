@@ -6186,3 +6186,78 @@ fixed at its cause:
   16,155 on Windows, about 15,000 on Linux, against a threshold of 16,000).
   It now uses a fixed, realistic AppData-length path: about 13,800 to 14,700
   everywhere.
+
+### D-196 · Shorts that hook, step 1: caption styles, seen live as the video will have them
+
+The owner's brief for Shorts: strong hooks, full control after the video is
+made, and seeing how the captions display and move before committing to them.
+The plan, agreed with the owner (ROADMAP, "Shorts"): (1) caption styles with a
+live preview; (2) split screen and picture-in-picture; (3) pop-ups at word
+cues; (4) the hook and the pace. Clips from a long recording wait.
+
+**Seven animations**, each timed by the words' own timestamps, so none can
+drift from the voice (`CaptionAnimation`):
+
+- **highlight** (as before), **karaoke** (the line fills as each word is
+  said, `\kf`), **typewriter** (words appear as they are said), **plain**:
+  drawn as libass lays out lines;
+- **pop** (each word grows in from its own centre, overshoots, settles),
+  **bounce** (the spoken word jumps when it is said, not before), and
+  **spotlight** (a box glides behind the spoken word): drawn word by word
+  (`render/captions/words.py`). In a line, a word that grows pushes its
+  neighbours, so these place every word themselves, where libass's own line
+  layout would: the same font, measured the same way, a line exactly one font
+  size tall (measured from libass's output), and libass's lines 0.7% wider
+  than the font's advances add up to (measured on whole lines). Static, they
+  land within 1 px of the line layout at 1080×1920 and 1920×1080 (tested on
+  burned frames).
+
+**Five transitions** for each caption coming and going: cut, fade, pop in,
+slide up, zoom in. A caption is drawn as one Dialogue line per spoken word,
+and a transition can outlast the first of them, so each line takes up the
+transition where the line before left it (`_motion`): it runs on unbroken
+whatever the timing, and eases when one line holds it whole.
+
+**Also:** emphasised words, larger and in colour, chosen per scene (wrapping
+allows for their size); captions placed anywhere up the frame (`anchor_y`,
+which also keeps them where a person put them rather than moving them clear
+of a face); size; all caps.
+
+**Kept in the plan** (D-011): `ScenePlan.captions` (`CaptionChoice`: what a
+person changed over the template; nothing else) and, per scene,
+`caption_animation` and `emphasis`. `plan_captions()` builds the one caption
+document both the render and the studio use. With nothing chosen, the
+captions are byte-for-byte what they were, so no existing video changes.
+
+**Seen live, exactly.** Renders from the app also keep the video without its
+captions (`*.studio.mp4`: the same pictures and the same sound, copied). The
+studio plays that and draws the captions over it with libass built for the
+browser (JASSUB 2.5.16), from `GET /api/jobs/{id}/captions`: the plan's
+caption document as it stands, at the video's size. A change shows the moment
+it is saved; "Update video" then burns in what was seen. The uncaptioned
+pictures are cached by their own key, so a change to the captions alone burns
+them in again and nothing more. A video made before this, or a browser that
+cannot draw them, plays the captioned video and says so.
+
+In Chromium, the live captions are compared with the frame FFmpeg burns at
+the same moment: same place, same shape (browser test). Choosing "Pop" in the
+studio changes the player before the video is made again, and dragging the
+captions in the player moves them and saves where they were put (browser
+tests). Playwright's Chromium cannot decode H.264, so its test video is VP9.
+
+**Licensing** (the owner approved JASSUB's LGPL parts): libass is ISC,
+FreeType FTL, HarfBuzz MIT, zlib Zlib, FriBidi LGPL-2.1+. The WebAssembly
+files are separate and served unmodified, so they can be replaced; the notice
+and source location ship with the app (`live-captions-NOTICE.txt`). Two
+dependencies are kept out of the build by alias (`web/src/vendor`):
+`rvfc-polyfill`, which is **GPL-3.0** and needed by no browser Voxframe
+supports, and `lfa-ponyfill`'s online font lookup, which Voxframe never uses
+and whose font list is rewritten from the network at install, which would make
+the build differ from day to day. The fonts are the app's own Inter, the ones
+the video is rendered with, and nothing is looked up (`queryFonts: false`).
+
+**Security:** the page's Content-Security-Policy now allows compiling
+WebAssembly (`'wasm-unsafe-eval'`); JavaScript still cannot be evaluated
+(tested). `.wasm`, `.js` and font files are served with their types set
+explicitly, since with `nosniff` a browser believes the type it is told, and
+Windows takes them from the registry.

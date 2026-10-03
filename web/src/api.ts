@@ -262,6 +262,10 @@ export interface PlannedScene {
   shot_reason?: string;
   /** Where the scene starts in the recording; null for a card or no footage. */
   footage_start?: number | null;
+  /** This scene's own caption animation, when chosen (D-196). */
+  caption_animation?: CaptionAnimation | null;
+  /** Emphasised words: positions in the scene's caption words. */
+  emphasis?: number[];
   match_score: number;
   semantic_score: number;
   match_reason: string;
@@ -286,6 +290,8 @@ export interface ScenePlan {
   score?: { style: string; seed: number; intensity: number } | null;
   /** The recording's own picture, when the video shows the speaker (D-192). */
   footage?: { path: string; width: number; height: number; subject_x: number } | null;
+  /** The person's caption choices (D-196). */
+  captions?: CaptionChoice;
   created_at: string;
   scenes: PlannedScene[];
 }
@@ -829,7 +835,71 @@ export interface PlanHistory {
   changed_scenes: number[];
   /** Of those, the scenes whose picture changed: the player shows the new one. */
   changed_pictures: number[];
+  /** Whether the whole video's caption choices differ from the video's (D-196). */
+  captions_changed?: boolean;
 }
+
+// --- captions (D-196) ---------------------------------------------------------
+
+export type CaptionAnimation =
+  | "highlight"
+  | "karaoke"
+  | "typewriter"
+  | "pop"
+  | "bounce"
+  | "spotlight"
+  | "plain";
+export type CaptionTransition = "cut" | "fade" | "pop" | "slide" | "zoom";
+
+/** What a person changed about the captions; null is the template's choice. */
+export interface CaptionChoice {
+  animation: CaptionAnimation | null;
+  transition: CaptionTransition | null;
+  anchor_y: number | null;
+  size: number;
+  uppercase: boolean | null;
+}
+
+export interface CaptionLook {
+  choice: CaptionChoice;
+  template: { animation: CaptionAnimation; transition: CaptionTransition };
+  effective: {
+    animation: CaptionAnimation;
+    transition: CaptionTransition;
+    /** Where the middle of the captions sits, as a fraction of the height. */
+    anchor_y: number;
+    /** Whether a person has moved them. */
+    placed: boolean;
+    uppercase: boolean;
+  };
+}
+
+/** The captions exactly as the video burns them in, from the plan as it is now. */
+export async function getCaptions(jobId: string): Promise<string> {
+  const response = await fetch(`/api/jobs/${jobId}/captions`, { credentials: "same-origin" });
+  if (!response.ok) throw new ApiError(response.status, "The captions could not be loaded.");
+  return response.text();
+}
+
+export const getCaptionLook = (jobId: string) =>
+  request<CaptionLook>(`/api/jobs/${jobId}/captions/style`);
+
+export const setCaptions = (jobId: string, choice: CaptionChoice) =>
+  request<{ captions: CaptionChoice } & PlanHistory>(`/api/jobs/${jobId}/captions`, {
+    method: "PUT",
+    body: JSON.stringify(choice),
+  });
+
+export const setSceneCaptions = (
+  jobId: string,
+  index: number,
+  animation: CaptionAnimation | null,
+  emphasis: number[],
+) =>
+  request<{ scene: PlannedScene } & PlanHistory>(`/api/jobs/${jobId}/scenes/${index}/captions`, {
+    method: "PUT",
+    body: JSON.stringify({ animation, emphasis }),
+  });
 
 export const getPlanHistory = (jobId: string) =>
   request<PlanHistory>(`/api/jobs/${jobId}/plan/history`);

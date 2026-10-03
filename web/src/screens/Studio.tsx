@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
+  type CaptionLook,
   type EditResult,
   type Job,
   type PlanEditResult,
@@ -24,16 +25,21 @@ import {
   addTitle,
   artifactUrl,
   followJob,
+  getCaptionLook,
+  getCaptions,
   getJob,
   getPlan,
   getPlanHistory,
   openFolder,
   redoPlan,
   rerenderJob,
+  setCaptions,
   undoPlan,
 } from "../api";
 import { Notice } from "../components";
+import { CaptionStyle, SceneCaptionStyle } from "./CaptionStyle";
 import { SceneDetail, TitleAdder, sceneThumbnail, showsSpeaker } from "./Filmstrip";
+import { liveCaptionsSupported, useLiveCaptions } from "./LiveCaptions";
 import { SoundPanel } from "./Sound";
 import { Timeline, type TimedWord } from "./Timeline";
 
@@ -193,7 +199,13 @@ export function Studio({
   const [toast, setToast] = useState<string | null>(null);
   const [addingTitle, setAddingTitle] = useState(false);
   const [layout, setLayout] = useState<Layout>(loadLayout);
-  const video = useRef<HTMLVideoElement>(null);
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+  const [captions, setCaptionsDoc] = useState<string | null>(null);
+  const [look, setLook] = useState<CaptionLook | null>(null);
+  const [liveFailed, setLiveFailed] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  const [dragAnchor, setDragAnchor] = useState<number | null>(null);
+  const video = useRef<HTMLVideoElement | null>(null);
   const frame = useRef<HTMLDivElement>(null);
   const shortcuts = useRef<HTMLDialogElement>(null);
   const toastTimer = useRef<number | undefined>(undefined);
@@ -225,6 +237,43 @@ export function Studio({
   useEffect(() => {
     reload().catch((caught: Error) => setError(caught.message));
   }, [reload]);
+
+  // --- live captions (D-196) ---------------------------------------------------
+
+  // The video without its captions, with the captions drawn over it from the
+  // plan as it is now. A video made before there was a studio copy, or a
+  // browser that cannot draw them, plays the captioned video instead.
+  const live = job.artifacts.includes("studio") && liveCaptionsSupported() && !liveFailed;
+  useEffect(() => {
+    if (!plan) return;
+    let current = true;
+    const timer = window.setTimeout(() => {
+      // Both at once, so the drawn captions and the controls change together.
+      void Promise.all([getCaptionLook(jobId), live ? getCaptions(jobId) : Promise.resolve(null)])
+        .then(([loadedLook, document]) => {
+          if (!current) return;
+          setLook(loadedLook);
+          if (document !== null) setCaptionsDoc(document);
+        })
+        .catch(() => current && live && setLiveFailed(true));
+    }, 80);
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [jobId, plan, live, videoVersion]);
+  useLiveCaptions(live ? videoElement : null, live ? captions : null, () => setLiveFailed(true));
+
+  // While the captions are dragged, the drawn captions follow the finger;
+  // they settle when the document for their new place arrives.
+  useEffect(() => setDragAnchor(null), [look]);
+  useEffect(() => {
+    const canvas = frame.current?.querySelector<HTMLCanvasElement>("canvas.JASSUB");
+    if (!canvas) return;
+    const shift = dragAnchor !== null && look ? dragAnchor - look.effective.anchor_y : 0;
+    const height = frame.current?.getBoundingClientRect().height ?? 0;
+    canvas.style.transform = shift ? `translateY(${shift * height}px)` : "";
+  }, [dragAnchor, look, captions]);
 
   // --- the player ------------------------------------------------------------
 
@@ -286,6 +335,21 @@ export function Studio({
   const pending = history?.pending ?? job.summary.pending_edits ?? 0;
   const changed = new Set(history?.changed_scenes ?? []);
   const changedPictures = new Set(history?.changed_pictures ?? []);
+
+  const saveAnchor = useCallback(
+    async (anchor: number) => {
+      if (!look) return;
+      try {
+        const result = await setCaptions(jobId, { ...look.choice, anchor_y: Math.round(anchor * 1000) / 1000 });
+        setPlan((current) => current && { ...current, captions: result.captions });
+        setHistory(result);
+      } catch (caught) {
+        setError(caught instanceof ApiError ? caught.message : "The captions could not be moved.");
+        setDragAnchor(null);
+      }
+    },
+    [jobId, look],
+  );
 
   const afterEdit = useCallback(
     (result: EditResult | PlanEditResult) => {
@@ -483,7 +547,7 @@ export function Studio({
         <details className="studio-menu">
           <summary className="btn btn-quiet">Download</summary>
           <div className="studio-menu-list" role="menu">
-            {job.artifacts.map((name) => (
+            {job.artifacts.filter((name) => name !== "studio").map((name) => (
               <a key={name} role="menuitem" href={artifactUrl(job.id, name)} download>
                 {ARTIFACT_LABELS[name] ?? name}
               </a>
@@ -513,9 +577,12 @@ export function Studio({
             <div className="studio-frame" ref={frame} style={{ aspectRatio: plan.aspect.replace(":", " / ") }}>
               {hasVideo && (
                 <video
-                  ref={video}
-                  key={videoVersion}
-                  src={`${artifactUrl(job.id, "video")}?v=${videoVersion}`}
+                  ref={(element) => {
+                    video.current = element;
+                    setVideoElement(element);
+                  }}
+                  key={`${videoVersion}-${live ? "live" : "burned"}`}
+                  src={`${artifactUrl(job.id, live ? "studio" : "video")}?v=${videoVersion}`}
                   preload="auto"
                   muted={muted}
                   onPlay={() => setPlaying(true)}
@@ -534,7 +601,17 @@ export function Studio({
               {previewing && (
                 <img className="studio-preview" src={sceneThumbnail(jobId, scene)} alt="" />
               )}
-              {changed.has(scene.index) && <span className="studio-preview-badge">Preview · not yet in the video</span>}
+              {(changed.has(scene.index) || history?.captions_changed) && (
+                <span className="studio-preview-badge">Preview · not yet in the video</span>
+              )}
+              {placing && look && (
+                <CaptionGuide
+                  anchor={dragAnchor ?? look.effective.anchor_y}
+                  frame={frame}
+                  onMove={setDragAnchor}
+                  onDrop={(anchor) => void saveAnchor(anchor)}
+                />
+              )}
             </div>
           </div>
           <div className="studio-transport">
@@ -663,6 +740,32 @@ export function Studio({
                 <Notice tone="info">A card has no words: they begin in the next scene.</Notice>
               ) : (
                 <>
+                  {!live && (
+                    <Notice tone="info">
+                      {job.artifacts.includes("studio") || !liveCaptionsSupported()
+                        ? "This browser cannot draw captions live: changes show once you update the video."
+                        : "Update the video once and caption changes will show in the player the moment you make them."}
+                    </Notice>
+                  )}
+                  <CaptionStyle
+                    jobId={jobId}
+                    look={look}
+                    placing={placing}
+                    onPlacing={setPlacing}
+                    onSaved={(choice, where) => {
+                      setPlan((current) => current && { ...current, captions: choice });
+                      setHistory(where);
+                    }}
+                  />
+                  <SceneCaptionStyle
+                    key={`${scene.index}-${planVersion}-style`}
+                    jobId={jobId}
+                    scene={scene}
+                    onSaved={(edited, where) => {
+                      setPlan((current) => current && { ...current, scenes: current.scenes.map((s) => (s.index === edited.index ? edited : s)) });
+                      setHistory(where);
+                    }}
+                  />
                   <div className="studio-words" role="group" aria-label="Words in this scene: choose one to jump to it">
                     {sceneWords.map((word, index) => (
                       <button
@@ -797,6 +900,61 @@ export function Studio({
       <div className={`studio-toast${toast ? " on" : ""}`} role="status" aria-live="polite">
         {toast}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A line across the player marking where the middle of the captions sits,
+ * dragged to move them (D-196). Also moved with the arrow keys.
+ */
+function CaptionGuide({
+  anchor,
+  frame,
+  onMove,
+  onDrop,
+}: {
+  anchor: number;
+  frame: React.RefObject<HTMLDivElement>;
+  onMove: (anchor: number) => void;
+  onDrop: (anchor: number) => void;
+}) {
+  const dragging = useRef(false);
+  const clamp = (value: number) => Math.min(0.95, Math.max(0.05, value));
+  const at = (clientY: number) => {
+    const box = frame.current?.getBoundingClientRect();
+    return box ? clamp((clientY - box.top) / box.height) : anchor;
+  };
+  return (
+    <div
+      className="caption-guide"
+      style={{ top: `${anchor * 100}%` }}
+      role="slider"
+      tabIndex={0}
+      aria-label="Where the captions sit"
+      aria-valuemin={5}
+      aria-valuemax={95}
+      aria-valuenow={Math.round(anchor * 100)}
+      aria-valuetext={`${Math.round(anchor * 100)}% down the picture`}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        dragging.current = true;
+        onMove(at(event.clientY));
+      }}
+      onPointerMove={(event) => dragging.current && onMove(at(event.clientY))}
+      onPointerUp={(event) => {
+        if (!dragging.current) return;
+        dragging.current = false;
+        onDrop(at(event.clientY));
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onDrop(clamp(anchor + (event.key === "ArrowUp" ? -0.02 : 0.02)));
+      }}
+    >
+      <span>Captions</span>
     </div>
   );
 }

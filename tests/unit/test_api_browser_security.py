@@ -130,8 +130,9 @@ class TestSecurityHeaders:
     ) -> None:
         policy = client.get("/api/health").headers["Content-Security-Policy"]
 
-        assert "script-src 'self'" in policy
-        assert "'unsafe-inline'" not in policy.split("script-src")[1].split(";")[0]
+        scripts = policy.split("script-src")[1].split(";")[0]
+        assert scripts.split() == ["'self'", "'wasm-unsafe-eval'"]
+        assert "'unsafe-inline'" not in scripts and "'unsafe-eval'" not in scripts
 
     def test_the_csp_forbids_framing(self, client: TestClient) -> None:
         """No frame means a clickjacking overlay has nothing to cover."""
