@@ -6186,3 +6186,182 @@ fixed at its cause:
   16,155 on Windows, about 15,000 on Linux, against a threshold of 16,000).
   It now uses a fixed, realistic AppData-length path: about 13,800 to 14,700
   everywhere.
+
+### D-196 · Shorts that hook, step 1: caption styles, seen live as the video will have them
+
+The owner's brief for Shorts: strong hooks, full control after the video is
+made, and seeing how the captions display and move before committing to them.
+The plan, agreed with the owner (ROADMAP, "Shorts"): (1) caption styles with a
+live preview; (2) split screen and picture-in-picture; (3) pop-ups at word
+cues; (4) the hook and the pace. Clips from a long recording wait.
+
+**Seven animations**, each timed by the words' own timestamps, so none can
+drift from the voice (`CaptionAnimation`):
+
+- **highlight** (as before), **karaoke** (the line fills as each word is
+  said, `\kf`), **typewriter** (words appear as they are said), **plain**:
+  drawn as libass lays out lines;
+- **pop** (each word grows in from its own centre, overshoots, settles),
+  **bounce** (the spoken word jumps when it is said, not before), and
+  **spotlight** (a box glides behind the spoken word): drawn word by word
+  (`render/captions/words.py`). In a line, a word that grows pushes its
+  neighbours, so these place every word themselves, where libass's own line
+  layout would: the same font, measured the same way, a line exactly one font
+  size tall (measured from libass's output), and libass's lines 0.7% wider
+  than the font's advances add up to (measured on whole lines). Static, they
+  land within 1 px of the line layout at 1080×1920 and 1920×1080 (tested on
+  burned frames).
+
+**Five transitions** for each caption coming and going: cut, fade, pop in,
+slide up, zoom in. A caption is drawn as one Dialogue line per spoken word,
+and a transition can outlast the first of them, so each line takes up the
+transition where the line before left it (`_motion`): it runs on unbroken
+whatever the timing, and eases when one line holds it whole.
+
+**Also:** emphasised words, larger and in colour, chosen per scene (wrapping
+allows for their size); captions placed anywhere up the frame (`anchor_y`,
+which also keeps them where a person put them rather than moving them clear
+of a face); size; all caps.
+
+**Kept in the plan** (D-011): `ScenePlan.captions` (`CaptionChoice`: what a
+person changed over the template; nothing else) and, per scene,
+`caption_animation` and `emphasis`. `plan_captions()` builds the one caption
+document both the render and the studio use. With nothing chosen, the
+captions are byte-for-byte what they were, so no existing video changes.
+
+**Seen live, exactly.** Renders from the app also keep the video without its
+captions (`*.studio.mp4`: the same pictures and the same sound, copied). The
+studio plays that and draws the captions over it with libass built for the
+browser (JASSUB 2.5.16), from `GET /api/jobs/{id}/captions`: the plan's
+caption document as it stands, at the video's size. A change shows the moment
+it is saved; "Update video" then burns in what was seen. The uncaptioned
+pictures are cached by their own key, so a change to the captions alone burns
+them in again and nothing more. A video made before this, or a browser that
+cannot draw them, plays the captioned video and says so.
+
+In Chromium, the live captions are compared with the frame FFmpeg burns at
+the same moment: same place, same shape (browser test). Choosing "Pop" in the
+studio changes the player before the video is made again, and dragging the
+captions in the player moves them and saves where they were put (browser
+tests). Playwright's Chromium cannot decode H.264, so its test video is VP9.
+
+**Licensing** (the owner approved JASSUB's LGPL parts): libass is ISC,
+FreeType FTL, HarfBuzz MIT, zlib Zlib, FriBidi LGPL-2.1+. The WebAssembly
+files are separate and served unmodified, so they can be replaced; the notice
+and source location ship with the app (`live-captions-NOTICE.txt`). Two
+dependencies are kept out of the build by alias (`web/src/vendor`):
+`rvfc-polyfill`, which is **GPL-3.0** and needed by no browser Voxframe
+supports, and `lfa-ponyfill`'s online font lookup, which Voxframe never uses
+and whose font list is rewritten from the network at install, which would make
+the build differ from day to day. The fonts are the app's own Inter, the ones
+the video is rendered with, and nothing is looked up (`queryFonts: false`).
+
+**Security:** the page's Content-Security-Policy now allows compiling
+WebAssembly (`'wasm-unsafe-eval'`); JavaScript still cannot be evaluated
+(tested). `.wasm`, `.js` and font files are served with their types set
+explicitly, since with `nosniff` a browser believes the type it is told, and
+Windows takes them from the registry.
+
+### D-197 · Shorts that hook, step 2: split screen and picture-in-picture
+
+The owner asked for the layout seen in many Shorts: what is being explained
+playing at the top (a video of a flood in Cameroon, or a picture), the
+speaker below, explaining it; adjustable in size and place; and, as well,
+screen masks and overlays.
+
+**Per scene, a layout** (`PlannedScene.layout`, `SceneLayout`):
+
+- **one at a time:** as before, the shot decides whether you or the picture
+  fills the frame;
+- **split screen:** the picture in one part and you in the other, stacked in
+  a vertical or square frame and side by side in a landscape one. The
+  picture's share is adjustable (25-75%), you can go first, and a thin line
+  divides them;
+- **picture in picture:** you in a small frame over the picture, or the
+  picture over you; a circle or a rounded rectangle (upright in a vertical
+  frame), any size from 15% to 60% of the width, anywhere, kept inside the
+  frame; with a white border and a soft shadow.
+
+**Rendered frame-exact** (`render/compose/layout.py`): each part is rendered
+on its own at its own size by the code that renders a whole frame (the
+picture with its camera movement or its clip; you, cut to the frames that
+were spoken and framed on your face for that part's shape, D-193), then put
+together in one FFmpeg pass that keeps every frame: stacked for a split,
+overlaid through an antialiased mask for an inset (masks drawn four times
+larger and reduced). Parts and places are on the 4:2:0 grid. The segment
+cache key adds the layout for these scenes only, so every other key is as it
+was.
+
+**Captions sit on the divider** of a vertical split, between the picture and
+you, as these Shorts have them, unless a person has placed them (D-196). A
+split or inset scene is not a full speaker shot, so captions are not moved
+for the face in it.
+
+**Your own clip.** "Use your own photo" now takes a video clip too (MP4,
+WebM, MOV, M4V, up to 1 GB), checked to be a playable video before it is
+accepted; it plays in its scene, trimmed or slowed to the scene's length
+(D-085), with its sound left out: the voice is yours.
+
+**In the studio:** a Layout card under the scene's picture, with a drawing of
+each layout in the video's shape; the player previews the scene as it will
+look (a still put together by the same geometry), and "Update video" makes
+it.
+
+**Tests:** the geometry (every part on the grid, filling the frame, insets
+inside it, masks antialiased); FFmpeg compositions measured pixel by pixel
+(each part in its place, the divider, the inset's shape and border, the base
+untouched, every frame kept); a plan with a split and an inset rendered
+whole; captions on the divider; the API (saving, refusing a sound-only video
+and out-of-range values, the composed preview, your own clip, a renamed file
+refused); and in Chromium, a scene split, previewed, reordered and made, the
+finished frames checked.
+
+### D-198 · Shorts that hook, step 3: pop-ups on cue
+
+The owner asked for elements that pop up at specific cues, and moving
+visuals. Each pop-up is **tied to a word, not a time** (`Overlay.scene`,
+`.word`): it appears when that word is said, and moves with it when cards
+are added or taken out (scenes are renumbered with them).
+
+**Kinds:**
+
+- **text:** a callout, as a pill (on the colour), bold (outlined) or a note
+  card;
+- **sticker:** one of 48 of Microsoft's Fluent Emoji (MIT), drawn to PNG at
+  512 px by `scripts/make_stickers.py` and shipped with their licence;
+- **shape:** an arrow (four ways), a ring to circle something, an underline
+  drawn on from left to right;
+- **counter:** a number counting up to its value, keeping what is written
+  round it ("$1,200", "90%") and easing as it arrives;
+- **picture:** one of the person's own, checked to be an image.
+
+Each has a place (its centre, dragged in the player), a size, how long it
+stays, a colour where it has one, and an entrance: pop in, slide up, drop
+in, fade, or just appear; all fade as they go. A video-wide **progress bar**
+fills along the bottom as the video plays.
+
+**Drawn where they can be seen live.** Text, shapes, counters and the
+progress bar are drawn by libass into the captions' own document (D-196), so
+the studio shows them exactly. Stickers and pictures are laid over the
+picture by FFmpeg as the captions are burned in, under the captions, which
+stay readable; their entrances are the same curves, in FFmpeg's expressions
+(scale and position by frame). The studio shows those over the player, with
+the same timing; and only there, since the burned video already has them.
+The burned pictures' cache key adds their files and places, so a change to
+a sticker burns again and nothing else is remade.
+
+**Suggestions you choose.** From the words, by plain signals: a word a
+sticker is for ("flood" for the wave, "money" for the bag; the word lists
+avoid common words), and a number, said as digits or as a word, for a
+counter (a year is not counted). At most one per scene, and none in a scene
+that already has a pop-up. Nothing is added until a person clicks.
+
+**Tests:** the API (adding, changing, removing, refusing what cannot be
+drawn, a picture of your own, a renamed file refused, the progress bar, a
+title added keeping pop-ups on their words, suggestions), the finished
+frames (a sticker appears on its word, pops in, slides from below and drops
+from above, and is gone after; text drawn from its word; the progress bar's
+fill matching the time to within 6%; a sticker change burning again over the
+same pictures), and in Chromium (a suggestion added and shown over the
+player on its word, text drawn live and dragged into place, the progress
+bar).

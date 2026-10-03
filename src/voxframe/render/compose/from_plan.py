@@ -27,7 +27,7 @@ import structlog
 
 from voxframe.assets import FontsMissing, fonts_dir
 from voxframe.config.settings import QualityPreset
-from voxframe.config.style import StyleTemplate, TransitionKind
+from voxframe.config.style import CaptionStyle, StyleTemplate, TransitionKind
 from voxframe.models.scene import Scene
 from voxframe.models.transcript import Word
 from voxframe.plan.scene_plan import ScenePlan
@@ -41,7 +41,7 @@ from voxframe.render.audio.mixdown import (
     sum_groups,
     voice_loudness,
 )
-from voxframe.render.captions.ass import write_ass
+from voxframe.render.captions.ass import build_ass
 from voxframe.render.captions.subtitles import write_srt, write_vtt
 from voxframe.render.compose.captioned import (
     _CRF,
@@ -120,6 +120,56 @@ def _narration_graph(plan: ScenePlan) -> tuple[str, bool]:
     return ";".join(parts), True
 
 
+def _edited_recording(
+    projection: Any, audio_path: Path, caps: FFmpegCapabilities, folder: Path
+) -> Path:
+    """The recording with the cuts taken out and the cold open first (D-199):
+    its pieces in the video's order, each faded over 5 ms at its edges so a
+    join never clicks. Kept by what it is made of."""
+    import hashlib
+
+    folder.mkdir(parents=True, exist_ok=True)
+    stat = audio_path.stat()
+    key = hashlib.sha256(
+        json.dumps(
+            [str(audio_path.resolve()), stat.st_size, stat.st_mtime_ns,
+             projection.source_pieces(), 1]
+        ).encode()
+    ).hexdigest()[:24]
+    edited = folder / f"edited_{key}.wav"
+    if edited.is_file():
+        return edited
+
+    pieces = projection.source_pieces()
+    fade = 0.005
+    parts = [f"[0:a]asplit={len(pieces)}" + "".join(f"[s{i}]" for i in range(len(pieces)))]
+    for i, (start, end) in enumerate(pieces):
+        length = end - start
+        edge = min(fade, length / 4)
+        parts.append(
+            f"[s{i}]atrim=start={start:.6f}:end={end:.6f},asetpts=PTS-STARTPTS,"
+            f"afade=t=in:d={edge:.4f},afade=t=out:st={length - edge:.6f}:d={edge:.4f}[p{i}]"
+        )
+    parts.append(
+        "".join(f"[p{i}]" for i in range(len(pieces))) + f"concat=n={len(pieces)}:v=0:a=1[cut]"
+    )
+    partial = edited.with_suffix(".partial.wav")
+    run_ffmpeg(
+        caps.ffmpeg_path,
+        [
+            "-loglevel", "error",
+            "-i", str(audio_path.resolve()),
+            "-filter_complex", ";".join(parts),
+            "-map", "[cut]", "-c:a", "pcm_s16le",
+            "-y", str(partial.resolve()),
+        ],
+    )
+    partial.replace(edited)
+    log.info("render.pace.recording", pieces=len(pieces), seconds=round(sum(
+        end - start for start, end in pieces), 2))
+    return edited
+
+
 def _scenes_for_captions(plan: ScenePlan) -> tuple[Scene, ...]:
     """Rebuild caption-bearing scenes from the plan.
 
@@ -171,14 +221,63 @@ def _scenes_for_captions(plan: ScenePlan) -> tuple[Scene, ...]:
                 # Scene.text is derived from its words, so the corrected text
                 # arrives with them and must not be passed separately.
                 words=words,
+                # A correction can leave fewer words than were emphasised.
+                emphasis=tuple(i for i in planned.emphasis if 0 <= i < len(words)),
             )
         )
 
     return tuple(scenes)
 
 
+def plan_captions(plan: ScenePlan, style: StyleTemplate, width: int, height: int) -> str:
+    """The captions of a plan, as the ASS document burned into its video.
+
+    The studio's live preview draws this same document over the picture, so
+    what a person sees while editing is what the video will show (D-196).
+    """
+    from voxframe.plan.projection import project
+    from voxframe.render.captions.popups import popup_events, popup_styles
+
+    # The video's own timing, after its cuts (D-199).
+    plan = project(plan).plan
+    captions = plan.captions.apply(style.captions)
+    extra = popup_events(plan, width, height)
+    animations = {
+        scene.index: scene.caption_animation
+        for scene in plan.scenes
+        if scene.caption_animation is not None
+    }
+    return build_ass(
+        _scenes_for_captions(plan), captions, width, height, plan.fps,
+        top_scenes=_captions_above_face(plan, captions, width, height),
+        animations=animations,
+        anchors=_captions_on_divider(plan, captions, width, height),
+        extra_styles=tuple(popup_styles(width, height)) if extra else (),
+        extra_events=tuple(extra),
+    )
+
+
+def _captions_on_divider(
+    plan: ScenePlan, captions: CaptionStyle, width: int, height: int
+) -> dict[int, float]:
+    """Split scenes whose captions sit on the divider, between the picture and
+    the speaker, as these Shorts have them (D-197). Captions a person has
+    placed stay where they put them; a side-by-side split has no divider
+    across the frame to sit on."""
+    from voxframe.plan.scene_layout import LayoutKind
+    from voxframe.render.compose.layout import divider_position, stacked
+
+    if captions.anchor_y is not None or not stacked(width, height):
+        return {}
+    return {
+        scene.index: divider_position(width, height, scene.layout)
+        for scene in plan.scenes
+        if plan.shares_frame(scene) and scene.layout.kind is LayoutKind.SPLIT
+    }
+
+
 def _captions_above_face(
-    plan: ScenePlan, style: StyleTemplate, width: int, height: int
+    plan: ScenePlan, captions: CaptionStyle, width: int, height: int
 ) -> frozenset[int]:
     """Speaker scenes whose captions go to the top, clear of the face (D-193).
 
@@ -190,10 +289,10 @@ def _captions_above_face(
     from voxframe.config.style import CaptionPosition
     from voxframe.render.compose.footage import face_extent
 
-    captions = style.captions
     if plan.footage is None or not plan.footage.track:
         return frozenset()
-    if captions.position is not CaptionPosition.BOTTOM:
+    # Captions a person has placed stay where they put them.
+    if captions.position is not CaptionPosition.BOTTOM or captions.anchor_y is not None:
         return frozenset()
     margin = captions.margin_vertical_px(width, height)
     # The tallest the caption block can be: every line, with line spacing.
@@ -248,6 +347,7 @@ def render_from_plan(
     background: str = "0x141824",
     write_sidecars: bool = True,
     keep_segments: bool = False,
+    studio_copy: bool = False,
 ) -> RenderResult:
     """Render a video from a scene plan.
 
@@ -263,6 +363,8 @@ def render_from_plan(
         background: Colour for scenes with no asset.
         write_sidecars: Also write ``.srt`` and ``.vtt``.
         keep_segments: Leave the intermediate segments on disk, for debugging.
+        studio_copy: Also write the video without its captions, beside it,
+            for the studio to play under its live caption preview (D-196).
 
     Returns:
         Paths written and timing measurements.
@@ -284,6 +386,19 @@ def render_from_plan(
     width, out_height = _dimensions(plan.aspect, height)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     work_dir = output_path.parent / f".{output_path.stem}_segments"
+
+    # --- 0. the pace: cuts, a cold open, punch-ins (D-199) ---
+    #
+    # The video is projected from the plan and its pace; the recording is cut
+    # from the same list, so every word stays with its picture. Everything
+    # after this works on the projection as it always worked on the plan.
+    from voxframe.plan.projection import project
+
+    projection = project(plan)
+    if not projection.identity:
+        sounds = (cache_dir.parent if cache_dir is not None else work_dir) / "sound"
+        audio_path = _edited_recording(projection, audio_path, caps, sounds)
+        plan = projection.plan.model_copy(update={"audio_path": str(audio_path)})
 
     log.info(
         "render.plan.start",
@@ -336,9 +451,8 @@ def render_from_plan(
     # --- 3. captions ---
     ass_path = output_path.with_suffix(".ass")
     caption_scenes = _scenes_for_captions(plan)
-    write_ass(
-        ass_path, caption_scenes, style.captions, width, out_height, plan.fps,
-        top_scenes=_captions_above_face(plan, style, width, out_height),
+    ass_path.write_text(
+        plan_captions(plan, style, width, out_height), encoding="utf-8", newline="\n"
     )
 
     srt_path = vtt_path = None
@@ -351,9 +465,11 @@ def render_from_plan(
     # A change to the sound alone -- the person's mix settings -- then costs no
     # picture work at all: the whole captioned video comes back from the cache
     # and only the sound is made again (D-171).
-    pictures = _pictures(
+    pictures, clean = _pictures(
         plan, segments, transitions, ass_path, caps, work_dir, output_path,
         quality=quality, cache_root=cache_dir.parent if cache_dir is not None else None,
+        want_clean=studio_copy,
+        size=(width, out_height),
     )
 
     # --- 5. the sound: stems, the person's mix, the loudness target, checks ---
@@ -387,6 +503,25 @@ def render_from_plan(
 
     _verify_frame_count(caps, output_path, plan.total_frames)
 
+    studio_path: Path | None = None
+    if clean is not None:
+        # The same pictures, uncaptioned, with the finished video's sound:
+        # both copied, so they are the same frames and the same sound.
+        studio_path = output_path.with_suffix(".studio.mp4")
+        run_ffmpeg(
+            caps.ffmpeg_path,
+            [
+                "-loglevel", "error",
+                "-i", str(clean.resolve()),
+                "-i", str(output_path.resolve()),
+                "-map", "0:v", "-map", "1:a",
+                "-c", "copy",
+                "-t", f"{video_seconds:.6f}",
+                "-movflags", "+faststart",
+                "-y", str(studio_path.resolve()),
+            ],
+        )
+
     if not keep_segments:
         cleanup_segments(work_dir)
 
@@ -397,6 +532,7 @@ def render_from_plan(
         srt_path=srt_path,
         vtt_path=vtt_path,
         ass_path=ass_path,
+        studio_path=studio_path,
         width=width,
         height=out_height,
         fps=plan.fps,
@@ -451,12 +587,19 @@ def _pictures(
     *,
     quality: QualityPreset,
     cache_root: Path | None,
-) -> Path:
-    """The whole video's pictures with captions burned in, and no sound.
+    want_clean: bool = False,
+    size: tuple[int, int] = (0, 0),
+) -> tuple[Path, Path | None]:
+    """The whole video's pictures with captions burned in, and no sound; and,
+    when ``want_clean``, the same pictures without captions.
 
     Keyed by everything that shapes them: each segment's content, the
     transitions, the captions and the quality. Kept in the cache, so a render
     whose pictures have not changed reuses them whole.
+
+    The pictures without captions are kept too, keyed without the captions.
+    The studio plays them under its live caption preview (D-196), and a
+    change to the captions alone then costs only burning them in again.
 
     Segments are named by position (``scene_00001.mp4``), so their names say
     nothing about what is in them. Keyed by names, a new picture, card text or
@@ -466,27 +609,47 @@ def _pictures(
     import hashlib
     import shutil
 
+    from voxframe.render.compose.stickers import overlay_graph, picture_overlays
+
+    width, height = size
+    laid = picture_overlays(plan, width, height) if width and height else []
+
+    content = {
+        "segments": [_content_digest(segment.path) for segment in segments],
+        "transitions": [repr(t) for t in transitions],
+        "quality": quality.value,
+        "frames": plan.total_frames,
+        "fps": plan.fps,
+        "version": PICTURES_VERSION,
+    }
     key_material = json.dumps(
         {
-            "segments": [_content_digest(segment.path) for segment in segments],
-            "transitions": [repr(t) for t in transitions],
+            **content,
             "captions": hashlib.sha256(ass_path.read_bytes()).hexdigest(),
-            "quality": quality.value,
-            "frames": plan.total_frames,
-            "fps": plan.fps,
-            "version": PICTURES_VERSION,
+            # Stickers and images are burned in with the captions (D-198).
+            **({"overlays": [item.signature() for item in laid]} if laid else {}),
         },
         sort_keys=True,
     )
     key = hashlib.sha256(key_material.encode()).hexdigest()[:24]
+    clean_key = hashlib.sha256(json.dumps(content, sort_keys=True).encode()).hexdigest()[:24]
     folder = (cache_root / "pictures") if cache_root is not None else work_dir
+    folder.mkdir(parents=True, exist_ok=True)
     cached = folder / f"{key}.mp4"
+    # Kept apart from the captioned pictures, which are counted by name.
+    clean = folder / "clean" / f"{clean_key}.mp4"
+    clean.parent.mkdir(parents=True, exist_ok=True)
+
+    if not clean.is_file() and (want_clean or not cached.is_file()):
+        concatenated = work_dir / "concatenated.mp4"
+        concat_segments(segments, caps, concatenated, work_dir, transitions, plan.fps)
+        partial_clean = clean.with_suffix(".partial.mp4")
+        shutil.move(str(concatenated), str(partial_clean))
+        partial_clean.replace(clean)
+
     if cached.is_file():
         log.info("render.pictures.reused", key=key)
-        return cached
-
-    concatenated = work_dir / "concatenated.mp4"
-    concat_segments(segments, caps, concatenated, work_dir, transitions, plan.fps)
+        return cached, (clean if want_clean else None)
 
     try:
         font_directory: Path | None = fonts_dir()
@@ -502,14 +665,24 @@ def _pictures(
         ass_for_filter = ass_path
     caption_filter, cwd = ass_filter(ass_for_filter, fontsdir=font_directory)
 
-    folder.mkdir(parents=True, exist_ok=True)
     partial = cached.with_suffix(".partial.mp4")
+    if laid:
+        # Stickers and images under the captions, which must stay readable.
+        inputs, graph, last = overlay_graph(laid, plan.fps, height)
+        picture: list[str] = [
+            *inputs,
+            "-filter_complex",
+            f"[0:v]null[base];{graph};[{last}]{caption_filter},format=yuv420p[v]",
+            "-map", "[v]",
+        ]
+    else:
+        picture = ["-vf", f"{caption_filter},format=yuv420p"]
     run_ffmpeg(
         caps.ffmpeg_path,
         [
             "-loglevel", "error",
-            "-i", str(concatenated.resolve()),
-            "-vf", f"{caption_filter},format=yuv420p",
+            "-i", str(clean.resolve()),
+            *picture,
             "-an",
             "-frames:v", str(plan.total_frames),
             "-c:v", "libx264",
@@ -522,7 +695,7 @@ def _pictures(
     partial.replace(cached)
     if staging is not None:
         shutil.rmtree(staging, ignore_errors=True)
-    return cached
+    return cached, (clean if want_clean else None)
 
 
 def _stems(

@@ -116,6 +116,9 @@ class JobOptions:
     #: Show the recording's own picture, when it has one, with the matched
     #: pictures as cutaways (D-192). Off: pictures only, as before.
     footage: bool = False
+    #: Also keep the video without captions, for the studio's live caption
+    #: preview (D-196). Set by the app; the command line has no studio.
+    studio_copy: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -406,6 +409,7 @@ def run_pipeline(
             height=options.height,
             music=options.music,
             cache_dir=settings.cache_path / "segments",
+            studio_copy=options.studio_copy,
         )
     else:
         result = render_captioned_video(
@@ -478,6 +482,7 @@ def render_plan(
     quality: QualityPreset = QualityPreset.STANDARD,
     height: int = 1080,
     progress: ProgressCallback = _ignore,
+    studio_copy: bool = False,
 ) -> PipelineOutcome:
     """Render an existing plan exactly as it stands.
 
@@ -515,6 +520,7 @@ def render_plan(
         height=height,
         music=music,
         cache_dir=settings.cache_path / "segments",
+        studio_copy=studio_copy,
     )
     progress(Stage.DONE, "Done", 1.0)
 

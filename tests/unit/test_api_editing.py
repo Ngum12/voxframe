@@ -593,6 +593,7 @@ class TestUndoRedo:
         assert state == {
             "can_undo": False, "can_redo": False, "pending": 0,
             "undo_label": "", "redo_label": "", "changed_scenes": [], "changed_pictures": [],
+            "captions_changed": False,
         }
         assert client.post(f"/api/jobs/{finished_job}/plan/undo").status_code == 409
 

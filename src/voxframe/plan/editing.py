@@ -20,6 +20,11 @@ from __future__ import annotations
 
 import structlog
 
+from voxframe.config.style import CaptionAnimation
+from voxframe.plan.caption_choice import CaptionChoice
+from voxframe.plan.overlays import Overlay, OverlayKind, counter_parts
+from voxframe.plan.pace import Cut, CutKind, PunchIn
+from voxframe.plan.scene_layout import SceneLayout
 from voxframe.plan.scene_plan import MotionKind, PlanAsset, PlannedScene, ScenePlan, Shot
 
 __all__ = [
@@ -242,9 +247,12 @@ def correct_caption(plan: ScenePlan, index: int, text: str) -> ScenePlan:
         raise EditError("This scene has no speech to caption.")
 
     original = " ".join(scene.text.split())
-    edited = scene.model_copy(
-        update={"caption_text": "" if cleaned == original else cleaned}
-    )
+    corrected = "" if cleaned == original else cleaned
+    update: dict[str, object] = {"caption_text": corrected}
+    if corrected != scene.caption_text:
+        # Emphasis marks words by position; new words are not the old ones.
+        update["emphasis"] = ()
+    edited = scene.model_copy(update=update)
 
     log.info(
         "plan.edit.caption",
@@ -296,7 +304,13 @@ def _retile(plan: ScenePlan, scenes: list[PlannedScene]) -> ScenePlan:
     """
     rebuilt: list[PlannedScene] = []
     cursor = 0
+    # Pop-ups follow their scene to its new number (D-198); a new card is
+    # not one of the old scenes.
+    old_index = {id(scene): scene.index for scene in plan.scenes}
+    renumbered: dict[int, int] = {}
     for position, scene in enumerate(scenes):
+        if id(scene) in old_index:
+            renumbered[old_index[id(scene)]] = position
         duration = scene.duration_frames
         shift = (cursor - scene.start_frame) / plan.fps
         update: dict[str, object] = {
@@ -313,7 +327,14 @@ def _retile(plan: ScenePlan, scenes: list[PlannedScene]) -> ScenePlan:
             )
         rebuilt.append(scene.model_copy(update=update))
         cursor += duration
-    return plan.model_copy(update={"scenes": tuple(rebuilt), "total_frames": cursor})
+    overlays = tuple(
+        overlay.model_copy(update={"scene": renumbered[overlay.scene]})
+        for overlay in plan.overlays
+        if overlay.scene in renumbered
+    )
+    return plan.model_copy(
+        update={"scenes": tuple(rebuilt), "total_frames": cursor, "overlays": overlays}
+    )
 
 
 def _new_card(plan: ScenePlan, kind: str, text: str, seconds: float) -> PlannedScene:
@@ -485,3 +506,254 @@ def set_motion(plan: ScenePlan, index: int, on: bool) -> ScenePlan:
     # The image is unchanged, so its source is too: an atmospheric scene stays
     # labelled atmospheric (D-137).
     return _replace(plan, scene.model_copy(update=update))
+
+
+# --- captions (D-196) ----------------------------------------------------------
+
+
+def set_captions(plan: ScenePlan, choice: CaptionChoice) -> ScenePlan:
+    """Choose how the whole video's captions look and move."""
+    log.info(
+        "plan.edit.captions",
+        animation=choice.animation.value if choice.animation else None,
+        transition=choice.transition.value if choice.transition else None,
+        placed=choice.anchor_y is not None,
+        size=choice.size,
+    )
+    return plan.model_copy(update={"captions": choice})
+
+
+def set_scene_captions(
+    plan: ScenePlan,
+    index: int,
+    animation: CaptionAnimation | None,
+    emphasis: tuple[int, ...],
+) -> ScenePlan:
+    """Give one scene its own caption animation, and choose its emphasised
+    words. ``None`` follows the whole video's choice.
+
+    Raises:
+        EditError: The scene is a card, or a word chosen is not in it.
+    """
+    if 0 <= index < len(plan.scenes) and plan.scenes[index].is_card:
+        raise EditError("A title or chapter card has no captions.")
+    scene = _scene(plan, index)
+    count = len(scene.caption_words())
+    marked = tuple(sorted(set(emphasis)))
+    if any(not 0 <= word < count for word in marked):
+        raise EditError("That word is not in this scene's caption.")
+    log.info(
+        "plan.edit.scene_captions",
+        scene=index,
+        animation=animation.value if animation else None,
+        emphasis=len(marked),
+    )
+    return _replace(
+        plan, scene.model_copy(update={"caption_animation": animation, "emphasis": marked})
+    )
+
+
+# --- layout (D-197) -------------------------------------------------------------
+
+
+def set_layout(plan: ScenePlan, index: int, layout: SceneLayout) -> ScenePlan:
+    """Share one scene's frame between the speaker and its picture: a split
+    screen or an inset. Full gives the frame back to the shot.
+
+    Raises:
+        EditError: The scene is a card, or the video has no recording of the
+            speaker to show.
+    """
+    if 0 <= index < len(plan.scenes) and plan.scenes[index].is_card:
+        raise EditError("A title or chapter card fills the frame with its text.")
+    scene = _scene(plan, index)
+    if not layout.is_full:
+        if plan.footage is None:
+            raise EditError(
+                "This video was made from sound only, so there is no recording of you "
+                "to put beside the picture. Make it again from a video file with "
+                '"Use my video" on.'
+            )
+        if scene.footage_start is None:
+            raise EditError("This scene has no part of your recording to show.")
+    log.info("plan.edit.layout", scene=index, layout=layout.kind.value)
+    return _replace(plan, scene.model_copy(update={"layout": layout}))
+
+
+# --- pop-ups (D-198) ------------------------------------------------------------
+
+#: More than this many pop-ups on one video is a mistake, not an edit.
+MAX_OVERLAYS = 200
+
+
+def _check_overlay(plan: ScenePlan, overlay: Overlay) -> None:
+    if not 0 <= overlay.scene < len(plan.scenes) or plan.scenes[overlay.scene].is_card:
+        raise EditError("Choose a spoken scene for the pop-up to appear in.")
+    words = plan.scenes[overlay.scene].caption_words()
+    if words and overlay.word >= len(words):
+        raise EditError("That word is not in the scene's caption.")
+    if overlay.kind is OverlayKind.TEXT and not overlay.text.strip():
+        raise EditError("Write what the pop-up says.")
+    if overlay.kind is OverlayKind.COUNTER and counter_parts(overlay.text) is None:
+        raise EditError('A counter needs a number to count to, such as "3", "$1,200" or "90%".')
+    if overlay.kind is OverlayKind.STICKER:
+        from voxframe.render.compose.stickers import sticker_names
+
+        if overlay.sticker not in sticker_names():
+            raise EditError("Choose one of the stickers.")
+
+
+def add_overlay(plan: ScenePlan, overlay: Overlay) -> ScenePlan:
+    """Add a pop-up.
+
+    Raises:
+        EditError: It is not on a spoken scene's word, or is missing what its
+            kind needs, or the video has as many as it can take.
+    """
+    if len(plan.overlays) >= MAX_OVERLAYS:
+        raise EditError(f"A video can have up to {MAX_OVERLAYS} pop-ups.")
+    if any(existing.id == overlay.id for existing in plan.overlays):
+        raise EditError("That pop-up is already there.")
+    _check_overlay(plan, overlay)
+    log.info("plan.edit.overlay_added", kind=overlay.kind.value, scene=overlay.scene)
+    return plan.model_copy(update={"overlays": (*plan.overlays, overlay)})
+
+
+def update_overlay(plan: ScenePlan, overlay: Overlay) -> ScenePlan:
+    """Change a pop-up: what it is, when, where, how it comes on.
+
+    Raises:
+        EditError: There is no such pop-up, or the change is not valid.
+    """
+    if not any(existing.id == overlay.id for existing in plan.overlays):
+        raise EditError("That pop-up is no longer there.")
+    _check_overlay(plan, overlay)
+    return plan.model_copy(
+        update={
+            "overlays": tuple(
+                overlay if existing.id == overlay.id else existing for existing in plan.overlays
+            )
+        }
+    )
+
+
+def remove_overlay(plan: ScenePlan, overlay_id: str) -> ScenePlan:
+    """Take a pop-up out.
+
+    Raises:
+        EditError: There is no such pop-up.
+    """
+    remaining = tuple(o for o in plan.overlays if o.id != overlay_id)
+    if len(remaining) == len(plan.overlays):
+        raise EditError("That pop-up is no longer there.")
+    log.info("plan.edit.overlay_removed")
+    return plan.model_copy(update={"overlays": remaining})
+
+
+def set_progress_bar(plan: ScenePlan, on: bool) -> ScenePlan:
+    """Show a bar along the bottom that fills as the video plays, or not."""
+    return plan.model_copy(update={"progress_bar": on})
+
+
+# --- the hook and the pace (D-199) ----------------------------------------------
+
+#: A cold open shorter than this is a blip; longer, it is no longer a hook.
+COLD_OPEN_SECONDS = (0.8, 12.0)
+
+
+def set_found_cuts(plan: ScenePlan, found: tuple[Cut, ...]) -> ScenePlan:
+    """Replace the cuts found automatically with ``found``; cuts a person made
+    stay, and a found cut a person switched off stays off."""
+    switched_off = {(c.start, c.end) for c in plan.pace.cuts if not c.on}
+    manual = tuple(c for c in plan.pace.cuts if c.kind is CutKind.MANUAL)
+    found = tuple(
+        c.model_copy(update={"on": False}) if (c.start, c.end) in switched_off else c
+        for c in found
+    )
+    log.info("plan.edit.cuts_found", cuts=len(found))
+    return _with_pace(plan, cuts=tuple(sorted((*manual, *found), key=lambda c: c.start)))
+
+
+def _with_pace(plan: ScenePlan, **changes: object) -> ScenePlan:
+    return plan.model_copy(update={"pace": plan.pace.model_copy(update=changes)})
+
+
+def switch_cut(plan: ScenePlan, index: int, on: bool) -> ScenePlan:
+    """Make a cut, or undo it, on its own.
+
+    Raises:
+        EditError: There is no such cut.
+    """
+    if not 0 <= index < len(plan.pace.cuts):
+        raise EditError("That cut is no longer there.")
+    cuts = list(plan.pace.cuts)
+    cuts[index] = cuts[index].model_copy(update={"on": on})
+    return _with_pace(plan, cuts=tuple(cuts))
+
+
+def add_cut(plan: ScenePlan, start: float, end: float) -> ScenePlan:
+    """Cut a stretch a person chose, on the plan's clock.
+
+    Raises:
+        EditError: It is too short to see, or it would cut the whole video.
+    """
+    total = plan.total_frames / plan.fps
+    start, end = max(0.0, start), min(total, end)
+    if end - start < 0.05:
+        raise EditError("Choose a longer stretch to cut.")
+    cut = Cut(start=round(start, 3), end=round(end, 3), kind=CutKind.MANUAL, label="your cut")
+    edited = _with_pace(plan, cuts=tuple(sorted((*plan.pace.cuts, cut), key=lambda c: c.start)))
+    from voxframe.plan.projection import project
+
+    try:
+        project(edited)
+    except Exception as exc:
+        raise EditError("That would cut everything there is.") from exc
+    return edited
+
+
+def remove_cut(plan: ScenePlan, index: int) -> ScenePlan:
+    if not 0 <= index < len(plan.pace.cuts):
+        raise EditError("That cut is no longer there.")
+    return _with_pace(plan, cuts=plan.pace.cuts[:index] + plan.pace.cuts[index + 1 :])
+
+
+def set_cold_open(plan: ScenePlan, span: tuple[float, float] | None) -> ScenePlan:
+    """Play a line first, before the video begins: its hook. ``None`` takes
+    it away.
+
+    Raises:
+        EditError: It is too short or too long to hook.
+    """
+    if span is not None:
+        start, end = span
+        shortest, longest = COLD_OPEN_SECONDS
+        if not shortest <= end - start <= longest:
+            raise EditError(
+                f"A cold open is a single line: between {shortest:g} and {longest:g} seconds."
+            )
+    log.info("plan.edit.cold_open", on=span is not None)
+    return _with_pace(plan, cold_open=span)
+
+
+def set_punch_ins(plan: ScenePlan, punches: tuple[PunchIn, ...]) -> ScenePlan:
+    return _with_pace(plan, punch_ins=punches)
+
+
+def switch_punch_in(plan: ScenePlan, index: int, on: bool) -> ScenePlan:
+    if not 0 <= index < len(plan.pace.punch_ins):
+        raise EditError("That punch-in is no longer there.")
+    punches = list(plan.pace.punch_ins)
+    punches[index] = punches[index].model_copy(update={"on": on})
+    return _with_pace(plan, punch_ins=tuple(punches))
+
+
+def set_alternate_zoom(plan: ScenePlan, on: bool) -> ScenePlan:
+    return _with_pace(plan, alternate_zoom=on)
+
+
+def set_hook_title(plan: ScenePlan, text: str) -> ScenePlan:
+    cleaned = " ".join(text.split())
+    if len(cleaned) > 80:
+        raise EditError("A hook title is read in a second or two: keep it under 80 characters.")
+    return plan.model_copy(update={"hook_title": cleaned})

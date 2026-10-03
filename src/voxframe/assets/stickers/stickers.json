@@ -1,0 +1,385 @@
+[
+ {
+  "name": "fire",
+  "label": "Fire",
+  "words": [
+   "fire",
+   "hot",
+   "burn",
+   "burning",
+   "lit",
+   "amazing"
+  ]
+ },
+ {
+  "name": "hundred-points",
+  "label": "100",
+  "words": [
+   "hundred",
+   "perfect",
+   "100",
+   "totally",
+   "absolutely"
+  ]
+ },
+ {
+  "name": "check-mark-button",
+  "label": "Tick",
+  "words": [
+   "correct"
+  ]
+ },
+ {
+  "name": "cross-mark",
+  "label": "Cross",
+  "words": [
+   "wrong",
+   "mistake",
+   "fail"
+  ]
+ },
+ {
+  "name": "warning",
+  "label": "Warning",
+  "words": [
+   "warning",
+   "careful",
+   "danger",
+   "dangerous",
+   "risk",
+   "beware"
+  ]
+ },
+ {
+  "name": "light-bulb",
+  "label": "Idea",
+  "words": [
+   "idea",
+   "tip",
+   "realise",
+   "realize"
+  ]
+ },
+ {
+  "name": "red-heart",
+  "label": "Heart",
+  "words": [
+   "love",
+   "loved"
+  ]
+ },
+ {
+  "name": "star",
+  "label": "Star",
+  "words": []
+ },
+ {
+  "name": "glowing-star",
+  "label": "Glowing star",
+  "words": [
+   "brilliant"
+  ]
+ },
+ {
+  "name": "sparkles",
+  "label": "Sparkles",
+  "words": [
+   "magic",
+   "beautiful"
+  ]
+ },
+ {
+  "name": "party-popper",
+  "label": "Party",
+  "words": [
+   "celebrate",
+   "party",
+   "congratulations"
+  ]
+ },
+ {
+  "name": "clapping-hands",
+  "label": "Applause",
+  "words": [
+   "bravo",
+   "applause"
+  ]
+ },
+ {
+  "name": "thumbs-up",
+  "label": "Thumbs up",
+  "words": []
+ },
+ {
+  "name": "thumbs-down",
+  "label": "Thumbs down",
+  "words": []
+ },
+ {
+  "name": "raising-hands",
+  "label": "Hooray",
+  "words": [
+   "hooray",
+   "yay"
+  ]
+ },
+ {
+  "name": "flexed-biceps",
+  "label": "Strong",
+  "words": []
+ },
+ {
+  "name": "eyes",
+  "label": "Eyes",
+  "words": []
+ },
+ {
+  "name": "thinking-face",
+  "label": "Thinking",
+  "words": []
+ },
+ {
+  "name": "face-with-open-mouth",
+  "label": "Surprised",
+  "words": [
+   "wow",
+   "surprise",
+   "surprising",
+   "shocked"
+  ]
+ },
+ {
+  "name": "exploding-head",
+  "label": "Mind blown",
+  "words": [
+   "crazy",
+   "insane",
+   "incredible",
+   "unbelievable"
+  ]
+ },
+ {
+  "name": "loudly-crying-face",
+  "label": "Crying",
+  "words": [
+   "tragic",
+   "loss"
+  ]
+ },
+ {
+  "name": "face-with-tears-of-joy",
+  "label": "Laughing",
+  "words": [
+   "hilarious"
+  ]
+ },
+ {
+  "name": "smiling-face-with-sunglasses",
+  "label": "Cool",
+  "words": []
+ },
+ {
+  "name": "rocket",
+  "label": "Rocket",
+  "words": [
+   "launch",
+   "growth",
+   "rocket"
+  ]
+ },
+ {
+  "name": "money-bag",
+  "label": "Money",
+  "words": [
+   "money",
+   "cash"
+  ]
+ },
+ {
+  "name": "money-with-wings",
+  "label": "Spending",
+  "words": [
+   "expensive"
+  ]
+ },
+ {
+  "name": "chart-increasing",
+  "label": "Up",
+  "words": [
+   "increase",
+   "rise",
+   "rising",
+   "higher"
+  ]
+ },
+ {
+  "name": "chart-decreasing",
+  "label": "Down",
+  "words": [
+   "decrease",
+   "fall",
+   "falling",
+   "lower"
+  ]
+ },
+ {
+  "name": "megaphone",
+  "label": "Announce",
+  "words": [
+   "announce",
+   "news"
+  ]
+ },
+ {
+  "name": "bell",
+  "label": "Bell",
+  "words": [
+   "subscribe",
+   "notification",
+   "reminder"
+  ]
+ },
+ {
+  "name": "round-pushpin",
+  "label": "Place",
+  "words": [
+   "location"
+  ]
+ },
+ {
+  "name": "globe-showing-europe-africa",
+  "label": "Globe",
+  "words": [
+   "world",
+   "africa",
+   "cameroon",
+   "global",
+   "country"
+  ]
+ },
+ {
+  "name": "water-wave",
+  "label": "Wave",
+  "words": [
+   "water",
+   "flood",
+   "floods",
+   "flooding",
+   "ocean",
+   "river"
+  ]
+ },
+ {
+  "name": "cloud-with-rain",
+  "label": "Rain",
+  "words": [
+   "rain",
+   "storm",
+   "rainy"
+  ]
+ },
+ {
+  "name": "house",
+  "label": "Home",
+  "words": []
+ },
+ {
+  "name": "police-car-light",
+  "label": "Alarm",
+  "words": [
+   "emergency",
+   "alert",
+   "urgent",
+   "breaking"
+  ]
+ },
+ {
+  "name": "stop-sign",
+  "label": "Stop",
+  "words": [
+   "stop",
+   "avoid",
+   "quit"
+  ]
+ },
+ {
+  "name": "backhand-index-pointing-down",
+  "label": "Point down",
+  "words": []
+ },
+ {
+  "name": "backhand-index-pointing-right",
+  "label": "Point right",
+  "words": []
+ },
+ {
+  "name": "red-question-mark",
+  "label": "Question",
+  "words": []
+ },
+ {
+  "name": "red-exclamation-mark",
+  "label": "Exclamation",
+  "words": []
+ },
+ {
+  "name": "alarm-clock",
+  "label": "Time",
+  "words": [
+   "deadline"
+  ]
+ },
+ {
+  "name": "books",
+  "label": "Books",
+  "words": [
+   "school"
+  ]
+ },
+ {
+  "name": "graduation-cap",
+  "label": "Graduate",
+  "words": [
+   "student",
+   "university",
+   "graduate",
+   "degree"
+  ]
+ },
+ {
+  "name": "gem-stone",
+  "label": "Gem",
+  "words": [
+   "valuable",
+   "precious",
+   "secret"
+  ]
+ },
+ {
+  "name": "trophy",
+  "label": "Trophy",
+  "words": [
+   "winner",
+   "champion",
+   "award"
+  ]
+ },
+ {
+  "name": "crown",
+  "label": "Crown",
+  "words": [
+   "king",
+   "queen"
+  ]
+ },
+ {
+  "name": "folded-hands",
+  "label": "Thank you",
+  "words": [
+   "thanks",
+   "thank",
+   "pray",
+   "grateful"
+  ]
+ }
+]

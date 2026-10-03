@@ -80,6 +80,8 @@ class RenderResult:
     music_note: str = ""
     #: The sound's measurements and checks (D-171), when it was mixed.
     sound: dict[str, object] | None = None
+    #: The video without captions, for the studio's live preview (D-196).
+    studio_path: Path | None = None
 
     @property
     def realtime_factor(self) -> float:

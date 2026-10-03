@@ -261,6 +261,20 @@ def test_the_built_bundle_matches_the_committed_source(built_app: None) -> None:
         path.relative_to(static_root()).as_posix()
         for path in (static_root() / "assets").glob("*")
     }
+    # Scripts name the files they load themselves: the live captions' workers,
+    # WebAssembly and fallback font (D-196). Followed until nothing new turns
+    # up, so a file only a worker loads still counts as used.
+    while True:
+        found = {
+            name
+            for script in referenced
+            if script.endswith(".js") and (static_root() / script).is_file()
+            for name in present - referenced
+            if name.split("/")[-1] in (static_root() / script).read_text(encoding="utf-8")
+        }
+        if not found:
+            break
+        referenced |= found
 
     missing = referenced - present
     assert not missing, f"index.html references files that are not shipped: {missing}"

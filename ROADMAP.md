@@ -12,21 +12,12 @@ Three additions to the studio, built in this order.
 
 ### 1. Caption styles and animations
 
-- **Styles:**
-  - **Highlight** (today's): the line, with the spoken word coloured;
-  - **Karaoke:** the line fills with colour as it is spoken;
-  - **Pop-in:** each word appears as it is spoken;
-  - **Typewriter:** the line builds up word by word;
-  - **Emphasis:** chosen words larger and in colour;
-  - **Plain:** no animation.
-- **Positions:** bottom, centre or top, with a small lift to clear a lower
-  third or a face.
-- **Presets:** each template has its own style, and any scene can use a
-  different one.
-- **Emphasis words** are yours to choose. A **suggest** button marks the words
-  you stressed most, and nothing changes until you click.
-- **Captions stay frame-exact.** Timing still comes only from each word's
-  own timestamp.
+- **Done** for Shorts and every other video (D-196): seven styles, caption
+  transitions, emphasised words, placement and size, seen live in the
+  studio.
+- **Still to come:** each template's own default style, and a **suggest**
+  button that marks the words you stressed most for emphasis; nothing
+  changes until you click.
 
 ### 2. Transitions
 
@@ -54,43 +45,63 @@ Three additions to the studio, built in this order.
   - **a clear note** that some openly licensed music is also registered with
     YouTube's Content ID, so a video using it may still get a claim.
 
-## Then: Shorts
+## Now: Shorts that hook
 
 Short vertical videos with real editing, made from a recording **or a
-video**. Built in this order, each step usable on its own:
+video**, that hook a viewer in the first seconds and keep them. Every choice
+stays yours, and can be changed after the video is made. Built in this order,
+each step usable on its own:
 
-### 1. Your video on screen
+### Done: your video on screen, framing that follows you
 
-- **Use the speaker's own footage.** A video you add is no longer reduced to
-  its sound: you are on screen, in sync to the frame, and the matched
-  pictures cut in as cutaways when you mention something they show.
-- **You choose:** "Use my video" or "Pictures only", and any scene can be
-  switched between you and its picture in the studio.
-- **Framed for the shape you chose.** A landscape recording made vertical
-  keeps you in the frame rather than the middle of the room.
+- **Your own footage**, in sync to the frame, with matched pictures cut in
+  as cutaways (D-192); **framing that follows your face** in a vertical crop
+  (D-193); **captions that fit** the frame and stay clear of your face
+  (D-193, D-194).
 
-### 2. Framing that follows you
+### 1. Caption styles, seen live (D-196) - done
 
-- **Face tracking**, on your computer, so a 9:16 crop follows you as you
-  move, smoothly, without jitter. A download the first time it is used, like
-  the music component.
-- **Captions placed clear of your face.**
+- **Seven styles:** highlight, pop, bounce, spotlight, karaoke, typewriter
+  and plain, every word moving exactly when it is said.
+- **Transitions** for each caption: cut, fade, pop in, slide up, zoom in.
+- **Emphasised words**, larger and in colour; **size**, **all caps**, and
+  captions **dragged** to any height in the player.
+- **Seen live in the studio,** drawn by the same engine that burns them into
+  the video, before the video is made again.
 
-### 3. Jump cuts
+### 2. Split screen and picture-in-picture (D-197) - done
 
-- **Silences, "um"s and false starts removed**, cut on the word timestamps,
-  so sound and picture stay together. Every cut is shown and can be undone.
-- **Zoom punch-ins** on the words you stress.
+- **A screen divider:** the picture or video clip of what you are talking
+  about on top, you below, explaining it; the divide where you choose.
+- **Picture-in-picture:** you in a rounded or circular frame over the
+  picture, or the picture over you; any size, anywhere.
+- **Per scene,** like the shot: full picture, full you, split or inset.
+- **Your own clips** as a scene's picture, playing above you in a split.
 
-### 4. Clips from a long recording
+### 3. Pop-ups on cue (D-198) - done
 
-- **Suggested Shorts:** 15 to 60 seconds each, starting and ending on a
-  sentence, scored by the same plain signals as highlights. You preview,
-  trim and choose; nothing is posted or chosen for you.
-- **Bold Shorts captions** (from 0.3.0's caption styles), a hook title over
-  the first seconds, and a progress bar.
-- **Export presets** for YouTube Shorts, TikTok, Reels and WhatsApp Status:
-  length, loudness, and captions kept clear of each app's buttons.
+- **Text callouts, emoji and stickers, your own images, arrows and circles,
+  number counters and a progress bar,** each tied to a word, so it appears
+  when that word is said and moves with it if the timing changes.
+- **Entrances and exits** (pop, slide, bounce, fade), placed by dragging in
+  the player, and suggestions you accept with a click.
+
+### 4. The hook and the pace
+
+- **A hook finder** that ranks your strongest opening lines by plain signals
+  (a question, a number, "you", a short sentence, the energy in your voice),
+  and a **cold open** that starts on the one you pick.
+- **A hook title** over the first seconds.
+- **Jump cuts:** silences, "um"s and false starts removed on the word
+  timestamps, every cut shown and undoable; **zoom punch-ins** on stressed
+  words.
+- **A retention check** that marks long stretches where nothing changes.
+
+### Waiting: clips from a long recording
+
+- Suggested 15 to 60 second Shorts from a long recording, and export presets
+  for YouTube Shorts, TikTok and Reels. Held until the Shorts themselves are
+  as good as they can be.
 
 ## Later
 

@@ -15,7 +15,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
+  type CaptionLook,
   type EditResult,
+  type OverlaysState,
   type Job,
   type PlanEditResult,
   type PlanHistory,
@@ -24,20 +26,29 @@ import {
   addTitle,
   artifactUrl,
   followJob,
+  getCaptionLook,
+  getCaptions,
   getJob,
+  getOverlays,
   getPlan,
   getPlanHistory,
   openFolder,
   redoPlan,
   rerenderJob,
+  setCaptions,
   undoPlan,
+  updateOverlay,
 } from "../api";
 import { Notice } from "../components";
-import { SceneDetail, TitleAdder, sceneThumbnail, showsSpeaker } from "./Filmstrip";
+import { CaptionStyle, SceneCaptionStyle } from "./CaptionStyle";
+import { SceneDetail, TitleAdder, sceneThumbnail, sharesFrame, showsSpeaker } from "./Filmstrip";
+import { LayoutPicker } from "./Layout";
+import { PopupLayer, PopupsPanel } from "./Popups";
+import { liveCaptionsSupported, useLiveCaptions } from "./LiveCaptions";
 import { SoundPanel } from "./Sound";
 import { Timeline, type TimedWord } from "./Timeline";
 
-type Tab = "scenes" | "captions" | "sound" | "style";
+type Tab = "scenes" | "captions" | "popups" | "sound" | "style";
 
 /** The studio's panel sizes and whether each is open, kept between sessions (D-183). */
 interface Layout {
@@ -121,6 +132,7 @@ function Resizer({
 const TABS: { id: Tab; label: string }[] = [
   { id: "scenes", label: "Scenes" },
   { id: "captions", label: "Captions" },
+  { id: "popups", label: "Pop-ups" },
   { id: "sound", label: "Sound" },
   { id: "style", label: "Style" },
 ];
@@ -193,7 +205,15 @@ export function Studio({
   const [toast, setToast] = useState<string | null>(null);
   const [addingTitle, setAddingTitle] = useState(false);
   const [layout, setLayout] = useState<Layout>(loadLayout);
-  const video = useRef<HTMLVideoElement>(null);
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+  const [captions, setCaptionsDoc] = useState<string | null>(null);
+  const [look, setLook] = useState<CaptionLook | null>(null);
+  const [liveFailed, setLiveFailed] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  const [dragAnchor, setDragAnchor] = useState<number | null>(null);
+  const [popups, setPopups] = useState<OverlaysState | null>(null);
+  const [selectedPopup, setSelectedPopup] = useState<string | null>(null);
+  const video = useRef<HTMLVideoElement | null>(null);
   const frame = useRef<HTMLDivElement>(null);
   const shortcuts = useRef<HTMLDialogElement>(null);
   const toastTimer = useRef<number | undefined>(undefined);
@@ -225,6 +245,48 @@ export function Studio({
   useEffect(() => {
     reload().catch((caught: Error) => setError(caught.message));
   }, [reload]);
+
+  // --- live captions (D-196) ---------------------------------------------------
+
+  // The video without its captions, with the captions drawn over it from the
+  // plan as it is now. A video made before there was a studio copy, or a
+  // browser that cannot draw them, plays the captioned video instead.
+  const live = job.artifacts.includes("studio") && liveCaptionsSupported() && !liveFailed;
+  useEffect(() => {
+    if (!plan) return;
+    let current = true;
+    const timer = window.setTimeout(() => {
+      // Both at once, so the drawn captions and the controls change together.
+      void Promise.all([
+        getCaptionLook(jobId),
+        live ? getCaptions(jobId) : Promise.resolve(null),
+        getOverlays(jobId),
+      ])
+        .then(([loadedLook, document, overlays]) => {
+          if (!current) return;
+          setLook(loadedLook);
+          setPopups(overlays);
+          if (document !== null) setCaptionsDoc(document);
+        })
+        .catch(() => current && live && setLiveFailed(true));
+    }, 80);
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [jobId, plan, live, videoVersion]);
+  useLiveCaptions(live ? videoElement : null, live ? captions : null, () => setLiveFailed(true));
+
+  // While the captions are dragged, the drawn captions follow the finger;
+  // they settle when the document for their new place arrives.
+  useEffect(() => setDragAnchor(null), [look]);
+  useEffect(() => {
+    const canvas = frame.current?.querySelector<HTMLCanvasElement>("canvas.JASSUB");
+    if (!canvas) return;
+    const shift = dragAnchor !== null && look ? dragAnchor - look.effective.anchor_y : 0;
+    const height = frame.current?.getBoundingClientRect().height ?? 0;
+    canvas.style.transform = shift ? `translateY(${shift * height}px)` : "";
+  }, [dragAnchor, look, captions]);
 
   // --- the player ------------------------------------------------------------
 
@@ -286,6 +348,21 @@ export function Studio({
   const pending = history?.pending ?? job.summary.pending_edits ?? 0;
   const changed = new Set(history?.changed_scenes ?? []);
   const changedPictures = new Set(history?.changed_pictures ?? []);
+
+  const saveAnchor = useCallback(
+    async (anchor: number) => {
+      if (!look) return;
+      try {
+        const result = await setCaptions(jobId, { ...look.choice, anchor_y: Math.round(anchor * 1000) / 1000 });
+        setPlan((current) => current && { ...current, captions: result.captions });
+        setHistory(result);
+      } catch (caught) {
+        setError(caught instanceof ApiError ? caught.message : "The captions could not be moved.");
+        setDragAnchor(null);
+      }
+    },
+    [jobId, look],
+  );
 
   const afterEdit = useCallback(
     (result: EditResult | PlanEditResult) => {
@@ -385,7 +462,7 @@ export function Studio({
       } else if (key === "?") shortcuts.current?.showModal();
       else if (key === "[" && !mod) togglePanel();
       else if (key === "]" && !mod) toggleTimeline();
-      else if (["1", "2", "3", "4"].includes(key) && !mod) setTab(TABS[Number(key) - 1].id);
+      else if (["1", "2", "3", "4", "5"].includes(key) && !mod) setTab(TABS[Number(key) - 1].id);
       else if ((key === "+" || key === "=") && !mod) window.dispatchEvent(new CustomEvent("voxframe:zoom", { detail: 1.5 }));
       else if (key === "-" && !mod) window.dispatchEvent(new CustomEvent("voxframe:zoom", { detail: 1 / 1.5 }));
     };
@@ -401,7 +478,8 @@ export function Studio({
   const summary = job.summary ?? {};
   const hasVideo = job.artifacts.includes("video");
   const position = plan.scenes.findIndex((s) => s.index === scene.index);
-  const previewing = changedPictures.has(scene.index) && (!!scene.asset || showsSpeaker(scene));
+  const previewing =
+    changedPictures.has(scene.index) && (!!scene.asset || showsSpeaker(scene) || sharesFrame(scene));
   const statusText =
     status.kind === "updating"
       ? `Updating your video… ${status.fraction !== null ? `${Math.round(status.fraction * 100)}%` : ""}`
@@ -483,7 +561,7 @@ export function Studio({
         <details className="studio-menu">
           <summary className="btn btn-quiet">Download</summary>
           <div className="studio-menu-list" role="menu">
-            {job.artifacts.map((name) => (
+            {job.artifacts.filter((name) => name !== "studio").map((name) => (
               <a key={name} role="menuitem" href={artifactUrl(job.id, name)} download>
                 {ARTIFACT_LABELS[name] ?? name}
               </a>
@@ -513,9 +591,12 @@ export function Studio({
             <div className="studio-frame" ref={frame} style={{ aspectRatio: plan.aspect.replace(":", " / ") }}>
               {hasVideo && (
                 <video
-                  ref={video}
-                  key={videoVersion}
-                  src={`${artifactUrl(job.id, "video")}?v=${videoVersion}`}
+                  ref={(element) => {
+                    video.current = element;
+                    setVideoElement(element);
+                  }}
+                  key={`${videoVersion}-${live ? "live" : "burned"}`}
+                  src={`${artifactUrl(job.id, live ? "studio" : "video")}?v=${videoVersion}`}
                   preload="auto"
                   muted={muted}
                   onPlay={() => setPlaying(true)}
@@ -534,7 +615,34 @@ export function Studio({
               {previewing && (
                 <img className="studio-preview" src={sceneThumbnail(jobId, scene)} alt="" />
               )}
-              {changed.has(scene.index) && <span className="studio-preview-badge">Preview · not yet in the video</span>}
+              {(changed.has(scene.index) || history?.captions_changed) && (
+                <span className="studio-preview-badge">Preview · not yet in the video</span>
+              )}
+              <PopupLayer
+                jobId={jobId}
+                showPictures={live}
+                state={popups}
+                time={time}
+                selected={tab === "popups" ? selectedPopup : null}
+                frame={frame}
+                onMoved={(moved) => {
+                  setPopups((current) => current && { ...current, overlays: current.overlays.map((o) => (o.id === moved.id ? moved : o)) });
+                  void updateOverlay(jobId, moved)
+                    .then((result) => {
+                      setPlan((current) => current && { ...current });
+                      setHistory(result);
+                    })
+                    .catch((caught: unknown) => setError(caught instanceof ApiError ? caught.message : "The pop-up could not be moved."));
+                }}
+              />
+              {placing && look && (
+                <CaptionGuide
+                  anchor={dragAnchor ?? look.effective.anchor_y}
+                  frame={frame}
+                  onMove={setDragAnchor}
+                  onDrop={(anchor) => void saveAnchor(anchor)}
+                />
+              )}
             </div>
           </div>
           <div className="studio-transport">
@@ -655,6 +763,17 @@ export function Studio({
                   }}
                   part="picture"
                 />
+                {plan.footage && !scene.card_kind && scene.footage_start != null && (
+                  <LayoutPicker
+                    jobId={jobId}
+                    scene={scene}
+                    vertical={plan.aspect !== "16:9"}
+                    onSaved={(edited, where) => {
+                      setPlan((current) => current && { ...current, scenes: current.scenes.map((s) => (s.index === edited.index ? edited : s)) });
+                      setHistory(where);
+                    }}
+                  />
+                )}
               </>
             )}
 
@@ -663,6 +782,32 @@ export function Studio({
                 <Notice tone="info">A card has no words: they begin in the next scene.</Notice>
               ) : (
                 <>
+                  {!live && (
+                    <Notice tone="info">
+                      {job.artifacts.includes("studio") || !liveCaptionsSupported()
+                        ? "This browser cannot draw captions live: changes show once you update the video."
+                        : "Update the video once and caption changes will show in the player the moment you make them."}
+                    </Notice>
+                  )}
+                  <CaptionStyle
+                    jobId={jobId}
+                    look={look}
+                    placing={placing}
+                    onPlacing={setPlacing}
+                    onSaved={(choice, where) => {
+                      setPlan((current) => current && { ...current, captions: choice });
+                      setHistory(where);
+                    }}
+                  />
+                  <SceneCaptionStyle
+                    key={`${scene.index}-${planVersion}-style`}
+                    jobId={jobId}
+                    scene={scene}
+                    onSaved={(edited, where) => {
+                      setPlan((current) => current && { ...current, scenes: current.scenes.map((s) => (s.index === edited.index ? edited : s)) });
+                      setHistory(where);
+                    }}
+                  />
                   <div className="studio-words" role="group" aria-label="Words in this scene: choose one to jump to it">
                     {sceneWords.map((word, index) => (
                       <button
@@ -689,6 +834,28 @@ export function Studio({
                     part="caption"
                   />
                 </>
+              ))}
+
+            {tab === "popups" &&
+              (scene.card_kind ? (
+                <Notice tone="info">A card has no words for a pop-up to appear on: choose a spoken scene.</Notice>
+              ) : (
+                <PopupsPanel
+                  jobId={jobId}
+                  scene={scene}
+                  scenes={plan.scenes}
+                  state={popups}
+                  time={time}
+                  selected={selectedPopup}
+                  onSelect={setSelectedPopup}
+                  onSeek={seek}
+                  onSaved={(state, where) => {
+                    setPopups(state);
+                    setHistory(where);
+                    // The live document draws the text, shapes and counters.
+                    setPlan((current) => current && { ...current });
+                  }}
+                />
               ))}
 
             {tab === "sound" && hasVideo && (
@@ -783,7 +950,7 @@ export function Studio({
           <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Back or forward one second</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Undo the last change</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></dt><dd>Redo</dd>
-          <dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>Scenes, Captions, Sound, Style</dd>
+          <dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Scenes, Captions, Pop-ups, Sound, Style</dd>
           <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Zoom the timeline</dd>
           <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Hide or show the side panel, the timeline</dd>
           <dt><kbd>?</kbd></dt><dd>This list</dd>
@@ -797,6 +964,61 @@ export function Studio({
       <div className={`studio-toast${toast ? " on" : ""}`} role="status" aria-live="polite">
         {toast}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A line across the player marking where the middle of the captions sits,
+ * dragged to move them (D-196). Also moved with the arrow keys.
+ */
+function CaptionGuide({
+  anchor,
+  frame,
+  onMove,
+  onDrop,
+}: {
+  anchor: number;
+  frame: React.RefObject<HTMLDivElement>;
+  onMove: (anchor: number) => void;
+  onDrop: (anchor: number) => void;
+}) {
+  const dragging = useRef(false);
+  const clamp = (value: number) => Math.min(0.95, Math.max(0.05, value));
+  const at = (clientY: number) => {
+    const box = frame.current?.getBoundingClientRect();
+    return box ? clamp((clientY - box.top) / box.height) : anchor;
+  };
+  return (
+    <div
+      className="caption-guide"
+      style={{ top: `${anchor * 100}%` }}
+      role="slider"
+      tabIndex={0}
+      aria-label="Where the captions sit"
+      aria-valuemin={5}
+      aria-valuemax={95}
+      aria-valuenow={Math.round(anchor * 100)}
+      aria-valuetext={`${Math.round(anchor * 100)}% down the picture`}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        dragging.current = true;
+        onMove(at(event.clientY));
+      }}
+      onPointerMove={(event) => dragging.current && onMove(at(event.clientY))}
+      onPointerUp={(event) => {
+        if (!dragging.current) return;
+        dragging.current = false;
+        onDrop(at(event.clientY));
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+        event.preventDefault();
+        event.stopPropagation();
+        onDrop(clamp(anchor + (event.key === "ArrowUp" ? -0.02 : 0.02)));
+      }}
+    >
+      <span>Captions</span>
     </div>
   );
 }

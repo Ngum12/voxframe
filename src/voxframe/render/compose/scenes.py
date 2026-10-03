@@ -16,6 +16,7 @@ choice where a wrong image reads as a bug.
 
 from __future__ import annotations
 
+import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -185,6 +186,19 @@ def render_scene_segments(
             )
             results.append(SegmentResult(scene.index, segment, frames, False))
 
+        elif (
+            plan.shares_frame(scene)
+            and plan.footage is not None
+            and scene.footage_start is not None
+            and Path(plan.footage.path).is_file()
+        ):
+            # The speaker and the picture together: a split or an inset
+            # (D-197). Footage gone, the scene falls through to its picture.
+            had_asset = _render_shared(
+                plan, scene, caps, segment, work_dir, width, height, frames, motion, background
+            )
+            results.append(SegmentResult(scene.index, segment, frames, had_asset))
+
         elif plan.shows_speaker(scene) and plan.footage is not None:
             # The speaker, cut to the frames the scene's words were spoken
             # over (D-192). The plan's validation guarantees a start.
@@ -198,96 +212,16 @@ def render_scene_segments(
                 )
                 results.append(SegmentResult(scene.index, segment, frames, scene.asset is not None))
             else:
-                render_footage_segment(
-                    caps,
-                    plan.footage,
-                    scene.footage_start,
-                    segment,
-                    width=width,
-                    height=height,
-                    fps=plan.fps,
-                    frames=frames,
-                    intermediate_args=_INTERMEDIATE_ARGS,
-                )
+                _render_speaker(plan, scene, caps, segment, width, height, frames)
                 results.append(SegmentResult(scene.index, segment, frames, True))
 
-        elif scene.asset is not None and scene.asset.is_video:
-            # A clip supplies its own motion, so it takes a different path
-            # entirely: no Ken Burns, audio stripped, trimmed or stretched to
-            # the grid (D-085).
-            clip_path = Path(scene.asset.path)
-            if not clip_path.is_file():
-                log.warning(
-                    "render.clip.missing", scene=scene.index, path=str(clip_path)
-                )
-                _render_background(
-                    caps, segment, width, height, plan.fps, frames, background
-                )
-                results.append(SegmentResult(scene.index, segment, frames, False))
-                continue
-
-            render_clip_segment(
-                caps,
-                clip_path,
-                segment,
-                width=width,
-                height=height,
-                fps=plan.fps,
-                frames=frames,
-                clip_seconds=scene.asset.duration,
-                intermediate_args=_INTERMEDIATE_ARGS,
-            )
-            results.append(SegmentResult(scene.index, segment, frames, True))
-
-        elif scene.asset is not None and scene.motion is not MotionKind.NONE:
-            asset_path = Path(scene.asset.path)
-            if not asset_path.is_file():
-                # A moved or deleted file must not abort the render: the plan
-                # may be older than the library, and a missing image degrades
-                # to a background rather than failing outright.
-                log.warning(
-                    "render.asset.missing",
-                    scene=scene.index,
-                    path=str(asset_path),
-                )
-                _render_background(
-                    caps, segment, width, height, plan.fps, frames, background
-                )
-                results.append(SegmentResult(scene.index, segment, frames, False))
-                continue
-
-            # Aim the move at the subject rather than the frame centre, which
-            # on a landscape photograph is usually sky (D-047). A low-confidence
-            # estimate is discarded: aiming at noise is worse than aiming at
-            # the centre.
-            saliency = find_subject_center(asset_path)
-            subject = saliency.center if saliency.is_confident else None
-
-            fp = filter_path_context(asset_path)
-            chain = _scene_filter(
-                scene, width, height, plan.fps, motion, background, subject
-            )
-
-            run_ffmpeg(
-                caps.ffmpeg_path,
-                [
-                    "-loglevel", "error",
-                    "-loop", "1",
-                    "-i", fp.name if fp.cwd else str(asset_path.resolve()),
-                    "-vf", chain,
-                    "-frames:v", str(frames),
-                    "-r", str(plan.fps),
-                    *_INTERMEDIATE_ARGS,
-                    "-y", str(segment.resolve()),
-                ],
-                cwd=fp.cwd,
-            )
-            results.append(SegmentResult(scene.index, segment, frames, True))
         else:
-            _render_background(
-                caps, segment, width, height, plan.fps, frames, background
+            had_asset, cacheable = _render_picture(
+                plan, scene, caps, segment, width, height, frames, motion, background
             )
-            results.append(SegmentResult(scene.index, segment, frames, False))
+            results.append(SegmentResult(scene.index, segment, frames, had_asset))
+            if not cacheable:
+                continue
 
         if key and cache is not None:
             cache.store(key, segment)
@@ -302,13 +236,217 @@ def render_scene_segments(
     return results
 
 
+def _render_picture(
+    plan: ScenePlan,
+    scene: PlannedScene,
+    caps: FFmpegCapabilities,
+    segment: Path,
+    width: int,
+    height: int,
+    frames: int,
+    motion: MotionStyle,
+    background: str,
+) -> tuple[bool, bool]:
+    """A scene's picture, at ``width`` by ``height``: its clip, its image with
+    the camera moving, or the plain background.
+
+    Returns:
+        Whether it had an asset, and whether the segment may be cached: one
+        drawn because its file is missing is not, so the file is used once it
+        is back.
+    """
+    if scene.asset is not None and scene.asset.is_video:
+        # A clip supplies its own motion, so it takes a different path
+        # entirely: no Ken Burns, audio stripped, trimmed or stretched to
+        # the grid (D-085).
+        clip_path = Path(scene.asset.path)
+        if not clip_path.is_file():
+            log.warning("render.clip.missing", scene=scene.index, path=str(clip_path))
+            _render_background(caps, segment, width, height, plan.fps, frames, background)
+            return False, False
+
+        render_clip_segment(
+            caps,
+            clip_path,
+            segment,
+            width=width,
+            height=height,
+            fps=plan.fps,
+            frames=frames,
+            clip_seconds=scene.asset.duration,
+            intermediate_args=_INTERMEDIATE_ARGS,
+        )
+        return True, True
+
+    if scene.asset is not None and scene.motion is not MotionKind.NONE:
+        asset_path = Path(scene.asset.path)
+        if not asset_path.is_file():
+            # A moved or deleted file must not abort the render: the plan
+            # may be older than the library, and a missing image degrades
+            # to a background rather than failing outright.
+            log.warning("render.asset.missing", scene=scene.index, path=str(asset_path))
+            _render_background(caps, segment, width, height, plan.fps, frames, background)
+            return False, False
+
+        # Aim the move at the subject rather than the frame centre, which
+        # on a landscape photograph is usually sky (D-047). A low-confidence
+        # estimate is discarded: aiming at noise is worse than aiming at
+        # the centre.
+        saliency = find_subject_center(asset_path)
+        subject = saliency.center if saliency.is_confident else None
+
+        fp = filter_path_context(asset_path)
+        chain = _scene_filter(scene, width, height, plan.fps, motion, background, subject)
+
+        run_ffmpeg(
+            caps.ffmpeg_path,
+            [
+                "-loglevel", "error",
+                "-loop", "1",
+                "-i", fp.name if fp.cwd else str(asset_path.resolve()),
+                "-vf", chain,
+                "-frames:v", str(frames),
+                "-r", str(plan.fps),
+                *_INTERMEDIATE_ARGS,
+                "-y", str(segment.resolve()),
+            ],
+            cwd=fp.cwd,
+        )
+        return True, True
+
+    _render_background(caps, segment, width, height, plan.fps, frames, background)
+    return False, True
+
+
+def _render_speaker(
+    plan: ScenePlan,
+    scene: PlannedScene,
+    caps: FFmpegCapabilities,
+    segment: Path,
+    width: int,
+    height: int,
+    frames: int,
+) -> None:
+    """The speaker in a scene, at ``width`` by ``height``: one unbroken stretch
+    of the recording, or, where cuts break the scene up, each of its stretches
+    in turn, joined frame-exact (D-199). Punch-ins zoom toward the eye line.
+    """
+    from voxframe.plan.projection import frames_of
+    from voxframe.render.compose.footage import zoom_expression
+
+    assert plan.footage is not None and scene.footage_start is not None
+    zooms = [(z.start, z.end, z.factor) for z in scene.zooms]
+    if not scene.footage_spans:
+        render_footage_segment(
+            caps, plan.footage, scene.footage_start, segment,
+            width=width, height=height, fps=plan.fps, frames=frames,
+            intermediate_args=_INTERMEDIATE_ARGS, zoom=zoom_expression(1.0, zooms),
+        )
+        return
+
+    spans = scene.footage_spans
+    counts = frames_of([span.seconds for span in spans], plan.fps)
+    # Whatever rounding left over goes to the last stretch: the scene's frame
+    # count is the grid's, not the sum of its parts.
+    counts[-1] += frames - sum(counts)
+    parts: list[Path] = []
+    offset = 0.0
+    for number, (span, count) in enumerate(zip(spans, counts, strict=True)):
+        if count <= 0:
+            offset += span.seconds
+            continue
+        local = [(a - offset, b - offset, f) for a, b, f in zooms if b > offset]
+        part = segment.with_name(f"{segment.stem}.part{number:03d}.mp4")
+        render_footage_segment(
+            caps, plan.footage, span.source, part,
+            width=width, height=height, fps=plan.fps, frames=count,
+            intermediate_args=_INTERMEDIATE_ARGS, zoom=zoom_expression(span.zoom, local),
+        )
+        parts.append(part)
+        offset += span.seconds
+    listing = segment.with_name(f"{segment.stem}.parts.txt")
+    _concat_listed(parts, caps, segment, listing)
+    for part in parts:
+        part.unlink(missing_ok=True)
+    listing.unlink(missing_ok=True)
+
+
+def _render_shared(
+    plan: ScenePlan,
+    scene: PlannedScene,
+    caps: FFmpegCapabilities,
+    segment: Path,
+    work_dir: Path,
+    width: int,
+    height: int,
+    frames: int,
+    motion: MotionStyle,
+    background: str,
+) -> bool:
+    """The speaker and the picture in one frame: split or inset (D-197).
+
+    Each part is rendered at its own size by the code that renders a whole
+    frame (the speaker framed on their face for the part's shape), then the
+    parts are put together, every frame kept.
+    """
+    from voxframe.plan.scene_layout import LayoutKind
+    from voxframe.render.compose.layout import (
+        compose_inset,
+        compose_split,
+        inset_pane,
+        split_panes,
+    )
+
+    assert plan.footage is not None and scene.footage_start is not None
+    layout = scene.layout
+    picture = segment.with_name(f"{segment.stem}.picture.mp4")
+    speaker = segment.with_name(f"{segment.stem}.speaker.mp4")
+
+    def speaker_at(w: int, h: int) -> None:
+        _render_speaker(plan, scene, caps, speaker, w, h, frames)
+
+    if layout.kind is LayoutKind.SPLIT:
+        picture_pane, speaker_pane = split_panes(width, height, layout)
+        had_asset, _ = _render_picture(
+            plan, scene, caps, picture, picture_pane.width, picture_pane.height,
+            frames, motion, background,
+        )
+        speaker_at(speaker_pane.width, speaker_pane.height)
+        compose_split(
+            caps, picture, speaker, segment, width=width, height=height, layout=layout,
+            frames=frames, intermediate_args=_INTERMEDIATE_ARGS,
+        )
+    else:
+        pane = inset_pane(width, height, layout)
+        if layout.inset_speaker:
+            had_asset, _ = _render_picture(
+                plan, scene, caps, picture, width, height, frames, motion, background
+            )
+            speaker_at(pane.width, pane.height)
+            base, inset = picture, speaker
+        else:
+            speaker_at(width, height)
+            had_asset, _ = _render_picture(
+                plan, scene, caps, picture, pane.width, pane.height, frames, motion, background
+            )
+            base, inset = speaker, picture
+        compose_inset(
+            caps, base, inset, segment, pane=pane, shape=layout.inset_shape, frames=frames,
+            work_dir=work_dir / "masks", intermediate_args=_INTERMEDIATE_ARGS,
+        )
+    picture.unlink(missing_ok=True)
+    speaker.unlink(missing_ok=True)
+    return had_asset
+
+
 def _footage_signature(plan: ScenePlan, scene: PlannedScene, frames: int) -> str:
     """What makes a speaker shot look as it does, or ``""`` for any other scene.
 
     The file is identified by its size and modification time as well as its
     path, so replacing the recording at the same path is a different picture.
     """
-    if not plan.shows_speaker(scene) or plan.footage is None:
+    shared = plan.shares_frame(scene)
+    if not (plan.shows_speaker(scene) or shared) or plan.footage is None:
         return ""
     footage = plan.footage
     source = Path(footage.path)
@@ -327,9 +465,17 @@ def _footage_signature(plan: ScenePlan, scene: PlannedScene, frames: int) -> str
             footage.track, scene.footage_start, scene.footage_start + frames / plan.fps
         )
         path = ":path=" + ";".join(f"{p.t:.3f},{p.x:.4f},{p.y:.4f}" for p in stretch)
+    # A split or inset is its layout as well (D-197); a full speaker shot's
+    # key is as it was.
+    layout = f":layout={scene.layout.model_dump_json()}" if shared else ""
+    # Cuts and punch-ins (D-199); an uncut scene's key is as it was.
+    if scene.footage_spans or scene.zooms:
+        layout += ":pace=" + json.dumps(
+            [[s.model_dump() for s in scene.footage_spans], [z.model_dump() for z in scene.zooms]]
+        )
     return (
         f"speaker:{footage.path}:{identity}:{footage.audio_offset:.6f}"
-        f":{footage.subject_x:.4f}:{scene.footage_start:.6f}{path}"
+        f":{footage.subject_x:.4f}:{scene.footage_start:.6f}{path}{layout}"
     )
 
 

@@ -28,9 +28,14 @@ import structlog
 from pydantic import BaseModel, Field, model_validator
 
 from voxframe.config.settings import AspectRatio
+from voxframe.config.style import CaptionAnimation
 from voxframe.models.asset import Asset, AssetKind
 from voxframe.models.transcript import Word
 from voxframe.plan.audio_mix import AudioMix
+from voxframe.plan.caption_choice import CaptionChoice
+from voxframe.plan.overlays import Overlay
+from voxframe.plan.pace import PaceEdits
+from voxframe.plan.scene_layout import LayoutKind, SceneLayout
 from voxframe.plan.score_choice import ScoreChoice
 from voxframe.render.version import RENDERER_VERSION
 
@@ -142,6 +147,28 @@ class Footage(BaseModel):
         if any(b.t < a.t for a, b in zip(self.track, self.track[1:], strict=False)):
             raise PlanError("the footage's camera path must be in time order")
         return self
+
+
+class FootageSpan(BaseModel):
+    """One unbroken stretch of the recording within a scene, after cuts
+    (D-199): where it starts on the sound's clock, how long it plays, and how
+    close the camera is."""
+
+    model_config = {"frozen": True}
+
+    source: float = Field(ge=0)
+    seconds: float = Field(gt=0)
+    zoom: float = Field(default=1.0, ge=1.0, le=1.6)
+
+
+class Zoom(BaseModel):
+    """A punch-in on the speaker, in seconds from the scene's start (D-199)."""
+
+    model_config = {"frozen": True}
+
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+    factor: float = Field(ge=1.0, le=1.6)
 
 
 class PlanAsset(BaseModel):
@@ -339,6 +366,23 @@ class PlannedScene(BaseModel):
     #: spoken over. ``None`` for a card, or a plan without footage.
     footage_start: float | None = Field(default=None, ge=0)
 
+    #: How the frame is shared between the speaker and the picture (D-197):
+    #: a split screen or an inset. Full, the shot decides what fills it.
+    layout: SceneLayout = Field(default_factory=SceneLayout)
+
+    #: Set only in the cut video (D-199): which scene of the plan this is,
+    #: the stretches of the recording it plays when cuts break it up, and
+    #: its punch-ins. ``teaser`` marks the cold open's copy.
+    story_index: int | None = Field(default=None)
+    footage_spans: tuple[FootageSpan, ...] = Field(default=())
+    zooms: tuple[Zoom, ...] = Field(default=())
+    teaser: bool = Field(default=False)
+
+    #: This scene's own caption animation, when a person chose one (D-196).
+    caption_animation: CaptionAnimation | None = Field(default=None)
+    #: Words drawn larger and in colour: positions in ``caption_words()``.
+    emphasis: tuple[int, ...] = Field(default=())
+
     match_score: float = Field(default=0.0)
     semantic_score: float = Field(default=0.0)
     match_reason: str = Field(default="")
@@ -468,6 +512,21 @@ class ScenePlan(BaseModel):
     #: sound; the pictures come from the cache.
     audio_mix: AudioMix = Field(default_factory=AudioMix)
 
+    #: The person's caption choices (D-196): drawn the same in the studio's
+    #: preview and in the video.
+    captions: CaptionChoice = Field(default_factory=CaptionChoice)
+
+    #: Pop-ups, each appearing when its word is said (D-198).
+    overlays: tuple[Overlay, ...] = Field(default=())
+    #: A bar along the bottom that fills as the video plays (D-198).
+    progress_bar: bool = Field(default=False)
+
+    #: Cuts, a cold open and punch-ins (D-199): the video's pace. The scenes
+    #: and words stay the whole recording; the video is projected from both.
+    pace: PaceEdits = Field(default_factory=PaceEdits)
+    #: Big words over the first seconds of the video: its hook (D-199).
+    hook_title: str = Field(default="", max_length=80)
+
     #: Whether the language was detected or forced, and how confidently. Kept
     #: so a plan with a suspect transcript can be diagnosed later without
     #: re-running detection.
@@ -488,7 +547,7 @@ class ScenePlan(BaseModel):
     @model_validator(mode="after")
     def _speaker_shots_have_footage(self) -> Self:
         for scene in self.scenes:
-            if scene.shot is not Shot.SPEAKER:
+            if scene.shot is not Shot.SPEAKER and scene.layout.kind is LayoutKind.FULL:
                 continue
             if self.footage is None:
                 raise PlanError(
@@ -500,9 +559,44 @@ class ScenePlan(BaseModel):
                 )
         return self
 
+    @model_validator(mode="after")
+    def _overlays_belong_to_spoken_scenes(self) -> Self:
+        seen: set[str] = set()
+        by_index = {scene.index: scene for scene in self.scenes}
+        for overlay in self.overlays:
+            if overlay.id in seen:
+                raise PlanError(f"two pop-ups are called {overlay.id!r}")
+            seen.add(overlay.id)
+            scene = by_index.get(overlay.scene)
+            if scene is None or scene.is_card:
+                raise PlanError(f"pop-up {overlay.id!r} is on scene {overlay.scene}, "
+                                "which is not a spoken scene")
+        return self
+
+    def overlay_times(self, overlay: Overlay) -> tuple[float, float]:
+        """When a pop-up is on screen, in seconds on the video's clock: from
+        its word, for as long as it stays, never past the end."""
+        scene = next(s for s in self.scenes if s.index == overlay.scene)
+        words = scene.caption_words()
+        if words:
+            start = words[min(overlay.word, len(words) - 1)].start
+        else:
+            start = scene.start_seconds(self.fps)
+        end_of_video = self.total_frames / self.fps
+        start = min(max(start, 0.0), end_of_video)
+        return start, min(start + overlay.seconds, end_of_video)
+
     def shows_speaker(self, scene: PlannedScene) -> bool:
-        """Whether ``scene`` renders from the footage."""
-        return self.footage is not None and scene.shot is Shot.SPEAKER
+        """Whether ``scene`` renders from the footage, filling the frame."""
+        return (
+            self.footage is not None
+            and scene.shot is Shot.SPEAKER
+            and scene.layout.kind is LayoutKind.FULL
+        )
+
+    def shares_frame(self, scene: PlannedScene) -> bool:
+        """Whether ``scene`` shows the speaker and its picture together (D-197)."""
+        return self.footage is not None and scene.layout.kind is not LayoutKind.FULL
 
     @model_validator(mode="after")
     def _scenes_tile_the_timeline(self) -> Self:

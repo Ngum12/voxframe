@@ -74,13 +74,21 @@ function explainEmpty(scene: PlannedScene): string {
  * this the browser would keep showing the old picture from its own cache.
  */
 /** Whether a scene shows the speaker rather than a picture (D-192). */
+export function sharesFrame(scene: PlannedScene): boolean {
+  return !!scene.layout && scene.layout.kind !== "full" && scene.footage_start != null;
+}
+
 export function showsSpeaker(scene: PlannedScene): boolean {
-  return scene.shot === "speaker" && scene.footage_start != null;
+  return scene.shot === "speaker" && scene.footage_start != null && !sharesFrame(scene);
 }
 
 export function sceneThumbnail(jobId: string, scene: PlannedScene): string {
   // Keyed on what is on screen, so switching a shot never shows a stale frame.
-  const shown = showsSpeaker(scene) ? `you-${scene.footage_start}` : (scene.asset?.id ?? "");
+  const shown = sharesFrame(scene)
+    ? `layout-${scene.asset?.id ?? ""}-${JSON.stringify(scene.layout)}`
+    : showsSpeaker(scene)
+      ? `you-${scene.footage_start}`
+      : (scene.asset?.id ?? "");
   return `${thumbnailUrl(jobId, scene.index)}?v=${encodeURIComponent(shown)}`;
 }
 
@@ -853,7 +861,7 @@ export function SceneDetail({
               disabled={busy}
               onClick={() => fileRef.current?.click()}
             >
-              Use your own photo
+              Use your own photo or clip
             </button>
             {sourcingEnabled && (
               <button
@@ -869,9 +877,9 @@ export function SceneDetail({
             <input
               ref={fileRef}
               type="file"
-              accept=".jpg,.jpeg,.png,.webp"
+              accept=".jpg,.jpeg,.png,.webp,.mp4,.webm,.mov,.m4v"
               className="sr-only"
-              aria-label="Choose your own photo for this scene"
+              aria-label="Choose your own photo or video clip for this scene"
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 event.target.value = "";

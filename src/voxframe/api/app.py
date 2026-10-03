@@ -96,6 +96,10 @@ IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".webp"})
 #: frame can show.
 MAX_IMAGE_BYTES = 50 * 1024 * 1024
 
+#: A clip of your own for a scene (D-197): a phone's few minutes of video.
+CLIP_SUFFIXES = frozenset({".mp4", ".webm", ".mov", ".m4v"})
+MAX_CLIP_BYTES = 1024 * 1024 * 1024
+
 #: Name of the session cookie. HttpOnly, so no script can read it -- including
 #: any script that might be injected into the page.
 SESSION_COOKIE = "voxframe_session"
@@ -127,7 +131,9 @@ def _is_app_shell(path: str) -> bool:
 SECURITY_HEADERS = {
     "Content-Security-Policy": (
         "default-src 'self'; "
-        "script-src 'self'; "
+        # WebAssembly may be compiled (the live captions are libass, built
+        # for the browser: D-196); JavaScript still may not be evaluated.
+        "script-src 'self' 'wasm-unsafe-eval'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob:; "
         "media-src 'self' blob:; "
@@ -295,6 +301,98 @@ class ShotEdit(BaseModel):
     shot: Literal["speaker", "picture"]
 
 
+class CaptionsEdit(BaseModel):
+    """How the whole video's captions look and move (D-196). ``None`` is the
+    template's choice."""
+
+    animation: str | None = None
+    transition: str | None = None
+    anchor_y: float | None = Field(default=None, ge=0.05, le=0.95)
+    size: float = Field(default=1.0, ge=0.6, le=1.8)
+    uppercase: bool | None = None
+
+
+class LayoutEdit(BaseModel):
+    """How a scene shares the frame between the speaker and its picture (D-197)."""
+
+    kind: Literal["full", "split", "inset"] = "full"
+    split: float = 0.5
+    speaker_first: bool = False
+    divider: bool = True
+    inset_speaker: bool = True
+    inset_shape: Literal["circle", "rounded"] = "circle"
+    inset_size: float = 0.36
+    inset_x: float = 0.74
+    inset_y: float = 0.22
+
+
+class OverlayEdit(BaseModel):
+    """One pop-up, as the studio sends it (D-198). Checked again as an
+    ``Overlay`` before it reaches the plan."""
+
+    kind: Literal["text", "sticker", "shape", "counter", "image"]
+    scene: int
+    word: int = 0
+    seconds: float = 2.0
+    x: float = 0.5
+    y: float = 0.3
+    size: float = 0.3
+    entrance: Literal["pop", "slide", "bounce", "fade", "none"] = "pop"
+    colour: str = "accent"
+    text: str = ""
+    look: Literal["pill", "bold", "note"] = "pill"
+    sticker: str = ""
+    shape: Literal[
+        "arrow_down", "arrow_up", "arrow_left", "arrow_right", "ring", "underline"
+    ] = "arrow_down"
+
+
+class ProgressEdit(BaseModel):
+    on: bool
+
+
+class FindCuts(BaseModel):
+    """How tight to cut (D-199)."""
+
+    keep_pause: float = Field(default=0.25, ge=0.05, le=1.0)
+    fillers: bool = True
+    repeats: bool = True
+    edges: bool = True
+
+
+class SwitchEdit(BaseModel):
+    on: bool
+
+
+class VideoSpan(BaseModel):
+    """A stretch, in seconds on the video's clock, as the studio shows it."""
+
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+
+
+class StorySpan(BaseModel):
+    """A stretch, in seconds on the plan's clock, as hook lines give it."""
+
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+
+
+class ColdOpenEdit(BaseModel):
+    span: StorySpan | None = None
+
+
+class HookTitleEdit(BaseModel):
+    text: str = Field(default="", max_length=200)
+
+
+class SceneCaptionsEdit(BaseModel):
+    """One scene's own caption animation and emphasised words (D-196)."""
+
+    animation: str | None = None
+    emphasis: list[int] = Field(default_factory=list, max_length=200)
+
+
 class CaptionEdit(BaseModel):
     """What a scene's captions should say."""
 
@@ -400,6 +498,18 @@ def _install_frontend(app: FastAPI) -> None:
 
     assets = root / "assets"
     if assets.is_dir():
+        # Served by extension, and with nosniff a browser believes the type it
+        # is told: a system that does not know these (Windows reads them from
+        # the registry) would break the live captions' WebAssembly and fonts.
+        import mimetypes
+
+        for media_type, extension in (
+            ("application/wasm", ".wasm"),
+            ("text/javascript", ".js"),
+            ("font/woff2", ".woff2"),
+            ("font/ttf", ".ttf"),
+        ):
+            mimetypes.add_type(media_type, extension)
         app.mount("/assets", StaticFiles(directory=assets), name="assets")
 
     @app.get("/")
@@ -1056,6 +1166,18 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             raise HTTPException(status_code=404, detail="No such scene.")
 
         footage = payload.get("footage")
+        layout = scenes[index].get("layout") or {}
+        if (
+            footage
+            and layout.get("kind", "full") != "full"
+            and scenes[index].get("footage_start") is not None
+        ):
+            # The speaker and the picture together, as the render puts them
+            # (D-197).
+            return FileResponse(
+                _layout_thumbnail(context, job_id, payload, index), media_type="image/jpeg"
+            )
+
         if (
             footage
             and scenes[index].get("shot") == "speaker"
@@ -1338,6 +1460,533 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         return {"scene": edited.scenes[index].model_dump(mode="json"),
                 "pending_edits": job.summary.get("pending_edits", 0)}
 
+    @app.get("/api/jobs/{job_id}/captions")
+    def job_captions(job_id: str, context: ApiContext = Depends(ctx)) -> Response:
+        """The captions as the video burns them in, built from the plan as it
+        stands now: the studio draws them over the uncaptioned picture, so a
+        change shows the moment it is made (D-196)."""
+        from voxframe.config.style import get_template
+        from voxframe.render.compose.from_plan import plan_captions
+
+        job = context.store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="No such job.")
+        plan = _load_job_plan(context, job_id)
+        width, height = job.summary.get("width"), job.summary.get("height")
+        if not isinstance(width, int) or not isinstance(height, int):
+            raise HTTPException(status_code=404, detail="This video has not been made yet.")
+        document = plan_captions(plan, get_template(plan.style or None), width, height)
+        return Response(
+            document, media_type="text/plain; charset=utf-8",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.get("/api/jobs/{job_id}/captions/style")
+    def job_caption_style(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        """The captions' look as chosen, over the template's (D-196)."""
+        from voxframe.config.style import CaptionPosition, get_template
+
+        job = context.store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="No such job.")
+        plan = _load_job_plan(context, job_id)
+        template = get_template(plan.style or None).captions
+        chosen = plan.captions.apply(template)
+        # Where the middle of a two-line caption sits when nobody has moved
+        # it: where the studio's handle starts.
+        width = job.summary.get("width") or 1080
+        height = job.summary.get("height") or 1920
+        anchor = chosen.anchor_y
+        if anchor is None:
+            margin = chosen.margin_vertical_px(width, height)
+            lines = chosen.font_size_px(height) * min(2, chosen.max_lines) / 2
+            anchor = {
+                CaptionPosition.TOP: (margin + lines) / height,
+                CaptionPosition.CENTER: 0.5,
+            }.get(chosen.position, (height - margin - lines) / height)
+        return {
+            "choice": plan.captions.model_dump(mode="json"),
+            "template": {
+                "animation": template.effective_animation.value,
+                "transition": template.transition.value,
+            },
+            "effective": {
+                "animation": chosen.effective_animation.value,
+                "transition": chosen.transition.value,
+                "anchor_y": round(anchor, 4),
+                "placed": chosen.anchor_y is not None,
+                "uppercase": chosen.uppercase,
+            },
+        }
+
+    @app.put("/api/jobs/{job_id}/captions")
+    def edit_captions(
+        job_id: str, edit: CaptionsEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        """Choose how the whole video's captions look and move (D-196)."""
+        from voxframe.config.style import CaptionAnimation, CaptionTransition
+        from voxframe.plan.caption_choice import CaptionChoice
+        from voxframe.plan.editing import set_captions
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            choice = CaptionChoice(
+                animation=CaptionAnimation(edit.animation) if edit.animation else None,
+                transition=CaptionTransition(edit.transition) if edit.transition else None,
+                anchor_y=edit.anchor_y,
+                size=edit.size,
+                uppercase=edit.uppercase,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Unknown caption style.") from exc
+        saved = _save_plan(set_captions(plan, choice), plan_path, "the captions")
+        context.store.set_pending(job, saved.pending)
+        return {"captions": choice.model_dump(mode="json"), **_history_state(plan_path)}
+
+    @app.put("/api/jobs/{job_id}/scenes/{index}/captions")
+    def edit_scene_captions(
+        job_id: str,
+        index: int,
+        edit: SceneCaptionsEdit,
+        context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        """One scene's own caption animation and emphasised words (D-196)."""
+        from voxframe.config.style import CaptionAnimation
+        from voxframe.plan.editing import EditError, set_scene_captions
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            animation = CaptionAnimation(edit.animation) if edit.animation else None
+            edited = set_scene_captions(plan, index, animation, tuple(edit.emphasis))
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Unknown caption style.") from exc
+        saved = _save_plan(edited, plan_path, "a scene's captions")
+        context.store.set_pending(job, saved.pending)
+        return {"scene": edited.scenes[index].model_dump(mode="json"),
+                **_history_state(plan_path)}
+
+    @app.put("/api/jobs/{job_id}/scenes/{index}/layout")
+    def edit_layout(
+        job_id: str,
+        index: int,
+        edit: LayoutEdit,
+        context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        """Split the frame, or inset one part in the other (D-197)."""
+        from pydantic import ValidationError
+
+        from voxframe.plan.editing import EditError, set_layout
+        from voxframe.plan.scene_layout import SceneLayout
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            layout = SceneLayout.model_validate(edit.model_dump())
+            edited = set_layout(plan, index, layout)
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail="That layout is out of range.") from exc
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        label = {"full": "a full frame", "split": "a split screen", "inset": "an inset"}
+        saved = _save_plan(edited, plan_path, label[layout.kind.value])
+        context.store.set_pending(job, saved.pending)
+        return {"scene": edited.scenes[index].model_dump(mode="json"),
+                **_history_state(plan_path)}
+
+    # --- pop-ups (D-198) ---------------------------------------------------
+
+    @app.get("/api/stickers")
+    def sticker_list() -> list[dict[str, Any]]:
+        """The bundled stickers, with the words that suggest each."""
+        from voxframe.render.compose.stickers import stickers
+
+        return [dict(entry) for entry in stickers()]
+
+    @app.get("/api/stickers/{name}")
+    def sticker_image(name: str) -> Response:
+        """One sticker's picture. Only a name in the set selects a file."""
+        from voxframe.render.compose.stickers import sticker_path
+
+        path = sticker_path(name.removesuffix(".png"))
+        if path is None:
+            raise HTTPException(status_code=404, detail="No such sticker.")
+        return FileResponse(
+            path, media_type="image/png", headers={"Cache-Control": "max-age=86400"}
+        )
+
+    def _overlay_response(
+        job: Job, plan_path: Path, plan: ScenePlan, label: str
+    ) -> dict[str, Any]:
+        saved = _save_plan(plan, plan_path, label)
+        context.store.set_pending(job, saved.pending)
+        return {**_overlays_state(plan), **_history_state(plan_path)}
+
+    def _overlays_state(plan: ScenePlan) -> dict[str, Any]:
+        from voxframe.plan.projection import project
+
+        video = project(plan).plan
+        return {
+            "overlays": [o.model_dump(mode="json") for o in plan.overlays],
+            "progress_bar": plan.progress_bar,
+            # When each is on screen in the video, after its cuts (D-199):
+            # the studio previews stickers and pictures itself, libass draws
+            # the rest (D-198). A pop-up on a word cut away has no time.
+            "times": {o.id: list(video.overlay_times(o)) for o in video.overlays},
+        }
+
+    @app.get("/api/jobs/{job_id}/overlays")
+    def job_overlays(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        return _overlays_state(_load_job_plan(context, job_id))
+
+    def _overlay_from(edit: OverlayEdit, overlay_id: str, image_path: str = "") -> Any:
+        from pydantic import ValidationError
+
+        from voxframe.plan.overlays import Overlay
+
+        try:
+            return Overlay.model_validate(
+                {**edit.model_dump(), "id": overlay_id, "image_path": image_path}
+            )
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail="That pop-up is out of range.") from exc
+
+    @app.get("/api/jobs/{job_id}/overlays/suggestions")
+    def overlay_suggestions(
+        job_id: str, context: ApiContext = Depends(ctx)
+    ) -> list[dict[str, Any]]:
+        """Pop-ups worth adding, each with the word that prompted it. Nothing
+        is added until the person chooses one."""
+        from dataclasses import asdict
+
+        from voxframe.plan.popup_suggestions import suggest_popups
+
+        plan = _load_job_plan(context, job_id)
+        return [asdict(suggestion) for suggestion in suggest_popups(plan)]
+
+    @app.post("/api/jobs/{job_id}/overlays")
+    def add_overlay_route(
+        job_id: str, edit: OverlayEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        import uuid
+
+        from voxframe.plan.editing import EditError, add_overlay
+
+        if edit.kind == "image":
+            raise HTTPException(status_code=422, detail="Add a picture by choosing its file.")
+        job, plan_path, plan = _editable_plan(context, job_id)
+        overlay = _overlay_from(edit, uuid.uuid4().hex[:10])
+        try:
+            edited = add_overlay(plan, overlay)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        result = _overlay_response(job, plan_path, edited, "a pop-up")
+        return {**result, "id": overlay.id}
+
+    @app.put("/api/jobs/{job_id}/overlays/{overlay_id}")
+    def update_overlay_route(
+        job_id: str, overlay_id: str, edit: OverlayEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError, update_overlay
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        current = next((o for o in plan.overlays if o.id == overlay_id), None)
+        if current is None:
+            raise HTTPException(status_code=404, detail="That pop-up is no longer there.")
+        if edit.kind != current.kind.value:
+            raise HTTPException(status_code=422, detail="A pop-up keeps its kind.")
+        overlay = _overlay_from(edit, overlay_id, current.image_path)
+        try:
+            edited = update_overlay(plan, overlay)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _overlay_response(job, plan_path, edited, "a pop-up")
+
+    @app.delete("/api/jobs/{job_id}/overlays/{overlay_id}")
+    def remove_overlay_route(
+        job_id: str, overlay_id: str, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError, remove_overlay
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            edited = remove_overlay(plan, overlay_id)
+        except EditError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _overlay_response(job, plan_path, edited, "a pop-up taken out")
+
+    @app.post("/api/jobs/{job_id}/overlays/image")
+    async def add_image_overlay(
+        job_id: str,
+        scene: int = Form(...),
+        word: int = Form(0),
+        file: UploadFile = File(...),
+        context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        """A picture of the person's own, popping up on a word. Stored in the
+        job's own folder under a name the server chooses, and checked to be a
+        real image first (D-198)."""
+        import uuid
+
+        from voxframe.plan.editing import EditError, add_overlay
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        suffix = Path(file.filename or "").suffix.lower()
+        if suffix not in IMAGE_SUFFIXES:
+            raise HTTPException(status_code=415, detail="Use a JPEG, PNG or WebP image.")
+        overlay_id = uuid.uuid4().hex[:10]
+        directory = context.store.job_directory(job.id) / "own"
+        directory.mkdir(parents=True, exist_ok=True)
+        target = directory / f"popup-{overlay_id}{suffix}"
+        written = 0
+        with target.open("wb") as handle:
+            while chunk := await file.read(UPLOAD_CHUNK_BYTES):
+                written += len(chunk)
+                if written > MAX_IMAGE_BYTES:
+                    handle.close()
+                    target.unlink(missing_ok=True)
+                    raise HTTPException(status_code=413, detail="Images are limited to 50 MB.")
+                handle.write(chunk)
+        try:
+            from PIL import Image
+
+            with Image.open(target) as image:
+                image.verify()
+        except Exception as exc:
+            target.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=415, detail="That file is not a readable image."
+            ) from exc
+        edit = OverlayEdit(kind="image", scene=scene, word=word, size=0.4, y=0.32)
+        overlay = _overlay_from(edit, overlay_id, str(target.resolve()))
+        try:
+            edited = add_overlay(plan, overlay)
+        except EditError as exc:
+            target.unlink(missing_ok=True)
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        result = _overlay_response(job, plan_path, edited, "a picture pop-up")
+        return {**result, "id": overlay_id}
+
+    @app.get("/api/jobs/{job_id}/overlays/{overlay_id}/image")
+    def overlay_image(
+        job_id: str, overlay_id: str, context: ApiContext = Depends(ctx)
+    ) -> Response:
+        """A picture pop-up's file, for the studio's preview."""
+        plan = _load_job_plan(context, job_id)
+        overlay = next((o for o in plan.overlays if o.id == overlay_id), None)
+        if overlay is None or not overlay.image_path:
+            raise HTTPException(status_code=404, detail="No such picture.")
+        try:
+            path = resolve_within(Path(overlay.image_path), context.allowed_paths)
+        except PathOutsideSandbox as exc:
+            raise HTTPException(
+                status_code=403, detail="That picture is outside the allowed directories."
+            ) from exc
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="The picture is missing.")
+        return FileResponse(path)
+
+    @app.put("/api/jobs/{job_id}/progress-bar")
+    def edit_progress_bar(
+        job_id: str, edit: ProgressEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import set_progress_bar
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        label = "the progress bar" if edit.on else "no progress bar"
+        return _overlay_response(job, plan_path, set_progress_bar(plan, edit.on), label)
+
+    # --- the hook and the pace (D-199) --------------------------------------
+
+    def _pace_state(plan: ScenePlan) -> dict[str, Any]:
+        from dataclasses import asdict
+
+        from voxframe.plan.pace_finder import find_hooks, find_stillness
+        from voxframe.plan.projection import project
+
+        projection = project(plan)
+        video = projection.plan
+        audio = Path(plan.audio_path)
+        hooks = find_hooks(plan, audio if audio.is_file() else None)
+
+        def at(story: float) -> float | None:
+            mapped = projection.story_to_video(story)
+            return None if mapped is None else round(mapped, 3)
+
+        return {
+            "cuts": [
+                {**cut.model_dump(mode="json"), "index": number, "video_at": at(cut.start)}
+                for number, cut in enumerate(plan.pace.cuts)
+            ],
+            "cold_open": list(plan.pace.cold_open) if plan.pace.cold_open else None,
+            "punch_ins": [
+                {**punch.model_dump(mode="json"), "index": number, "video_at": at(punch.start)}
+                for number, punch in enumerate(plan.pace.punch_ins)
+            ],
+            "alternate_zoom": plan.pace.alternate_zoom,
+            "hook_title": plan.hook_title,
+            "recording_seconds": round(plan.total_frames / plan.fps, 3),
+            "video_seconds": round(video.total_frames / video.fps, 3),
+            "hooks": [asdict(hook) for hook in hooks],
+            "stillness": [asdict(still) for still in find_stillness(video)],
+        }
+
+    def _pace_saved(job: Job, plan_path: Path, plan: ScenePlan, label: str) -> dict[str, Any]:
+        saved = _save_plan(plan, plan_path, label)
+        context.store.set_pending(job, saved.pending)
+        return {**_pace_state(plan), **_history_state(plan_path)}
+
+    @app.get("/api/jobs/{job_id}/timeline")
+    def job_timeline(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        """The video as it will be made: the plan with its pace applied
+        (D-199). Each scene says which scene of the plan it is
+        (``story_index``), for the studio's edits."""
+        from voxframe.plan.projection import project
+
+        plan = _load_job_plan(context, job_id)
+        projection = project(plan)
+        payload: dict[str, Any] = json.loads(projection.plan.to_json())
+        for scene in payload["scenes"]:
+            if scene.get("story_index") is None:
+                scene["story_index"] = scene["index"]
+            # Which of the plan's words each of its words is: a cut word is
+            # gone from the video, so the positions can differ.
+            scene["story_words"] = projection.story_words.get(
+                scene["index"], list(range(len(scene.get("words", []))))
+            )
+        return payload
+
+    @app.get("/api/jobs/{job_id}/pace")
+    def job_pace(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        return _pace_state(_load_job_plan(context, job_id))
+
+    @app.post("/api/jobs/{job_id}/pace/cuts/find")
+    def find_cuts_route(
+        job_id: str, settings: FindCuts, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        """Find the pauses, filler words and restarts to cut, and cut them;
+        every one is listed, and can be undone on its own."""
+        from voxframe.plan.editing import set_found_cuts
+        from voxframe.plan.pace_finder import find_cuts
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        found = find_cuts(
+            plan, keep_pause=settings.keep_pause, fillers=settings.fillers,
+            repeats=settings.repeats, edges=settings.edges,
+        )
+        return _pace_saved(job, plan_path, set_found_cuts(plan, found), "the jump cuts")
+
+    @app.put("/api/jobs/{job_id}/pace/cuts/{index}")
+    def switch_cut_route(
+        job_id: str, index: int, edit: SwitchEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError, switch_cut
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            edited = switch_cut(plan, index, edit.on)
+        except EditError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _pace_saved(job, plan_path, edited, "a cut" if edit.on else "a cut undone")
+
+    @app.post("/api/jobs/{job_id}/pace/cuts")
+    def add_cut_route(
+        job_id: str, span: VideoSpan, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        """Cut a stretch chosen in the studio, given in the video's time."""
+        from voxframe.plan.editing import EditError, add_cut
+        from voxframe.plan.projection import project
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        projection = project(plan)
+        start = projection.video_to_story(span.start)
+        end = projection.video_to_story(span.end)
+        if start is None or end is None or end <= start:
+            raise HTTPException(
+                status_code=422, detail="Choose a stretch within one part of the video."
+            )
+        try:
+            edited = add_cut(plan, start, end)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _pace_saved(job, plan_path, edited, "your cut")
+
+    @app.delete("/api/jobs/{job_id}/pace/cuts/{index}")
+    def remove_cut_route(
+        job_id: str, index: int, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError, remove_cut
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            edited = remove_cut(plan, index)
+        except EditError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _pace_saved(job, plan_path, edited, "a cut taken out")
+
+    @app.put("/api/jobs/{job_id}/pace/cold-open")
+    def cold_open_route(
+        job_id: str, edit: ColdOpenEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        """Open on a line from later in the video: the hook (D-199)."""
+        from voxframe.plan.editing import EditError, set_cold_open
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        span = (edit.span.start, edit.span.end) if edit.span else None
+        try:
+            edited = set_cold_open(plan, span)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _pace_saved(job, plan_path, edited, "the cold open" if span else "no cold open")
+
+    @app.post("/api/jobs/{job_id}/pace/punch-ins/find")
+    def find_punch_ins_route(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        """Zoom in on the words said with most weight, where you are on screen."""
+        from voxframe.plan.editing import set_punch_ins
+        from voxframe.plan.pace_finder import find_stressed_words
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        audio = Path(plan.audio_path)
+        if not audio.is_file():
+            raise HTTPException(status_code=404, detail="The recording is missing.")
+        punches = find_stressed_words(plan, audio)
+        return _pace_saved(job, plan_path, set_punch_ins(plan, punches), "the punch-ins")
+
+    @app.put("/api/jobs/{job_id}/pace/punch-ins/{index}")
+    def switch_punch_route(
+        job_id: str, index: int, edit: SwitchEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError, switch_punch_in
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            edited = switch_punch_in(plan, index, edit.on)
+        except EditError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _pace_saved(job, plan_path, edited, "a punch-in")
+
+    @app.put("/api/jobs/{job_id}/pace/alternate-zoom")
+    def alternate_zoom_route(
+        job_id: str, edit: SwitchEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import set_alternate_zoom
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        return _pace_saved(job, plan_path, set_alternate_zoom(plan, edit.on), "the zoom on cuts")
+
+    @app.put("/api/jobs/{job_id}/hook-title")
+    def hook_title_route(
+        job_id: str, edit: HookTitleEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError, set_hook_title
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            edited = set_hook_title(plan, edit.text)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return _pace_saved(job, plan_path, edited, "the hook title")
+
     @app.put("/api/jobs/{job_id}/scenes/{index}/caption")
     def edit_caption(
         job_id: str,
@@ -1371,24 +2020,30 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         file: UploadFile = File(...),
         context: ApiContext = Depends(ctx),
     ) -> dict[str, Any]:
-        """Use a photograph the person supplies for one scene.
+        """Use a photograph or a video clip the person supplies for one scene.
 
         Stored inside the job's own directory under a name the server chooses;
         the client's filename is used only for its suffix. Checked to be a real
-        image before it is accepted, since a renamed file of any kind would
-        otherwise reach FFmpeg. Provenance defaults to the person's own work
-        (owner's decision 4) and is never blank (D-035).
+        image, or a real video, before it is accepted, since a renamed file of
+        any kind would otherwise reach FFmpeg. Provenance defaults to the
+        person's own work (owner's decision 4) and is never blank (D-035). A
+        clip plays in the scene, above the speaker in a split screen (D-197).
         """
         from voxframe.plan.editing import EditError, use_image
 
         job, plan_path, plan = _editable_plan(context, job_id)
 
         suffix = Path(file.filename or "").suffix.lower()
-        if suffix not in IMAGE_SUFFIXES:
+        is_clip = suffix in CLIP_SUFFIXES
+        if suffix not in IMAGE_SUFFIXES and not is_clip:
             raise HTTPException(
                 status_code=415,
-                detail=f"Use a JPEG, PNG or WebP image (got {suffix or 'no extension'}).",
+                detail=(
+                    "Use a JPEG, PNG or WebP image, or an MP4, WebM or MOV clip "
+                    f"(got {suffix or 'no extension'})."
+                ),
             )
+        limit = MAX_CLIP_BYTES if is_clip else MAX_IMAGE_BYTES
 
         import uuid
 
@@ -1401,14 +2056,51 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         with target.open("wb") as handle:
             while chunk := await file.read(UPLOAD_CHUNK_BYTES):
                 written += len(chunk)
-                if written > MAX_IMAGE_BYTES:
+                if written > limit:
                     handle.close()
                     target.unlink(missing_ok=True)
                     raise HTTPException(
                         status_code=413,
-                        detail=f"Images are limited to {MAX_IMAGE_BYTES // (1024 * 1024)} MB.",
+                        detail=(
+                            f"{'Clips' if is_clip else 'Images'} are limited to "
+                            f"{limit // (1024 * 1024)} MB."
+                        ),
                     )
                 handle.write(chunk)
+
+        from voxframe.plan.scene_plan import PlanAsset
+
+        if is_clip:
+            from voxframe.models.asset import AssetKind
+            from voxframe.render.encode.probe import probe_footage
+
+            try:
+                info = probe_footage(target)
+            except Exception:
+                info = None
+            if info is None or info.duration <= 0:
+                target.unlink(missing_ok=True)
+                raise HTTPException(status_code=415, detail="That file is not a playable video.")
+            asset = PlanAsset(
+                id=asset_id,
+                path=str(target.resolve()),
+                width=info.width,
+                height=info.height,
+                kind=AssetKind.VIDEO,
+                duration=info.duration,
+                license_name="Own work",
+                license_author="You",
+                license_source="Your own video",
+            )
+            try:
+                edited = use_image(plan, index, asset)
+            except EditError as exc:
+                target.unlink(missing_ok=True)
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            saved = _save_plan(edited, plan_path, "your clip")
+            context.store.set_pending(job, saved.pending)
+            return {"scene": edited.scenes[index].model_dump(mode="json"),
+                    "pending_edits": job.summary.get("pending_edits", 0)}
 
         try:
             from PIL import Image
@@ -1422,8 +2114,6 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             raise HTTPException(
                 status_code=415, detail="That file is not a readable image."
             ) from exc
-
-        from voxframe.plan.scene_plan import PlanAsset
 
         asset = PlanAsset(
             id=asset_id,
@@ -1960,6 +2650,61 @@ def _probe_key(adapter: str, key: str) -> tuple[bool, str]:
 THUMBNAIL_PIXELS = 320
 
 
+def _layout_thumbnail(
+    context: ApiContext, job_id: str, payload: dict[str, Any], index: int
+) -> Path:
+    """A still of a split or inset scene: its picture and the speaker, put
+    together as the render puts them (D-197)."""
+    import hashlib
+
+    from PIL import Image
+
+    from voxframe.plan.scene_layout import SceneLayout
+    from voxframe.render.compose.layout import compose_still
+
+    scene = payload["scenes"][index]
+    footage = payload["footage"]
+    try:
+        recording = resolve_within(Path(footage["path"]), context.allowed_paths)
+    except PathOutsideSandbox as exc:
+        raise HTTPException(
+            status_code=403, detail="That scene's recording is outside the allowed directories."
+        ) from exc
+    if not recording.is_file():
+        raise HTTPException(status_code=404, detail="The recording is missing.")
+    seconds = (scene["end_frame"] - scene["start_frame"]) / float(payload.get("fps") or 30.0)
+    at = float(scene["footage_start"]) + float(footage.get("audio_offset") or 0.0) + min(
+        0.5, seconds / 2
+    )
+    speaker = _thumbnail_for(context, job_id, recording, at=at)
+
+    picture: Path | None = None
+    asset = scene.get("asset") or {}
+    if asset.get("path"):
+        try:
+            source = resolve_within(Path(asset["path"]), context.allowed_paths)
+        except PathOutsideSandbox:
+            source = None
+        if source is not None and source.is_file():
+            picture = _thumbnail_for(context, job_id, source)
+
+    layout = SceneLayout.model_validate(scene.get("layout") or {})
+    size = {"9:16": (360, 640), "1:1": (480, 480)}.get(str(payload.get("aspect")), (640, 360))
+    key = hashlib.sha1(
+        f"{speaker.name}|{picture.name if picture else ''}|{layout.model_dump_json()}|{size}"
+        f"|{footage.get('subject_x', 0.5)}".encode(),
+        usedforsecurity=False,
+    ).hexdigest()[:20]
+    out = context.store.job_directory(job_id) / "thumbnails" / f"layout-{key}.jpg"
+    if not out.is_file():
+        still = compose_still(
+            Image.open(picture) if picture else None, Image.open(speaker), *size, layout,
+            speaker_x=float(footage.get("subject_x", 0.5)),
+        )
+        still.save(out, quality=88)
+    return out
+
+
 def _thumbnail_for(
     context: ApiContext, job_id: str, source: Path, *, at: float | None = None
 ) -> Path:
@@ -2318,8 +3063,11 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
         return (
             # What is on screen: the speaker (D-192), else the picture.
             "speaker" if now.shows_speaker(scene) else (scene.asset.id if scene.asset else None),
+            scene.layout,
             scene.motion,
             scene.caption_text,
+            scene.caption_animation,
+            scene.emphasis,
             scene.card_kind,
             scene.card_text,
             scene.start_frame,
@@ -2331,7 +3079,7 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
         before = shown.scenes[position] if position < len(shown.scenes) else None
         if before is None or looks(scene) != looks(before):
             changed.append(scene.index)
-        if before is None or looks(scene)[0] != looks(before)[0]:
+        if before is None or looks(scene)[:2] != looks(before)[:2]:
             pictures.append(scene.index)
     return changed, pictures
 
@@ -2347,7 +3095,19 @@ def _history_state(plan_path: Path) -> dict[str, Any]:
         "redo_label": state.redo_label,
         "changed_scenes": changed,
         "changed_pictures": pictures,
+        "captions_changed": _captions_changed(plan_path),
     }
+
+
+def _captions_changed(plan_path: Path) -> bool:
+    """Whether the whole video's caption choices differ from the video's."""
+    rendered = PlanHistory(plan_path).rendered_version()
+    if rendered is None or not rendered.is_file():
+        return False
+    try:
+        return ScenePlan.load(plan_path).captions != ScenePlan.load(rendered).captions
+    except Exception:
+        return False
 
 
 def _plan_renderer(context: ApiContext) -> Callable[[Job], None]:
@@ -2382,6 +3142,7 @@ def _plan_renderer(context: ApiContext) -> Callable[[Job], None]:
             quality=quality,
             height=int(job.options.get("height", 720)),
             progress=progress,
+            studio_copy=True,
         )
         _record_outcome(context, job, outcome)
 
@@ -2567,6 +3328,7 @@ def _job_options(
         footage=request.use_video,
         music=music,
         score=score,
+        studio_copy=True,
     )
 
 
@@ -2612,6 +3374,8 @@ def _record_outcome(context: ApiContext, job: Job, outcome: PipelineOutcome) -> 
         artifacts["srt"] = outcome.result.srt_path
     if outcome.result.vtt_path:
         artifacts["vtt"] = outcome.result.vtt_path
+    if outcome.result.studio_path:
+        artifacts["studio"] = outcome.result.studio_path
 
     context.store.record_result(
         job,

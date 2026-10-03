@@ -85,11 +85,14 @@ def footage_filter_chain(
     *,
     start: float = 0.0,
     seconds: float | None = None,
+    zoom: str | None = None,
 ) -> str:
     """The filter chain turning the footage into ``width`` x ``height`` on the grid.
 
     With a camera path (D-193) and the segment's ``start`` (on the sound's
-    clock) and length, the crop moves along the path frame by frame.
+    clock) and length, the crop moves along the path frame by frame. ``zoom``
+    is how close the camera is at each frame (see :func:`zoom_expression`),
+    toward the speaker's eye line (D-199).
     """
     scaled_w, scaled_h, x, y = crop_window(footage, width, height)
     crop = f"crop={width}:{height}:{x}:{y}"
@@ -103,11 +106,45 @@ def footage_filter_chain(
             f"fps={fps}",
             f"scale={scaled_w}:{scaled_h}:flags=lanczos",
             crop,
+            *([_zoom_filter(zoom, width, height, fps)] if zoom else []),
             "setsar=1",
             # Holds the last frame if the footage ends before the scene does;
             # ``-frames:v`` stops the output at exactly the scene's length.
             "tpad=stop_mode=clone:stop=-1",
         ]
+    )
+
+
+#: How long a punch-in takes to arrive and to leave, in seconds, and how long
+#: it holds after its word.
+PUNCH_IN, PUNCH_OUT, PUNCH_HOLD = 0.12, 0.2, 0.25
+
+
+def zoom_expression(base: float, zooms: Sequence[tuple[float, float, float]]) -> str | None:
+    """How close the camera is at each frame of a segment: ``base`` (an
+    alternate cut's 8% closer), and each punch-in ``(start, end, factor)``, in
+    seconds from the segment's start, arriving quickly and easing away.
+
+    ``None`` when the camera never moves in: the chain is then as it was.
+    """
+    if base == 1.0 and not zooms:
+        return None
+    t = "(on/FPS)"
+    terms = []
+    for start, end, factor in zooms:
+        rise = f"({t}-{start:.4f})/{PUNCH_IN}"
+        fall = f"({end + PUNCH_HOLD + PUNCH_OUT:.4f}-{t})/{PUNCH_OUT}"
+        terms.append(f"{factor - 1:.4f}*clip(min({rise},{fall}),0,1)")
+    lift = "+".join(terms) if terms else "0"
+    return f"{base:.4f}*(1+{lift})"
+
+
+def _zoom_filter(expression: str, width: int, height: int, fps: float) -> str:
+    """Zoom toward the eye line, where the framing put the speaker's eyes."""
+    z = expression.replace("FPS", f"{fps:g}")
+    return (
+        f"zoompan=z='{z}':x='iw/2-iw/zoom/2':y='ih*{EYE_LINE}-ih*{EYE_LINE}/zoom':"
+        f"d=1:s={width}x{height}:fps={fps:g}"
     )
 
 
@@ -222,6 +259,7 @@ def render_footage_segment(
     fps: float,
     frames: int,
     intermediate_args: Sequence[str],
+    zoom: str | None = None,
 ) -> None:
     """Render ``frames`` frames of footage, from ``start`` on the sound's clock.
 
@@ -246,7 +284,7 @@ def render_footage_segment(
             "-ss", f"{seek:.6f}",
             "-i", fp.name if fp.cwd else str(source.resolve()),
             "-vf", footage_filter_chain(
-                footage, width, height, fps, start=start, seconds=frames / fps
+                footage, width, height, fps, start=start, seconds=frames / fps, zoom=zoom
             ),
             # The recording's sound is laid in once, for the whole video.
             "-an", "-sn", "-dn",
