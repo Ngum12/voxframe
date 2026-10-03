@@ -553,7 +553,9 @@ def _pictures(
     folder = (cache_root / "pictures") if cache_root is not None else work_dir
     folder.mkdir(parents=True, exist_ok=True)
     cached = folder / f"{key}.mp4"
-    clean = folder / f"{clean_key}.clean.mp4"
+    # Kept apart from the captioned pictures, which are counted by name.
+    clean = folder / "clean" / f"{clean_key}.mp4"
+    clean.parent.mkdir(parents=True, exist_ok=True)
 
     if not clean.is_file() and (want_clean or not cached.is_file()):
         concatenated = work_dir / "concatenated.mp4"

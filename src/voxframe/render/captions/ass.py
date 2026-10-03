@@ -385,7 +385,7 @@ _EASE_OUT = 0.5
 
 def _centis(seconds: float) -> float:
     """A time as ASS stores it, to the centisecond: the clock that the times
-    within a line (``\t``, ``\fade``, ``\kf``) are counted from."""
+    within a line (``\\t``, ``\\fade``, ``\\kf``) are counted from."""
     return round(max(0.0, seconds) * 100) / 100
 
 

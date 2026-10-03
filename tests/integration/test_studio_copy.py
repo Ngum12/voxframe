@@ -112,7 +112,7 @@ def test_changing_only_the_captions_keeps_the_pictures(caps, audio: Path, tmp_pa
         quality=QualityPreset.DRAFT, height=360, cache_dir=cache, studio_copy=True,
     )
     pictures = tmp_path / "cache" / "pictures"
-    clean = sorted(pictures.glob("*.clean.mp4"))
+    clean = sorted((pictures / "clean").glob("*.mp4"))
     assert len(clean) == 1
     made = clean[0].stat().st_mtime_ns
 
@@ -122,7 +122,7 @@ def test_changing_only_the_captions_keeps_the_pictures(caps, audio: Path, tmp_pa
         quality=QualityPreset.DRAFT, height=360, cache_dir=cache, studio_copy=True,
     )
     # The same uncaptioned pictures, not made again; new captions burned in.
-    assert sorted(pictures.glob("*.clean.mp4")) == clean
+    assert sorted((pictures / "clean").glob("*.mp4")) == clean
     assert clean[0].stat().st_mtime_ns == made
     assert first.ass_path.read_text() != second.ass_path.read_text()
-    assert len(list(pictures.glob("*.mp4"))) == 3
+    assert len(list(pictures.glob("*.mp4"))) == 2
