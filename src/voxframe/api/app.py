@@ -295,6 +295,24 @@ class ShotEdit(BaseModel):
     shot: Literal["speaker", "picture"]
 
 
+class CaptionsEdit(BaseModel):
+    """How the whole video's captions look and move (D-196). ``None`` is the
+    template's choice."""
+
+    animation: str | None = None
+    transition: str | None = None
+    anchor_y: float | None = Field(default=None, ge=0.05, le=0.95)
+    size: float = Field(default=1.0, ge=0.6, le=1.8)
+    uppercase: bool | None = None
+
+
+class SceneCaptionsEdit(BaseModel):
+    """One scene's own caption animation and emphasised words (D-196)."""
+
+    animation: str | None = None
+    emphasis: list[int] = Field(default_factory=list, max_length=200)
+
+
 class CaptionEdit(BaseModel):
     """What a scene's captions should say."""
 
@@ -1338,6 +1356,97 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         return {"scene": edited.scenes[index].model_dump(mode="json"),
                 "pending_edits": job.summary.get("pending_edits", 0)}
 
+    @app.get("/api/jobs/{job_id}/captions")
+    def job_captions(job_id: str, context: ApiContext = Depends(ctx)) -> Response:
+        """The captions as the video burns them in, built from the plan as it
+        stands now: the studio draws them over the uncaptioned picture, so a
+        change shows the moment it is made (D-196)."""
+        from voxframe.config.style import get_template
+        from voxframe.render.compose.from_plan import plan_captions
+
+        job = context.store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="No such job.")
+        plan = _load_job_plan(context, job_id)
+        width, height = job.summary.get("width"), job.summary.get("height")
+        if not isinstance(width, int) or not isinstance(height, int):
+            raise HTTPException(status_code=404, detail="This video has not been made yet.")
+        document = plan_captions(plan, get_template(plan.style or None), width, height)
+        return Response(
+            document, media_type="text/plain; charset=utf-8",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.get("/api/jobs/{job_id}/captions/style")
+    def job_caption_style(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        """The captions' look as chosen, over the template's (D-196)."""
+        from voxframe.config.style import get_template
+
+        plan = _load_job_plan(context, job_id)
+        template = get_template(plan.style or None).captions
+        chosen = plan.captions.apply(template)
+        return {
+            "choice": plan.captions.model_dump(mode="json"),
+            "template": {
+                "animation": template.effective_animation.value,
+                "transition": template.transition.value,
+            },
+            "effective": {
+                "animation": chosen.effective_animation.value,
+                "transition": chosen.transition.value,
+                "anchor_y": chosen.anchor_y,
+                "uppercase": chosen.uppercase,
+            },
+        }
+
+    @app.put("/api/jobs/{job_id}/captions")
+    def edit_captions(
+        job_id: str, edit: CaptionsEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        """Choose how the whole video's captions look and move (D-196)."""
+        from voxframe.config.style import CaptionAnimation, CaptionTransition
+        from voxframe.plan.caption_choice import CaptionChoice
+        from voxframe.plan.editing import set_captions
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            choice = CaptionChoice(
+                animation=CaptionAnimation(edit.animation) if edit.animation else None,
+                transition=CaptionTransition(edit.transition) if edit.transition else None,
+                anchor_y=edit.anchor_y,
+                size=edit.size,
+                uppercase=edit.uppercase,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Unknown caption style.") from exc
+        saved = _save_plan(set_captions(plan, choice), plan_path, "the captions")
+        context.store.set_pending(job, saved.pending)
+        return {"captions": choice.model_dump(mode="json"), **_history_state(plan_path)}
+
+    @app.put("/api/jobs/{job_id}/scenes/{index}/captions")
+    def edit_scene_captions(
+        job_id: str,
+        index: int,
+        edit: SceneCaptionsEdit,
+        context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        """One scene's own caption animation and emphasised words (D-196)."""
+        from voxframe.config.style import CaptionAnimation
+        from voxframe.plan.editing import EditError, set_scene_captions
+
+        job, plan_path, plan = _editable_plan(context, job_id)
+        try:
+            animation = CaptionAnimation(edit.animation) if edit.animation else None
+            edited = set_scene_captions(plan, index, animation, tuple(edit.emphasis))
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Unknown caption style.") from exc
+        saved = _save_plan(edited, plan_path, "a scene's captions")
+        context.store.set_pending(job, saved.pending)
+        return {"scene": edited.scenes[index].model_dump(mode="json"),
+                **_history_state(plan_path)}
+
     @app.put("/api/jobs/{job_id}/scenes/{index}/caption")
     def edit_caption(
         job_id: str,
@@ -2320,6 +2429,8 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
             "speaker" if now.shows_speaker(scene) else (scene.asset.id if scene.asset else None),
             scene.motion,
             scene.caption_text,
+            scene.caption_animation,
+            scene.emphasis,
             scene.card_kind,
             scene.card_text,
             scene.start_frame,
@@ -2347,7 +2458,19 @@ def _history_state(plan_path: Path) -> dict[str, Any]:
         "redo_label": state.redo_label,
         "changed_scenes": changed,
         "changed_pictures": pictures,
+        "captions_changed": _captions_changed(plan_path),
     }
+
+
+def _captions_changed(plan_path: Path) -> bool:
+    """Whether the whole video's caption choices differ from the video's."""
+    rendered = PlanHistory(plan_path).rendered_version()
+    if rendered is None or not rendered.is_file():
+        return False
+    try:
+        return ScenePlan.load(plan_path).captions != ScenePlan.load(rendered).captions
+    except Exception:
+        return False
 
 
 def _plan_renderer(context: ApiContext) -> Callable[[Job], None]:
@@ -2382,6 +2505,7 @@ def _plan_renderer(context: ApiContext) -> Callable[[Job], None]:
             quality=quality,
             height=int(job.options.get("height", 720)),
             progress=progress,
+            studio_copy=True,
         )
         _record_outcome(context, job, outcome)
 
@@ -2567,6 +2691,7 @@ def _job_options(
         footage=request.use_video,
         music=music,
         score=score,
+        studio_copy=True,
     )
 
 
@@ -2612,6 +2737,8 @@ def _record_outcome(context: ApiContext, job: Job, outcome: PipelineOutcome) -> 
         artifacts["srt"] = outcome.result.srt_path
     if outcome.result.vtt_path:
         artifacts["vtt"] = outcome.result.vtt_path
+    if outcome.result.studio_path:
+        artifacts["studio"] = outcome.result.studio_path
 
     context.store.record_result(
         job,

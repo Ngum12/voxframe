@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import structlog
 
+from voxframe.config.style import CaptionAnimation
+from voxframe.plan.caption_choice import CaptionChoice
 from voxframe.plan.scene_plan import MotionKind, PlanAsset, PlannedScene, ScenePlan, Shot
 
 __all__ = [
@@ -242,9 +244,12 @@ def correct_caption(plan: ScenePlan, index: int, text: str) -> ScenePlan:
         raise EditError("This scene has no speech to caption.")
 
     original = " ".join(scene.text.split())
-    edited = scene.model_copy(
-        update={"caption_text": "" if cleaned == original else cleaned}
-    )
+    corrected = "" if cleaned == original else cleaned
+    update: dict[str, object] = {"caption_text": corrected}
+    if corrected != scene.caption_text:
+        # Emphasis marks words by position; new words are not the old ones.
+        update["emphasis"] = ()
+    edited = scene.model_copy(update=update)
 
     log.info(
         "plan.edit.caption",
@@ -485,3 +490,48 @@ def set_motion(plan: ScenePlan, index: int, on: bool) -> ScenePlan:
     # The image is unchanged, so its source is too: an atmospheric scene stays
     # labelled atmospheric (D-137).
     return _replace(plan, scene.model_copy(update=update))
+
+
+# --- captions (D-196) ----------------------------------------------------------
+
+
+def set_captions(plan: ScenePlan, choice: CaptionChoice) -> ScenePlan:
+    """Choose how the whole video's captions look and move."""
+    log.info(
+        "plan.edit.captions",
+        animation=choice.animation.value if choice.animation else None,
+        transition=choice.transition.value if choice.transition else None,
+        placed=choice.anchor_y is not None,
+        size=choice.size,
+    )
+    return plan.model_copy(update={"captions": choice})
+
+
+def set_scene_captions(
+    plan: ScenePlan,
+    index: int,
+    animation: CaptionAnimation | None,
+    emphasis: tuple[int, ...],
+) -> ScenePlan:
+    """Give one scene its own caption animation, and choose its emphasised
+    words. ``None`` follows the whole video's choice.
+
+    Raises:
+        EditError: The scene is a card, or a word chosen is not in it.
+    """
+    if 0 <= index < len(plan.scenes) and plan.scenes[index].is_card:
+        raise EditError("A title or chapter card has no captions.")
+    scene = _scene(plan, index)
+    count = len(scene.caption_words())
+    marked = tuple(sorted(set(emphasis)))
+    if any(not 0 <= word < count for word in marked):
+        raise EditError("That word is not in this scene's caption.")
+    log.info(
+        "plan.edit.scene_captions",
+        scene=index,
+        animation=animation.value if animation else None,
+        emphasis=len(marked),
+    )
+    return _replace(
+        plan, scene.model_copy(update={"caption_animation": animation, "emphasis": marked})
+    )

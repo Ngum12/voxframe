@@ -269,6 +269,7 @@ def render_from_plan(
     background: str = "0x141824",
     write_sidecars: bool = True,
     keep_segments: bool = False,
+    studio_copy: bool = False,
 ) -> RenderResult:
     """Render a video from a scene plan.
 
@@ -284,6 +285,8 @@ def render_from_plan(
         background: Colour for scenes with no asset.
         write_sidecars: Also write ``.srt`` and ``.vtt``.
         keep_segments: Leave the intermediate segments on disk, for debugging.
+        studio_copy: Also write the video without its captions, beside it,
+            for the studio to play under its live caption preview (D-196).
 
     Returns:
         Paths written and timing measurements.
@@ -371,9 +374,10 @@ def render_from_plan(
     # A change to the sound alone -- the person's mix settings -- then costs no
     # picture work at all: the whole captioned video comes back from the cache
     # and only the sound is made again (D-171).
-    pictures = _pictures(
+    pictures, clean = _pictures(
         plan, segments, transitions, ass_path, caps, work_dir, output_path,
         quality=quality, cache_root=cache_dir.parent if cache_dir is not None else None,
+        want_clean=studio_copy,
     )
 
     # --- 5. the sound: stems, the person's mix, the loudness target, checks ---
@@ -407,6 +411,25 @@ def render_from_plan(
 
     _verify_frame_count(caps, output_path, plan.total_frames)
 
+    studio_path: Path | None = None
+    if clean is not None:
+        # The same pictures, uncaptioned, with the finished video's sound:
+        # both copied, so they are the same frames and the same sound.
+        studio_path = output_path.with_suffix(".studio.mp4")
+        run_ffmpeg(
+            caps.ffmpeg_path,
+            [
+                "-loglevel", "error",
+                "-i", str(clean.resolve()),
+                "-i", str(output_path.resolve()),
+                "-map", "0:v", "-map", "1:a",
+                "-c", "copy",
+                "-t", f"{video_seconds:.6f}",
+                "-movflags", "+faststart",
+                "-y", str(studio_path.resolve()),
+            ],
+        )
+
     if not keep_segments:
         cleanup_segments(work_dir)
 
@@ -417,6 +440,7 @@ def render_from_plan(
         srt_path=srt_path,
         vtt_path=vtt_path,
         ass_path=ass_path,
+        studio_path=studio_path,
         width=width,
         height=out_height,
         fps=plan.fps,
@@ -471,12 +495,18 @@ def _pictures(
     *,
     quality: QualityPreset,
     cache_root: Path | None,
-) -> Path:
-    """The whole video's pictures with captions burned in, and no sound.
+    want_clean: bool = False,
+) -> tuple[Path, Path | None]:
+    """The whole video's pictures with captions burned in, and no sound; and,
+    when ``want_clean``, the same pictures without captions.
 
     Keyed by everything that shapes them: each segment's content, the
     transitions, the captions and the quality. Kept in the cache, so a render
     whose pictures have not changed reuses them whole.
+
+    The pictures without captions are kept too, keyed without the captions.
+    The studio plays them under its live caption preview (D-196), and a
+    change to the captions alone then costs only burning them in again.
 
     Segments are named by position (``scene_00001.mp4``), so their names say
     nothing about what is in them. Keyed by names, a new picture, card text or
@@ -486,27 +516,35 @@ def _pictures(
     import hashlib
     import shutil
 
+    content = {
+        "segments": [_content_digest(segment.path) for segment in segments],
+        "transitions": [repr(t) for t in transitions],
+        "quality": quality.value,
+        "frames": plan.total_frames,
+        "fps": plan.fps,
+        "version": PICTURES_VERSION,
+    }
     key_material = json.dumps(
-        {
-            "segments": [_content_digest(segment.path) for segment in segments],
-            "transitions": [repr(t) for t in transitions],
-            "captions": hashlib.sha256(ass_path.read_bytes()).hexdigest(),
-            "quality": quality.value,
-            "frames": plan.total_frames,
-            "fps": plan.fps,
-            "version": PICTURES_VERSION,
-        },
+        {**content, "captions": hashlib.sha256(ass_path.read_bytes()).hexdigest()},
         sort_keys=True,
     )
     key = hashlib.sha256(key_material.encode()).hexdigest()[:24]
+    clean_key = hashlib.sha256(json.dumps(content, sort_keys=True).encode()).hexdigest()[:24]
     folder = (cache_root / "pictures") if cache_root is not None else work_dir
+    folder.mkdir(parents=True, exist_ok=True)
     cached = folder / f"{key}.mp4"
+    clean = folder / f"{clean_key}.clean.mp4"
+
+    if not clean.is_file() and (want_clean or not cached.is_file()):
+        concatenated = work_dir / "concatenated.mp4"
+        concat_segments(segments, caps, concatenated, work_dir, transitions, plan.fps)
+        partial_clean = clean.with_suffix(".partial.mp4")
+        shutil.move(str(concatenated), str(partial_clean))
+        partial_clean.replace(clean)
+
     if cached.is_file():
         log.info("render.pictures.reused", key=key)
-        return cached
-
-    concatenated = work_dir / "concatenated.mp4"
-    concat_segments(segments, caps, concatenated, work_dir, transitions, plan.fps)
+        return cached, (clean if want_clean else None)
 
     try:
         font_directory: Path | None = fonts_dir()
@@ -522,13 +560,12 @@ def _pictures(
         ass_for_filter = ass_path
     caption_filter, cwd = ass_filter(ass_for_filter, fontsdir=font_directory)
 
-    folder.mkdir(parents=True, exist_ok=True)
     partial = cached.with_suffix(".partial.mp4")
     run_ffmpeg(
         caps.ffmpeg_path,
         [
             "-loglevel", "error",
-            "-i", str(concatenated.resolve()),
+            "-i", str(clean.resolve()),
             "-vf", f"{caption_filter},format=yuv420p",
             "-an",
             "-frames:v", str(plan.total_frames),
@@ -542,7 +579,7 @@ def _pictures(
     partial.replace(cached)
     if staging is not None:
         shutil.rmtree(staging, ignore_errors=True)
-    return cached
+    return cached, (clean if want_clean else None)
 
 
 def _stems(
