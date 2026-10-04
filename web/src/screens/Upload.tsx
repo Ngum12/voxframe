@@ -116,6 +116,7 @@ export function Upload({
     <div className="welcome">
       <div className="welcome-main">
       <header className="hero">
+        <p className="hero-kicker">The VoxFrame studio · Voice into vision</p>
         <h1>
           Turn a recording into a <em>video</em>
         </h1>

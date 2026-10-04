@@ -112,7 +112,7 @@ export function Timeline({
     <section
       className="studio-timeline"
       aria-label="Timeline"
-      style={{ "--scene-lane": `${sceneLane}px` } as React.CSSProperties}
+      style={{ "--scene-lane": `clamp(40px, ${sceneLane}px, max(40px, calc(100dvh - 480px)))` } as React.CSSProperties}
     >
       <div className="timeline-names">
         <div>

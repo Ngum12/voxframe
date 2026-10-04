@@ -290,8 +290,8 @@ export function Library({ onChanged }: { onChanged: () => void }) {
       <header style={{ marginBottom: 18 }}>
         <h1>Your library</h1>
         <p className="muted" style={{ marginTop: 4 }}>
-          The photos and clips Voxframe chooses from. Everything here says where it
-          came from, because that is what the credits will say.
+          Your pictures, clips and music, ready for the next story. Every asset
+          keeps its source and credit.
         </p>
       </header>
 
@@ -312,7 +312,7 @@ export function Library({ onChanged }: { onChanged: () => void }) {
 
       {page && page.all === 0 && (
         <Notice tone="info">
-          Your library is empty. Add your own photos above, or turn on online search in
+          Your image library is empty. Add your own photos above, or turn on online search in
           Settings and Voxframe will add images as you make videos.
         </Notice>
       )}
