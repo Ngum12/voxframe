@@ -35,10 +35,11 @@ import {
 import { Notice } from "../components";
 import { SceneDetail, TitleAdder, sceneThumbnail, showsSpeaker } from "./Filmstrip";
 import { CaptionStudio } from "./CaptionStudio";
+import { TransitionStudio } from "./TransitionStudio";
 import { SoundPanel } from "./Sound";
 import { Timeline, type TimedWord } from "./Timeline";
 
-type Tab = "scenes" | "captions" | "sound" | "style";
+type Tab = "scenes" | "captions" | "sound" | "style" | "transitions";
 
 /** The studio's panel sizes and whether each is open, kept between sessions (D-183). */
 interface Layout {
@@ -124,6 +125,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "captions", label: "Captions" },
   { id: "sound", label: "Sound" },
   { id: "style", label: "Style" },
+  { id: "transitions", label: "Transitions" },
 ];
 
 const ARTIFACT_LABELS: Record<string, string> = {
@@ -386,7 +388,7 @@ export function Studio({
       } else if (key === "?") shortcuts.current?.showModal();
       else if (key === "[" && !mod) togglePanel();
       else if (key === "]" && !mod) toggleTimeline();
-      else if (["1", "2", "3", "4"].includes(key) && !mod) setTab(TABS[Number(key) - 1].id);
+      else if (["1", "2", "3", "4", "5"].includes(key) && !mod) setTab(TABS[Number(key) - 1].id);
       else if ((key === "+" || key === "=") && !mod) window.dispatchEvent(new CustomEvent("voxframe:zoom", { detail: 1.5 }));
       else if (key === "-" && !mod) window.dispatchEvent(new CustomEvent("voxframe:zoom", { detail: 1 / 1.5 }));
     };
@@ -695,6 +697,9 @@ export function Studio({
                 </>
               ))}
 
+            {tab === "transitions" && <TransitionStudio key={`${jobId}-joins`}
+              jobId={jobId} plan={plan} sceneIndex={scene.index} onEdited={afterEdit} />}
+
             {tab === "sound" && hasVideo && (
               <SoundPanel
                 key={planVersion}
@@ -787,7 +792,7 @@ export function Studio({
           <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Back or forward one second</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Undo the last change</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></dt><dd>Redo</dd>
-          <dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>Scenes, Captions, Sound, Style</dd>
+          <dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Scenes, Captions, Sound, Style, Transitions</dd>
           <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Zoom the timeline</dd>
           <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Hide or show the side panel, the timeline</dd>
           <dt><kbd>?</kbd></dt><dd>This list</dd>

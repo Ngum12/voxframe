@@ -55,6 +55,7 @@ from voxframe.api.security import (
 )
 from voxframe.config.captions import CaptionTreatment
 from voxframe.config.settings import AspectRatio, QualityPreset, Settings, get_settings
+from voxframe.config.transitions import TransitionTreatment
 from voxframe.config.userprefs import (
     KEY_FIELDS,
     apply_to_settings,
@@ -306,6 +307,11 @@ class CaptionLook(BaseModel):
     treatment: CaptionTreatment | None = None
     emphasis: tuple[int, ...] = Field(default=(), max_length=400)
     all_scenes: bool = False
+
+
+class TransitionEdit(BaseModel):
+    treatment: TransitionTreatment | None = None
+    all_joins: bool = False
 
 
 class CardText(BaseModel):
@@ -1497,6 +1503,88 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             raise HTTPException(status_code=404, detail="No such preview.")
         return FileResponse(path, media_type="video/mp4")
 
+    @app.get("/api/jobs/{job_id}/scenes/{index}/transition")
+    def transition_controls(
+        job_id: str, index: int, context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        from voxframe.config.transitions import TRANSITION_PRESETS
+        from voxframe.render.compose.transitions import resolved_transitions
+
+        _, _, plan = _editable_plan(context, job_id)
+        _scene_or_404(plan, index)
+        if index >= len(plan.scenes) - 1:
+            raise HTTPException(status_code=422, detail="The last scene has no following join.")
+        scene = plan.scenes[index]
+        resolved = resolved_transitions(plan)[index]
+        chosen = scene.transition_after or plan.transition_treatment
+        treatment = chosen or TransitionTreatment(kind=resolved.kind,
+            seconds=resolved.frames / plan.fps, direction=resolved.direction)
+        return {"treatment": treatment.model_dump(mode="json"),
+                "resolved": {"kind": resolved.kind, "frames": resolved.frames,
+                             "reason": resolved.reason},
+                "source": "scene" if scene.transition_after else
+                          "video" if plan.transition_treatment else "template",
+                "max_frames": int(min(scene.duration_frames,
+                                      plan.scenes[index + 1].duration_frames) * .25),
+                "presets": {k: v.model_dump(mode="json") for k, v in TRANSITION_PRESETS.items()}}
+
+    @app.put("/api/jobs/{job_id}/scenes/{index}/transition")
+    def transition_edit(
+        job_id: str, index: int, edit: TransitionEdit, context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.transition_studio import set_transition
+
+        job, path, plan = _editable_plan(context, job_id)
+        try:
+            updated = set_transition(plan, index, edit.treatment, all_joins=edit.all_joins)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        saved = _save_plan(updated, path, "transition")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
+
+    @app.post("/api/jobs/{job_id}/scenes/{index}/transition/preview")
+    def transition_preview_edit(
+        job_id: str, index: int, edit: TransitionEdit, context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.transition_studio import set_transition
+        from voxframe.render.compose.transition_preview import transition_preview
+
+        _, _, plan = _editable_plan(context, job_id)
+        try:
+            set_transition(plan, index, edit.treatment)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if edit.treatment is None:
+            raise HTTPException(status_code=422, detail="Choose a transition to preview.")
+        try:
+            path = transition_preview(plan, index, edit.treatment,
+                context.store.job_directory(job_id) / "transition-previews",
+                context.settings.cache_path / "segments")
+        except Exception as exc:
+            log.warning("transition.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(
+                status_code=422, detail="The transition preview could not be made."
+            ) from exc
+        key = path.stem.removeprefix("preview_")
+        return {"url": f"/api/jobs/{job_id}/transition-previews/{key}",
+                "note": "Picture preview around this join. Sound and captions stay in place."}
+
+    @app.get("/api/jobs/{job_id}/transition-previews/{key}")
+    def transition_preview_video(
+        job_id: str, key: str, context: ApiContext = Depends(ctx),
+    ) -> FileResponse:
+        import re
+
+        if context.store.get(job_id) is None or re.fullmatch(r"[a-f0-9]{24}", key) is None:
+            raise HTTPException(status_code=404, detail="No such preview.")
+        path = context.store.job_directory(job_id) / "transition-previews" / f"preview_{key}.mp4"
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="No such preview.")
+        return FileResponse(path, media_type="video/mp4")
+
     @app.post("/api/jobs/{job_id}/scenes/{index}/image/own")
     async def own_image(
         job_id: str,
@@ -2457,6 +2545,7 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
             scene.caption_text,
             scene.caption_treatment,
             scene.caption_emphasis,
+            scene.transition_after,
             scene.card_kind,
             scene.card_text,
             scene.start_frame,
@@ -2467,11 +2556,15 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
     for position, scene in enumerate(now.scenes):
         before = shown.scenes[position] if position < len(shown.scenes) else None
         if (before is None or looks(scene) != looks(before)
-                or now.caption_treatment != shown.caption_treatment):
+                or now.caption_treatment != shown.caption_treatment
+                or now.transition_treatment != shown.transition_treatment):
             changed.append(scene.index)
         if before is None or looks(scene)[0] != looks(before)[0]:
             pictures.append(scene.index)
-    return changed, pictures
+        if (before is not None and scene.transition_after != before.transition_after
+                and position + 1 < len(now.scenes)):
+            changed.append(now.scenes[position + 1].index)
+    return sorted(set(changed)), pictures
 
 
 def _history_state(plan_path: Path) -> dict[str, Any]:

@@ -244,6 +244,7 @@ export interface PlannedScene {
   caption_text: string;
   caption_treatment?: CaptionTreatment | null;
   caption_emphasis?: number[];
+  transition_after?: TransitionTreatment | null;
   words: PlanWord[];
   card_kind: string;
   card_text: string;
@@ -279,6 +280,7 @@ export interface ScenePlan {
   aspect: string;
   style: string;
   caption_treatment?: CaptionTreatment | null;
+  transition_treatment?: TransitionTreatment | null;
   language: string;
   language_probability: number;
   transcribe_model: string;
@@ -885,4 +887,24 @@ export const suggestCaptionEmphasis = (jobId: string, index: number) =>
 export const previewCaptions = (jobId: string, index: number, treatment: CaptionTreatment, emphasis: number[]) =>
   request<{ url: string; note: string }>(`/api/jobs/${jobId}/scenes/${index}/captions/preview`, {
     method: "POST", body: JSON.stringify({ treatment, emphasis }),
+  });
+
+export interface TransitionTreatment {
+  kind: "cut" | "crossfade" | "dip_to_black" | "slide" | "push" | "zoom" | "soft_blur";
+  seconds: number; direction: "left" | "right" | "up" | "down";
+}
+export interface TransitionControls {
+  treatment: TransitionTreatment; source: "scene" | "video" | "template";
+  resolved: { kind: string; frames: number; reason: string };
+  max_frames: number; presets: Record<string, TransitionTreatment>;
+}
+export const getTransitionControls = (jobId: string, index: number) =>
+  request<TransitionControls>(`/api/jobs/${jobId}/scenes/${index}/transition`);
+export const saveTransition = (jobId: string, index: number, treatment: TransitionTreatment | null, all_joins: boolean) =>
+  request<PlanEditResult>(`/api/jobs/${jobId}/scenes/${index}/transition`, {
+    method: "PUT", body: JSON.stringify({ treatment, all_joins }),
+  });
+export const previewTransition = (jobId: string, index: number, treatment: TransitionTreatment) =>
+  request<{ url: string; note: string }>(`/api/jobs/${jobId}/scenes/${index}/transition/preview`, {
+    method: "POST", body: JSON.stringify({ treatment }),
   });

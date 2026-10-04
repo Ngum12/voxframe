@@ -38,7 +38,8 @@ from pathlib import Path
 
 import structlog
 
-from voxframe.config.style import TransitionKind
+from voxframe.config.style import TransitionKind, get_template
+from voxframe.config.transitions import TransitionDirection
 from voxframe.plan.scene_plan import PlannedScene, ScenePlan
 
 __all__ = [
@@ -88,6 +89,7 @@ class TransitionPlan:
     kind: TransitionKind
     frames: int = 0
     reason: str = ""
+    direction: TransitionDirection = TransitionDirection.LEFT
 
     @property
     def is_blend(self) -> bool:
@@ -284,7 +286,7 @@ def crossfade_filter(
             offset = (elapsed - transition.frames) / fps
             parts.append(
                 f"[{current}][n{following}]"
-                f"xfade=transition=fade"
+                f"xfade=transition={xfade_name(transition)}"
                 f":duration={transition.frames / fps:.6f}"
                 f":offset={offset:.6f},settb=AVTB[{label}]"
             )
@@ -333,3 +335,55 @@ def total_frames_after(durations: list[int], transitions: list[TransitionPlan]) 
 def frames_for_seconds(seconds: float, fps: float) -> int:
     """Transition length in whole frames, never below the useful minimum."""
     return max(MIN_TRANSITION_FRAMES, math.floor(seconds * fps))
+
+
+def has_saved_transitions(plan: ScenePlan) -> bool:
+    return plan.transition_treatment is not None or any(s.transition_after for s in plan.scenes)
+
+
+def resolved_transitions(plan: ScenePlan) -> list[TransitionPlan]:
+    """Resolve deliberate overrides before template automatic choices."""
+    base = get_template(plan.style).motion
+    defaults = plan_transitions(plan, default_seconds=base.transition_seconds,
+                                enabled=base.transition is not TransitionKind.CUT)
+    result = []
+    for outgoing, incoming, automatic in zip(plan.scenes, plan.scenes[1:], defaults, strict=False):
+        treatment = outgoing.transition_after or plan.transition_treatment
+        if treatment is None:
+            result.append(automatic)
+            continue
+        frames = min(round(treatment.seconds * plan.fps),
+                     int(min(outgoing.duration_frames, incoming.duration_frames) * .25))
+        if treatment.kind is TransitionKind.CUT or frames < MIN_TRANSITION_FRAMES:
+            result.append(TransitionPlan(outgoing.index, TransitionKind.CUT,
+                reason="Chosen cut" if treatment.kind is TransitionKind.CUT
+                else "Join too short for this transition"))
+        else:
+            result.append(TransitionPlan(outgoing.index, treatment.kind, frames,
+                f"Chosen {treatment.kind.value}; {frames} frames", treatment.direction))
+    return result
+
+
+def xfade_name(transition: TransitionPlan) -> str:
+    directional = {
+        TransitionKind.SLIDE: {"left": "coverleft", "right": "coverright",
+                               "up": "coverup", "down": "coverdown"},
+        TransitionKind.PUSH: {"left": "slideleft", "right": "slideright",
+                              "up": "slideup", "down": "slidedown"},
+    }
+    if transition.kind in directional:
+        return directional[transition.kind][transition.direction.value]
+    return {TransitionKind.CROSSFADE: "fade", TransitionKind.DIP_TO_BLACK: "fadeblack",
+            TransitionKind.ZOOM: "zoomin", TransitionKind.SOFT_BLUR: "hblur",
+            TransitionKind.CUT: "fade"}[transition.kind]
+
+
+def xfade_options(transition: TransitionPlan) -> str:
+    if transition.kind is not TransitionKind.DIP_TO_BLACK:
+        return f"transition={xfade_name(transition)}"
+    # Native fadeblack dips early. A balanced dip reaches neutral YUV black
+    # halfway through, without fading chroma toward zero (which turns green).
+    black = "if(eq(PLANE,0),16,128)"
+    expression = (f"if(gte(P,0.5),(A-{black})*(2*P-1)+{black},"
+                  f"(B-{black})*(1-2*P)+{black})")
+    return f"transition=custom:expr='{expression}'"

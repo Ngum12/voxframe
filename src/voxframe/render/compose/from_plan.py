@@ -294,6 +294,9 @@ def render_from_plan(
         size=f"{width}x{out_height}",
     )
 
+    from voxframe.render.compose.transitions import has_saved_transitions, resolved_transitions
+
+    saved_joins = has_saved_transitions(plan)
     # --- 1. transitions, decided before rendering ---
     #
     # A crossfade overlaps its two segments, so the outgoing one must be
@@ -307,7 +310,9 @@ def render_from_plan(
     )
 
     scene_frames = [scene.duration_frames for scene in plan.scenes]
-    render_frames = padded_durations(scene_frames, transitions)
+    if saved_joins:
+        transitions = resolved_transitions(plan)
+    render_frames = scene_frames if saved_joins else padded_durations(scene_frames, transitions)
 
     # --- 2. scene segments ---
     segments = render_scene_segments(
@@ -326,7 +331,8 @@ def render_from_plan(
     # The grid check is against the *scene* durations, not the padded ones:
     # padding exists to be consumed by the overlaps, and the output must still
     # equal what the plan declares (D-025).
-    produced = total_frames_after([s.frames for s in segments], transitions)
+    produced = (sum(s.frames for s in segments) if saved_joins
+                else total_frames_after([s.frames for s in segments], transitions))
     if produced != plan.total_frames:
         raise RenderError(
             f"After transitions the video would be {produced} frames but the "
@@ -473,6 +479,8 @@ def _pictures(
         {
             "segments": [_content_digest(segment.path) for segment in segments],
             "transitions": [repr(t) for t in transitions],
+            "join_layout": bool(plan.transition_treatment
+                                or any(s.transition_after for s in plan.scenes)),
             "captions": hashlib.sha256(ass_path.read_bytes()).hexdigest(),
             "quality": quality.value,
             "frames": plan.total_frames,
@@ -489,7 +497,15 @@ def _pictures(
         return cached
 
     concatenated = work_dir / "concatenated.mp4"
-    concat_segments(segments, caps, concatenated, work_dir, transitions, plan.fps)
+    from voxframe.render.compose.transitions import has_saved_transitions
+
+    if has_saved_transitions(plan):
+        from voxframe.render.compose.joins import concat_saved_transitions
+
+        join_cache = cache_root / "joins" if cache_root else work_dir / "joins"
+        concat_saved_transitions(segments, transitions, plan.fps, caps, concatenated, join_cache)
+    else:
+        concat_segments(segments, caps, concatenated, work_dir, transitions, plan.fps)
 
     try:
         font_directory: Path | None = fonts_dir()
