@@ -918,3 +918,22 @@ export interface PacingControls {
 export const getPacing = (jobId: string) => request<PacingControls>(`/api/jobs/${jobId}/pacing`);
 export const savePacing = (jobId: string, cuts: string[]) =>
   request<PlanEditResult>(`/api/jobs/${jobId}/pacing`, { method: "PUT", body: JSON.stringify({ cuts }) });
+
+export interface ShortCandidate {
+  id: string; first_word: number; last_word: number; start: number; end: number;
+  seconds: number; opening: string; ending: string; text: string; reasons: string[];
+}
+export interface ShortsControls {
+  revision: string; suggestions: ShortCandidate[];
+  words: { index: number; text: string; start: number; end: number }[];
+}
+export interface ShortChoice { revision: string; first_word: number; last_word: number; vertical: boolean }
+export interface ShortPreview {
+  url: string; seconds: number; note: string;
+  source_ranges: { audio_start: number; footage_start: number | null; seconds: number }[];
+}
+export const getShorts = (jobId: string) => request<ShortsControls>(`/api/jobs/${jobId}/shorts`);
+export const saveShort = (jobId: string, choice: ShortChoice) =>
+  request<PlanEditResult>(`/api/jobs/${jobId}/shorts`, { method: "PUT", body: JSON.stringify(choice) });
+export const previewShort = (jobId: string, choice: ShortChoice) =>
+  request<ShortPreview>(`/api/jobs/${jobId}/shorts/preview`, { method: "POST", body: JSON.stringify(choice) });

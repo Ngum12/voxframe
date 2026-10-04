@@ -6289,3 +6289,35 @@ Checks cover frame grids, crossing boundaries and empty scenes, protected
 captions, authentication, save/undo/redo, actual 25 fps footage exported at
 30 fps, silent cards, delayed sound/picture streams, subtitle timing, and a
 Chromium review/save/history/export flow. No transcription model is rerun.
+
+### D-199 · Quoted Shorts candidates, editable word boundaries and real drafts
+
+The second producer stage keeps a contiguous passage in source order. Up to
+three candidates use sentence boundaries and visible opening cues (question,
+number, explanation/contrast), aim near 30 seconds and fit 3–60 seconds.
+Overlap is limited so options differ. Openings and endings are quoted from
+the displayed transcript; punctuation-free endings and context-dependent
+openings are flagged. These are reviewable signals, not semantic story
+understanding or predicted engagement. Cards and untimed text separate
+suggestion groups; an overlong sentence is not arbitrarily cut into a candidate.
+
+The person can select first/last words and 9:16 or the current shape. A short
+retains matching scene attributes and caption corrections, rebases words,
+remaps emphasis and records original audio_start and footage_start independently.
+It omits cards, preserves earlier jump boundaries, and keeps the source file.
+Applying the selection is one full-plan history edit; undo restores the full
+edit. A 24-character full-plan revision protects word indices from stale edits.
+
+Draft previews run the actual export renderer at height 480 with source voice,
+footage and captions. Added music/score fitting is deferred to final export;
+saved music settings remain intact. Drafts do not save plans or edit history.
+Files are keyed by the draft and source timestamps, rendered in a temporary
+folder, and published only after successful verification. Playback is session
+authenticated, job-scoped, range-aware, and accepts only hexadecimal ids.
+Caption emphasis measurement now follows audio_start after a saved cut.
+
+Checks include source-clock separation for highlights, frame grids, corrected
+captions, card boundaries, quoted candidates, stale edits, authentication,
+undo/redo, real 25 fps source footage in 30 fps vertical exports, previous pause
+cuts, delayed sound streams, cache reuse, and the Chromium trim/preview/save/
+history/export flow. Tests seed plans and require no transcription downloads.

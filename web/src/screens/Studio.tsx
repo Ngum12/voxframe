@@ -37,10 +37,11 @@ import { SceneDetail, TitleAdder, sceneThumbnail, showsSpeaker } from "./Filmstr
 import { CaptionStudio } from "./CaptionStudio";
 import { TransitionStudio } from "./TransitionStudio";
 import { PacingStudio } from "./PacingStudio";
+import { ShortsStudio } from "./ShortsStudio";
 import { SoundPanel } from "./Sound";
 import { Timeline, type TimedWord } from "./Timeline";
 
-type Tab = "scenes" | "captions" | "sound" | "style" | "transitions" | "pacing";
+type Tab = "scenes" | "captions" | "sound" | "style" | "transitions" | "pacing" | "shorts";
 
 /** The studio's panel sizes and whether each is open, kept between sessions (D-183). */
 interface Layout {
@@ -128,6 +129,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "style", label: "Style" },
   { id: "transitions", label: "Transitions" },
   { id: "pacing", label: "Pacing" },
+  { id: "shorts", label: "Shorts" },
 ];
 
 const ARTIFACT_LABELS: Record<string, string> = {
@@ -203,6 +205,9 @@ export function Studio({
   const shortcuts = useRef<HTMLDialogElement>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const resumeAt = useRef(0);
+  useEffect(() => {
+    document.getElementById(`tab-${tab}`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [tab, layout.panelOpen]);
 
   const say = useCallback((text: string) => {
     setToast(text);
@@ -390,7 +395,7 @@ export function Studio({
       } else if (key === "?") shortcuts.current?.showModal();
       else if (key === "[" && !mod) togglePanel();
       else if (key === "]" && !mod) toggleTimeline();
-      else if (["1", "2", "3", "4", "5", "6"].includes(key) && !mod) setTab(TABS[Number(key) - 1].id);
+      else if (["1", "2", "3", "4", "5", "6", "7"].includes(key) && !mod) setTab(TABS[Number(key) - 1].id);
       else if ((key === "+" || key === "=") && !mod) window.dispatchEvent(new CustomEvent("voxframe:zoom", { detail: 1.5 }));
       else if (key === "-" && !mod) window.dispatchEvent(new CustomEvent("voxframe:zoom", { detail: 1 / 1.5 }));
     };
@@ -705,6 +710,9 @@ export function Studio({
             {tab === "pacing" && <PacingStudio key={`${jobId}-${planVersion}`} jobId={jobId}
               plan={plan} canListen={pending === 0} onEdited={afterEdit} onSeek={seek} />}
 
+            {tab === "shorts" && <ShortsStudio key={`${jobId}-${planVersion}`} jobId={jobId}
+              plan={plan} canListen={pending === 0} onEdited={afterEdit} onSeek={seek} />}
+
             {tab === "sound" && hasVideo && (
               <SoundPanel
                 key={planVersion}
@@ -797,7 +805,7 @@ export function Studio({
           <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Back or forward one second</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Undo the last change</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></dt><dd>Redo</dd>
-          <dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>Scenes, Captions, Sound, Style, Transitions, Pacing</dd>
+          <dt><kbd>1</kbd>–<kbd>7</kbd></dt><dd>Scenes, Captions, Sound, Style, Transitions, Pacing, Shorts</dd>
           <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Zoom the timeline</dd>
           <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Hide or show the side panel, the timeline</dd>
           <dt><kbd>?</kbd></dt><dd>This list</dd>

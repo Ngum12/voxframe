@@ -52,7 +52,8 @@ def suggest_emphasis(plan: ScenePlan, index: int) -> tuple[int, ...]:
     source = Path(plan.audio_path)
     if not source.is_file():
         raise EditError("The original recording is missing. Choose emphasis words yourself.")
-    offset = plan.card_seconds_before(index)
+    offset = (scene.start_frame / plan.fps - scene.audio_start
+              if scene.audio_start is not None else plan.card_seconds_before(index))
     start = max(0, words[0].start - offset)
     duration = words[-1].end - offset - start
     if duration <= 0 or duration > 90:

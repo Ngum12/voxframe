@@ -309,6 +309,13 @@ class CaptionLook(BaseModel):
     all_scenes: bool = False
 
 
+class ShortEdit(BaseModel):
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    first_word: int = Field(ge=0)
+    last_word: int = Field(ge=0)
+    vertical: bool = True
+
+
 class PacingEdit(BaseModel):
     cuts: tuple[str, ...] = Field(min_length=1, max_length=100)
 
@@ -1506,6 +1513,65 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         if not path.is_file():
             raise HTTPException(status_code=404, detail="No such preview.")
         return FileResponse(path, media_type="video/mp4")
+
+    @app.get("/api/jobs/{job_id}/shorts")
+    def shorts_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.shorts import controls
+
+        _, _, plan = _editable_plan(context, job_id)
+        return controls(plan)
+
+    def short_draft(plan: ScenePlan, edit: ShortEdit) -> ScenePlan:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.shorts import build_short, revision
+
+        if edit.revision != revision(plan):
+            raise HTTPException(status_code=409, detail="The transcript changed. Reload Shorts.")
+        try:
+            return build_short(plan, edit.first_word, edit.last_word, vertical=edit.vertical)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.put("/api/jobs/{job_id}/shorts")
+    def shorts_edit(job_id: str, edit: ShortEdit,
+                    context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        job, path, plan = _editable_plan(context, job_id)
+        updated = short_draft(plan, edit)
+        saved = _save_plan(updated, path, "short selection")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
+
+    @app.post("/api/jobs/{job_id}/shorts/preview")
+    def shorts_preview(job_id: str, edit: ShortEdit,
+                       context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.shorts import source_ranges
+        from voxframe.render.compose.short_preview import short_preview
+
+        _, _, plan = _editable_plan(context, job_id)
+        draft = short_draft(plan, edit)
+        try:
+            path = short_preview(draft, context.store.job_directory(job_id) / "short-previews")
+        except Exception as exc:
+            log.warning("short.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(status_code=422,
+                                detail="This short preview could not be rendered.") from exc
+        return {"url": f"/api/jobs/{job_id}/short-previews/{path.stem}",
+                "seconds": draft.total_frames / draft.fps,
+                "source_ranges": source_ranges(draft),
+                "note": "Draft preview of voice, footage and captions. "
+                        "Added music is heard after Update video."}
+
+    @app.get("/api/jobs/{job_id}/short-previews/{key}")
+    def shorts_preview_file(job_id: str, key: str, request: Request,
+                            context: ApiContext = Depends(ctx)) -> Response:
+        import re
+
+        if context.store.get(job_id) is None or re.fullmatch(r"[a-f0-9]{24}", key) is None:
+            raise HTTPException(status_code=404, detail="No such short preview.")
+        path = context.store.job_directory(job_id) / "short-previews" / f"{key}.mp4"
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="No such short preview.")
+        return _file_or_range(request, path)
 
     @app.get("/api/jobs/{job_id}/pacing")
     def pacing_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:

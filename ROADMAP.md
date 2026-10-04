@@ -110,9 +110,15 @@ Filler/false-start detection and emphasis-driven punch-ins remain next.
 
 ### 4. Clips from a long recording
 
-- **Suggested Shorts:** 15 to 60 seconds each, starting and ending on a
-  sentence, scored by the same plain signals as highlights. You preview,
-  trim and choose; nothing is posted or chosen for you.
+**Delivered:** the Shorts tab offers up to three distinct passages with quoted
+openings, full transcripts and visible reasons. Choose first/last words, preview
+real voice/footage/captions in 9:16, then save a reversible short selection.
+The original source clocks survive earlier pause cuts. Next: visual direction,
+emphasis punch-ins, text beats and platform-safe composition.
+
+- **Suggested Shorts:** 3 to 60 seconds, aiming near 30, with sentence-based
+  candidates ranked by questions, numbers and explanation/contrast cues.
+  You review the ending, trim and choose; no semantic story judgement is claimed.
 - **Bold Shorts captions** (from 0.3.0's caption styles), a hook title over
   the first seconds, and a progress bar.
 - **Export presets** for YouTube Shorts, TikTok, Reels and WhatsApp Status:

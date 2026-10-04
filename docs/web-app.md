@@ -96,6 +96,24 @@ and chapter cards intact, and leave corrected-caption scenes alone. Undo/redo
 restores the previous complete timeline. Listening is disabled while edits are
 pending so the old video cannot be mistaken for the new timing.
 
+**Shorts.** Open **Shorts** (keyboard **7**) for up to three passage options.
+Each quotes an opening from your transcript and shows a full passage, ending,
+duration and visible reasons. Ranking uses sentence boundaries, questions,
+numbers and explanation/contrast cues. Read and listen before choosing: these
+signals do not establish that a story is complete or predict its popularity.
+Use **Find a word** and the **First word** / **Last word** selectors to adjust
+boundaries. Keep **Vertical 9:16** checked, or keep the current shape.
+
+**Render short preview** renders the actual voice, footage and captions at
+draft quality, without saving changes. The preview's source ranges show both
+audio and footage positions, which can differ after highlights. Added music
+and generated scores are heard after final export. **Use this short** saves
+a 3–60 second selection to this project, omitting title/chapter cards; **Undo**
+restores the full edit, and **Redo** reapplies it. Click **Update video** for
+final export. Word positions are tied to the plan version: another edit makes
+old selections stale. A recording without word timings has no fabricated
+suggestions. Cards and text without word timings separate suggested passages.
+
 **Sound.** Voice polish (Polished, or Original exactly as recorded); the
 voice and music levels; how far the music drops while someone speaks; and
 the loudness for where the video is going. Moving a slider plays 15 seconds
