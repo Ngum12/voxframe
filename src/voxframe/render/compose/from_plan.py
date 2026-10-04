@@ -96,6 +96,28 @@ def _narration_graph(plan: ScenePlan) -> tuple[str, bool]:
         ending in ``[narr]``. Both pad the end, so the audio is never clipped
         (D-032).
     """
+    if any(scene.audio_start is not None for scene in plan.scenes):
+        parts = []
+        for i, scene in enumerate(plan.scenes):
+            seconds = scene.duration_frames / plan.fps
+            # Round absolute boundaries, not each duration: fractional frame
+            # rates must not accumulate one sample of drift per retained span.
+            samples = (round(scene.end_frame * RATE / plan.fps)
+                       - round(scene.start_frame * RATE / plan.fps))
+            if scene.is_card:
+                parts.append(f"anullsrc=r={RATE}:cl=mono,atrim=end_sample={samples}[p{i}]")
+            else:
+                start = scene.audio_start
+                if start is None:
+                    raise RenderError("A cut timeline is missing a source audio position.")
+                parts.append(
+                    f"[1:a]asetpts=PTS-STARTPTS,atrim=start={start:.9f}:duration={seconds:.9f},"
+                    f"asetpts=PTS-STARTPTS,aresample={RATE},aformat=channel_layouts=mono,"
+                    f"apad,atrim=end_sample={samples}[p{i}]"
+                )
+        parts.append("".join(f"[p{i}]" for i in range(len(plan.scenes)))
+                     + f"concat=n={len(plan.scenes)}:v=0:a=1,apad[narr]")
+        return ";".join(parts), True
     pauses = plan.card_pauses()
     lead = sum(seconds for at, seconds in pauses if at <= 1e-6)
     middle = [(at, seconds) for at, seconds in pauses if at > 1e-6]
@@ -570,7 +592,8 @@ def _stems(
 
     voice_key = hashlib.sha256(
         json.dumps(
-            [plan.audio_sha256, list(plan.card_pauses()), plan.total_frames, plan.fps, 1]
+            [plan.audio_sha256, list(plan.card_pauses()), plan.total_frames, plan.fps,
+             [(s.audio_start, s.duration_frames, s.is_card) for s in plan.scenes], 2]
         ).encode()
     ).hexdigest()[:24]
     voice = sound_root / f"voice_{voice_key}.wav"
@@ -578,14 +601,25 @@ def _stems(
         partial = voice.with_suffix(".partial.wav")
         # The narration graph reads its recording as input 1; a silent input 0
         # keeps its labels as they are everywhere else.
+        final_graph = f"{graph};[narr]aresample={RATE},aformat=channel_layouts=mono[v]"
+        graph_args = ["-filter_complex", final_graph]
+        if any(scene.audio_start is not None for scene in plan.scenes):
+            import re
+
+            graph_path = work_dir / "narration.ffgraph"
+            graph_path.write_text(final_graph, encoding="utf-8")
+            version = re.match(r"(?:n)?(\d+)", caps.version)
+            # FFmpeg 7 introduced file-valued options; 9 removed the old alias.
+            option = ("-/filter_complex" if version and int(version[1]) >= 7
+                      else "-filter_complex_script")
+            graph_args = [option, str(graph_path.resolve())]
         run_ffmpeg(
             caps.ffmpeg_path,
             [
                 "-loglevel", "error",
                 "-f", "lavfi", "-t", f"{video_seconds:.6f}", "-i", f"anullsrc=r={RATE}:cl=mono",
                 "-i", str(audio_path.resolve()),
-                "-filter_complex",
-                f"{graph};[narr]aresample={RATE},aformat=channel_layouts=mono[v]",
+                *graph_args,
                 "-map", "[v]", "-t", f"{video_seconds:.6f}",
                 "-c:a", "pcm_f32le", "-y", str(partial.resolve()),
             ],

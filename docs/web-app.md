@@ -86,6 +86,16 @@ Blends start at the join and keep the sound and caption clocks in place.
 Short scenes cap the duration, which is shown in frames below the controls.
 Save the choice, then click **Update video** to export it.
 
+**Pacing.** Open **Pacing** (keyboard **6**) to review long gaps in the
+transcript, including those crossing scene boundaries. Suggestions are
+unchecked: a missing transcript word or dramatic pause is not proven silence.
+**Listen at** seeks to before the gap. Choose up to 100 cuts and **Save selected
+cuts**, then **Update video**. The length comparison shows what you remove.
+Cuts leave about 0.18 seconds on each side, avoid all timed words, keep title
+and chapter cards intact, and leave corrected-caption scenes alone. Undo/redo
+restores the previous complete timeline. Listening is disabled while edits are
+pending so the old video cannot be mistaken for the new timing.
+
 **Sound.** Voice polish (Polished, or Original exactly as recorded); the
 voice and music levels; how far the music drops while someone speaks; and
 the loudness for where the video is going. Moving a slider plays 15 seconds

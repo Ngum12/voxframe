@@ -309,6 +309,10 @@ class CaptionLook(BaseModel):
     all_scenes: bool = False
 
 
+class PacingEdit(BaseModel):
+    cuts: tuple[str, ...] = Field(min_length=1, max_length=100)
+
+
 class TransitionEdit(BaseModel):
     treatment: TransitionTreatment | None = None
     all_joins: bool = False
@@ -1502,6 +1506,28 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         if not path.is_file():
             raise HTTPException(status_code=404, detail="No such preview.")
         return FileResponse(path, media_type="video/mp4")
+
+    @app.get("/api/jobs/{job_id}/pacing")
+    def pacing_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.pacing import suggest_cuts
+
+        _, _, plan = _editable_plan(context, job_id)
+        return {"cuts": suggest_cuts(plan), "seconds": plan.total_frames / plan.fps}
+
+    @app.put("/api/jobs/{job_id}/pacing")
+    def pacing_edit(job_id: str, edit: PacingEdit,
+                    context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.pacing import apply_cuts
+
+        job, path, plan = _editable_plan(context, job_id)
+        try:
+            updated = apply_cuts(plan, edit.cuts)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        saved = _save_plan(updated, path, "pause cuts")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
 
     @app.get("/api/jobs/{job_id}/scenes/{index}/transition")
     def transition_controls(

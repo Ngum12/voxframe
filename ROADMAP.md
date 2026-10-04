@@ -37,9 +37,10 @@ Three additions to the studio, built in this order.
 - **Reversible:** save for one scene or the whole video; undo/redo restores
   the saved look. Re-rendering keeps the original word timestamps and audio.
 
-**Next build: the reusable music library below.**
+**Current build: Shorts Producer — pacing, hooks and visual direction.
+The reusable music library follows this work.**
 
-### 2. Transition studio — implemented on `feat/transition-studio`
+### 2. Transition studio — implemented
 
 - **Kinds:** cut, crossfade, dip to black, slide, push, zoom and soft blur.
 - **Presets:** each template has its own transition, and any join between
@@ -74,7 +75,7 @@ Three additions to the studio, built in this order.
   - **a clear note** that some openly licensed music is also registered with
     YouTube's Content ID, so a video using it may still get a claim.
 
-## Then: Shorts
+## Current: Shorts Producer
 
 Short vertical videos with real editing, made from a recording **or a
 video**. Built in this order, each step usable on its own:
@@ -97,6 +98,11 @@ video**. Built in this order, each step usable on its own:
 - **Captions placed clear of your face.**
 
 ### 3. Jump cuts
+
+**Delivered first:** the Pacing tab reviews long transcript gaps, including
+pauses crossing scene boundaries. Choose cuts, listen around them and save;
+voice, footage and captions move together. Undo/redo restores full timelines.
+Filler/false-start detection and emphasis-driven punch-ins remain next.
 
 - **Silences, "um"s and false starts removed**, cut on the word timestamps,
   so sound and picture stay together. Every cut is shown and can be undone.

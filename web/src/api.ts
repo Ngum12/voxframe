@@ -265,6 +265,7 @@ export interface PlannedScene {
   shot_reason?: string;
   /** Where the scene starts in the recording; null for a card or no footage. */
   footage_start?: number | null;
+  audio_start?: number | null;
   match_score: number;
   semantic_score: number;
   match_reason: string;
@@ -908,3 +909,12 @@ export const previewTransition = (jobId: string, index: number, treatment: Trans
   request<{ url: string; note: string }>(`/api/jobs/${jobId}/scenes/${index}/transition/preview`, {
     method: "POST", body: JSON.stringify({ treatment }),
   });
+
+export interface PacingControls {
+  seconds: number;
+  cuts: { id: string; scene: number; start_frame: number; end_frame: number;
+    start: number; end: number; seconds: number; before: string; after: string }[];
+}
+export const getPacing = (jobId: string) => request<PacingControls>(`/api/jobs/${jobId}/pacing`);
+export const savePacing = (jobId: string, cuts: string[]) =>
+  request<PlanEditResult>(`/api/jobs/${jobId}/pacing`, { method: "PUT", body: JSON.stringify({ cuts }) });

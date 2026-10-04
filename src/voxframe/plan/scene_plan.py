@@ -344,6 +344,9 @@ class PlannedScene(BaseModel):
     #: spoken over. ``None`` for a card, or a plan without footage.
     footage_start: float | None = Field(default=None, ge=0)
 
+    #: Original narration clock, independent of cards and jump cuts.
+    audio_start: float | None = Field(default=None, ge=0)
+
     match_score: float = Field(default=0.0)
     semantic_score: float = Field(default=0.0)
     match_reason: str = Field(default="")
@@ -505,6 +508,14 @@ class ScenePlan(BaseModel):
                 raise PlanError(
                     f"scene {scene.index} shows the speaker but has no footage_start"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _cut_scenes_have_audio_positions(self) -> Self:
+        if any(scene.audio_start is not None for scene in self.scenes):
+            for scene in self.scenes:
+                if not scene.is_card and scene.audio_start is None:
+                    raise PlanError(f"scene {scene.index}: cut timeline has no audio_start")
         return self
 
     def shows_speaker(self, scene: PlannedScene) -> bool:

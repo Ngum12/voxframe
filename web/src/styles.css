@@ -2545,3 +2545,8 @@ main:has(.welcome) {
 @media (prefers-reduced-motion: reduce) { .transition-stage .incoming { animation: none; } }
 .transition-stage.portrait { width: min(100%, 202px); }
 .transition-stage.square { width: min(100%, 360px); }
+
+.pacing-cut { display: grid; gap: 8px; background: var(--sunken); padding: 12px;
+  border-radius: 8px; margin: 8px 0; font-size: .85rem; }
+.pacing-cut label { display: flex; align-items: baseline; gap: 7px; }
+.pacing-cut .link-button { justify-self: start; }

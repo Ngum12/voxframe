@@ -6258,3 +6258,34 @@ The join inputs explicitly restore frame rate before edge-frame padding and
 before blending: FFmpeg 7 otherwise clones no frames after a trim, turning
 a nominal blend into a cut. Pixel checks verify a balanced black midpoint
 and a true intermediate crossfade, as well as the output frame count.
+
+### D-198 · Reviewable pause cuts with original source clocks
+
+The first Shorts Producer stage is a Pacing tab. Interior transcript gaps of
+at least one second are offered for review, including gaps across scene
+boundaries. No suggestion is selected automatically: missing transcription
+is not evidence of silence. Cards and corrected-caption scenes form protected
+boundaries. Removal keeps about 180 ms on each side, quantized inward to the
+frame grid, and never overlaps any timed word. Fillers, false starts, hook
+selection and punch-ins are separate future stages.
+
+Saving splits retained spans, renumbers scenes and moves words to output time.
+Each non-card scene stores audio_start on the original narration clock;
+footage_start stays on the original footage's sound clock. This handles
+already-extracted highlights whose audio and footage have different origins.
+The renderer trims original audio by these positions, inserts silent card
+spans and concatenates. Input timestamps are normalized before trimming to
+handle delayed sound streams. Source files are never rewritten. New jump
+boundaries explicitly cut even with a whole-video blend selected.
+
+Source ranges shape the voice cache key. Long narration graphs live in a file
+to avoid Windows command-length limits, using FFmpeg's file-valued option on
+7+ and its legacy script option on earlier versions. Existing uncut narration
+keeps its original graph path. Save is one full-plan history operation; undo
+restores all cuts in that batch and redo reapplies them. Stale/duplicate choices
+are rejected. Studio listening is disabled while a saved edit awaits export.
+
+Checks cover frame grids, crossing boundaries and empty scenes, protected
+captions, authentication, save/undo/redo, actual 25 fps footage exported at
+30 fps, silent cards, delayed sound/picture streams, subtitle timing, and a
+Chromium review/save/history/export flow. No transcription model is rerun.
