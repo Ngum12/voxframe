@@ -6383,3 +6383,25 @@ reject stale requests. Tests inspect decoded safe-area pixels for all presets
 and caption looks, measure rail progress, preserve source clap/flash sync,
 and run pacing/selection/direction/export plus download in Chromium. FFmpeg 7
 compatibility is checked separately from the pinned FFmpeg 9 workflow.
+
+### D-202 · Reusable local music, owned copies and project credit snapshots
+
+Explicit Library imports save audio under the configured library's music
+folder, indexed separately in SQLite. SHA-256 ids deduplicate identical bytes;
+metadata holds title, user-supplied credit and one mood. Imports validate an
+actual audio stream and duration (0.1 seconds to two hours), decode a sample,
+and cap size at 200 MB. Network protocols are excluded from probing/decoding.
+No paths are accepted or returned by the music library API.
+
+Sound can audition a saved track under the kept voice without editing the
+plan. Applying selects its owned path and a credit snapshot, through normal
+plan history and music fitting. Timing edits must be rendered before sound
+previews so the old voice cannot be mistaken for the new cut. Hiding only
+removes a track from browsing and selection: bytes stay for project/history
+references. Reimporting restores it with its existing metadata. Changing
+metadata affects future selections, never rewrites existing project credits.
+
+This stage is local only. Openverse music discovery remains planned; it must
+honor explicit online consent, license rules, attribution and explicit choice.
+The quick upload in Sound remains a project-specific track; reusable storage
+requires Save a music track. No automatic downloading or music selection.

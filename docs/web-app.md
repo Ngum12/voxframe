@@ -47,6 +47,23 @@ configuration folder, never in the project, and are shown masked once saved:
 With an empty library and no keys you still get a video: captions over a
 calm background, and the page tells you how to add imagery.
 
+## Your reusable music
+
+In **Library**, open **Save a music track**, choose audio up to 200 MB, and
+set its title, credit and mood. Voxframe keeps its own local copy. Search
+by title or credit, filter by mood, and listen using each track's player.
+
+After making a video, open **Sound → Choose from your music library**.
+**Audition under my voice** plays a draft mix without changing the video.
+**Apply to the video** fits the selected music to the full recording and
+saves its credit. Render timing edits first before auditioning a new track.
+
+Editing a track's details affects future selections. **Hide from library**
+removes it from the list but keeps its audio for existing projects and undo
+history. Importing the same audio again restores it with its existing details.
+The Sound tab's quick upload still adds a track only to that project; save it
+through Library to reuse it. Online music discovery is a later stage.
+
 ## Making a video
 
 1. **Upload** a recording — WAV, MP3, M4A, FLAC, OGG, Opus, or a video with a

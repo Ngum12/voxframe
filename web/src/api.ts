@@ -104,6 +104,7 @@ export type ScoreLevels = Record<ScoreGroup, number>;
 
 /** The video's music as the Sound card changes it (D-179). */
 export interface MusicDraft {
+  library_id?: string | null;
   choice: "none" | "own" | "score";
   style: string | null;
   intensity: number;
@@ -761,6 +762,7 @@ export const saveMusic = (jobId: string, music: MusicDraft) =>
       style: music.style,
       intensity: music.intensity,
       seed: music.seed,
+      library_id: music.choice === "own" ? music.library_id ?? null : null,
       upload_id: music.choice === "own" ? music.upload_id ?? null : null,
       credit: music.choice === "own" ? music.credit ?? null : null,
       forget_track: music.forget_track ?? false,
@@ -799,7 +801,7 @@ export async function previewMix(
   start: number,
   voiceOnly: boolean,
   /** A track to hear in place of the video's music (D-184). */
-  track: { upload_id?: string | null; kept?: boolean } = {},
+  track: { upload_id?: string | null; library_id?: string | null; kept?: boolean } = {},
 ): Promise<string> {
   const response = await fetch(`/api/jobs/${jobId}/mix/preview`, {
     method: "POST",
@@ -810,6 +812,7 @@ export async function previewMix(
       start,
       seconds: 15,
       voice_only: voiceOnly,
+      music_library_id: track.library_id ?? null,
       music_upload_id: track.upload_id ?? null,
       kept_track: track.kept ?? false,
     }),
@@ -967,3 +970,18 @@ export const saveShortExport = (id: string, revision: string, settings: ShortExp
   request<PlanEditResult>(`/api/jobs/${id}/short-export`, {method: "PUT", body: JSON.stringify({revision, settings})});
 export const previewShortExport = (id: string, revision: string, settings: ShortExport) =>
   request<ShortPreview>(`/api/jobs/${id}/short-export/preview`, {method: "POST", body: JSON.stringify({revision, settings})});
+
+export interface MusicTrack {
+  id: string; title: string; credit: string; mood: string;
+  seconds: number; bytes: number; added_at: string;
+}
+export const listMusic = (q = "", mood = "", offset = 0) =>
+  request<{tracks: MusicTrack[]; total: number}>(`/api/music-library?${new URLSearchParams({q, mood, offset: String(offset)})}`);
+export const importMusic = (upload_id: string, title: string, credit: string, mood: string) =>
+  request<{track: MusicTrack; already_there: boolean}>("/api/music-library", {
+    method: "POST", body: JSON.stringify({upload_id, title, credit, mood}),
+  });
+export const updateMusic = (track: MusicTrack) => request<MusicTrack>(`/api/music-library/${track.id}`, {
+  method: "PUT", body: JSON.stringify({title: track.title, credit: track.credit, mood: track.mood}),
+});
+export const hideMusic = (id: string) => request<{hidden: boolean}>(`/api/music-library/${id}`, {method: "DELETE"});

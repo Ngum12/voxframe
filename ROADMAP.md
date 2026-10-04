@@ -37,8 +37,8 @@ Three additions to the studio, built in this order.
 - **Reversible:** save for one scene or the whole video; undo/redo restores
   the saved look. Re-rendering keeps the original word timestamps and audio.
 
-**Current build: Shorts Producer — pacing, hooks and visual direction.
-The reusable music library follows this work.**
+**Current build: Music library — local tracks delivered; online discovery next.
+Shorts pacing, selection, visual direction and portrait delivery are implemented.**
 
 ### 2. Transition studio — implemented
 
@@ -58,10 +58,16 @@ The reusable music library follows this work.**
 - **Short joins stay readable:** blends take at most a quarter of the shorter
   scene, and a join too short for four frames becomes a cut.
 
-### 3. A music library
+### 3. A music library — local tracks implemented
 
-- **Your tracks, kept.** Every track you add is saved for reuse, with its
-  credit, and any video can use it again.
+- **Your tracks, kept.** Library → Save a music track keeps an independent
+  local copy, its title, credit and mood. Search and filter saved tracks, listen
+  to them alone, or audition them under your voice from the Sound tab before
+  applying. Any project can reuse them. Duplicate audio shares one copy.
+- **Project-safe changes.** Each selection saves its credit into the project
+  and participates in undo/redo. Editing library details affects future
+  selections; hiding a track leaves saved projects and their history working.
+- **Next stage:** online discovery below is still planned.
 - **Search online for openly licensed music** (Openverse), with previews and
   filters for length, mood and instrumental. You can hear a track under your
   own voice before choosing it. It follows the same rules as image search:

@@ -2577,3 +2577,14 @@ main:has(.welcome) {
 .export-player video { display: block; width: 100%; max-height: none; margin: 0; border-radius: 0; }
 .export-guide { position: absolute; pointer-events: none; border: 1px dashed #70f0d0; box-shadow: 0 0 0 1000px #0005; }
 .export-guide span { position: absolute; top: -.1rem; left: .3rem; transform: translateY(-100%); padding: .15rem .3rem; color: #70f0d0; background: #111c; font-size: .55rem; letter-spacing: .12em; }
+
+.music-library { margin: 20px 0; padding: 18px; border: 1px solid var(--line); border-radius: 12px; }
+.music-library details, .music-library-picker { margin: 14px 0; }
+.music-library summary, .music-library-picker summary { cursor: pointer; padding: 8px 0; }
+.music-import, .music-filters { display: grid; gap: 12px; margin: 14px 0; }
+.music-filters { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.music-track { padding: 16px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.music-track audio { width: 100%; max-width: 440px; margin: 8px 0; }
+.music-track-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.music-track form { margin-top: 12px; display: grid; gap: 8px; }
+@media (max-width: 600px) { .music-filters { grid-template-columns: 1fr; } }

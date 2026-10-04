@@ -40,6 +40,7 @@ import {
   uploadAudio,
 } from "../api";
 import { Notice } from "../components";
+import { MusicLibraryPanel } from "./MusicLibrary";
 
 const GROUP_LABELS: Record<ScoreGroup, string> = {
   piano: "Piano",
@@ -63,7 +64,8 @@ function sameMix(a: AudioMix, b: AudioMix): boolean {
 function sameMusic(a: MusicDraft, b: MusicDraft): boolean {
   if (a.choice !== b.choice || Boolean(a.forget_track) !== Boolean(b.forget_track)) return false;
   if (a.choice === "own") {
-    return (a.upload_id ?? null) === (b.upload_id ?? null) && (a.credit ?? "") === (b.credit ?? "");
+    return (a.upload_id ?? null) === (b.upload_id ?? null) &&
+      (a.library_id ?? null) === (b.library_id ?? null) && (a.credit ?? "") === (b.credit ?? "");
   }
   if (a.choice !== "score") return true;
   return a.style === b.style && a.intensity === b.intensity && a.seed === b.seed;
@@ -81,8 +83,9 @@ function draftOf(state: MixState): MusicDraft {
 function previewTrack(
   music: MusicDraft,
   saved: MusicDraft,
-): { upload_id?: string | null; kept?: boolean } {
+): { upload_id?: string | null; library_id?: string | null; kept?: boolean } {
   if (music.choice !== "own") return {};
+  if (music.library_id) return { library_id: music.library_id };
   if (music.upload_id) return { upload_id: music.upload_id };
   return saved.choice === "own" ? {} : { kept: true };
 }
@@ -243,6 +246,7 @@ export function SoundPanel({
         {
           ...draft.music,
           choice: "own",
+          library_id: null,
           upload_id: uploaded.upload_id,
           upload_name: uploaded.name,
           credit: "",
@@ -391,6 +395,15 @@ export function SoundPanel({
           />
         </div>
 
+        <details className="music-library-picker">
+          <summary>Choose from your music library</summary>
+          <MusicLibraryPanel onChoose={(track) => changeMusic({
+            ...music, choice: "own", library_id: track.id, upload_id: null,
+            upload_name: track.title, credit: track.credit || `${track.title} (supplied by the user)`,
+            forget_track: false,
+          }, true)} />
+        </details>
+
         {music.choice === "own" && trackName && (
           <div className="own-track">
             <label className="field" htmlFor="track-credit">
@@ -414,7 +427,7 @@ export function SoundPanel({
               className="btn btn-quiet"
               onClick={() =>
                 changeMusic(
-                  { ...music, choice: "none", upload_id: null, upload_name: null, forget_track: true },
+                  { ...music, choice: "none", library_id: null, upload_id: null, upload_name: null, forget_track: true },
                   true,
                 )
               }

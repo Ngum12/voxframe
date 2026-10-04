@@ -31,6 +31,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Request,
     Response,
     UploadFile,
@@ -230,6 +231,7 @@ class MusicEdit(BaseModel):
     choice: Literal["none", "own", "score"]
     #: A track uploaded with ``/api/uploads``, for ``own``. Never a path.
     upload_id: str | None = Field(default=None, max_length=64)
+    library_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     #: The track's credit, as the person states it; never invented (D-091).
     #: ``None`` keeps the credit it has.
     credit: str | None = Field(default=None, max_length=300)
@@ -240,6 +242,16 @@ class MusicEdit(BaseModel):
     #: own, or a new one with ``new_variation``.
     seed: int | None = Field(default=None, ge=0, lt=2**31)
     new_variation: bool = False
+
+
+class MusicMetadata(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    credit: str = Field(default="", max_length=300)
+    mood: Literal["calm", "energetic", "cinematic", "reflective", "inspiring", "other"] = "other"
+
+
+class MusicImport(MusicMetadata):
+    upload_id: str = Field(min_length=1, max_length=64)
 
 
 class SettingsUpdate(BaseModel):
@@ -285,6 +297,7 @@ class MixPreview(BaseModel):
     #: one uploaded now, or the person's track the video switched away from.
     music_upload_id: str | None = Field(default=None, max_length=64)
     kept_track: bool = False
+    music_library_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
 
 
 class MotionEdit(BaseModel):
@@ -943,6 +956,61 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             "score": _score_summary(),
         }
 
+    def music_library(context: ApiContext) -> Any:
+        from voxframe.music.library import MusicLibrary
+
+        return MusicLibrary(context.settings.library_path / "music")
+
+    def library_track(context: ApiContext, key: str) -> tuple[Any, Path]:
+        library = music_library(context)
+        try:
+            track = library.get(key)
+            return track, library.file(track)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="No such saved music track.") from exc
+
+    @app.get("/api/music-library")
+    def list_music(q: str = Query(default="", max_length=120),
+                   mood: str = Query(default="", max_length=32),
+                   offset: int = Query(default=0, ge=0),
+                   limit: int = Query(default=60, ge=1, le=60),
+                   context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        return music_library(context).list(q, mood, offset, limit)
+
+    @app.post("/api/music-library")
+    def import_music(request: MusicImport, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        source = _upload_audio(context, request.upload_id)
+        try:
+            track, duplicate = music_library(context).import_track(
+                source, request.title, request.credit, request.mood)
+        except Exception as exc:
+            log.warning("music.import_failed", reason=type(exc).__name__)
+            raise HTTPException(status_code=422,
+                detail="The track could not be imported. Choose readable audio up to 200 MB.",
+            ) from exc
+        return {"track": track.public(), "already_there": duplicate}
+
+    @app.get("/api/music-library/{key}/audio")
+    def hear_music(key: str, request: Request, context: ApiContext = Depends(ctx)) -> Response:
+        _, path = library_track(context, key)
+        return _file_or_range(request, path)
+
+    @app.put("/api/music-library/{key}")
+    def metadata_music(key: str, request: MusicMetadata,
+                       context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        library_track(context, key)
+        try:
+            track = music_library(context).update(key, request.title, request.credit, request.mood)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return track.public()
+
+    @app.delete("/api/music-library/{key}")
+    def hide_music(key: str, context: ApiContext = Depends(ctx)) -> dict[str, bool]:
+        library_track(context, key)
+        music_library(context).hide(key)
+        return {"hidden": True}
+
     @app.post("/api/uploads")
     async def upload(
         file: UploadFile = File(...),
@@ -1256,13 +1324,24 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         from voxframe.plan.score_choice import ScoreChoice, new_seed
 
         job, plan_path, plan = _editable_plan(context, job_id)
+        if edit.library_id and (edit.choice != "own" or edit.upload_id):
+            raise HTTPException(status_code=422, detail="Choose one source for your music track.")
         if plan.music_path:
             # Kept, so the Sound card can switch back to it.
+            previous = job.summary.get("kept_track", {})
+            name = (previous.get("name") if previous.get("path") == plan.music_path else None)
             context.store.remember(
-                job, "kept_track", {"path": plan.music_path, "credit": plan.music_credit}
+                job, "kept_track", {"path": plan.music_path, "credit": plan.music_credit,
+                                    "name": name or Path(plan.music_path).name}
             )
         update: dict[str, Any] = {"music_path": "", "music_credit": "", "score": None}
-        if edit.choice == "own" and edit.upload_id:
+        if edit.choice == "own" and edit.library_id:
+            selected, track = library_track(context, edit.library_id)
+            credit = " ".join((edit.credit or selected.attribution).split())
+            update.update(music_path=str(track), music_credit=credit)
+            context.store.remember(job, "kept_track", {"path": str(track), "credit": credit,
+                                                       "name": selected.title})
+        elif edit.choice == "own" and edit.upload_id:
             track = _named_for_credits(_upload_audio(context, edit.upload_id))
             credit = " ".join((edit.credit or "").split())
             update.update(music_path=str(track), music_credit=credit)
@@ -1336,8 +1415,23 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 status_code=409,
                 detail="Update this video once to hear previews of its sound.",
             )
+        plan_path = context.store.artifact_path(job_id, "plan")
+        rendered = PlanHistory(plan_path).rendered_version() if plan_path else None
+        if plan_path and rendered and rendered.is_file():
+            current, shown = ScenePlan.load(plan_path), ScenePlan.load(rendered)
+
+            def voice_clock(plan: ScenePlan) -> tuple[Any, ...]:
+                return (plan.audio_path, plan.fps, plan.total_frames,
+                        tuple((s.start_frame, s.end_frame, s.audio_start, s.card_kind)
+                              for s in plan.scenes))
+
+            if voice_clock(current) != voice_clock(shown):
+                raise HTTPException(status_code=409,
+                    detail="Update the video after timing edits before auditioning music.")
         stems = Stems.load(stems_file)
-        if request.music_upload_id or request.kept_track:
+        if request.music_library_id and (request.music_upload_id or request.kept_track):
+            raise HTTPException(status_code=422, detail="Choose one source for the preview.")
+        if request.music_library_id or request.music_upload_id or request.kept_track:
             stems = _with_track(stems, _preview_track(job, request, context), request, context)
         kept = [stems.voice, stems.music, stems.voice_polished]
         if any(path is not None and not path.is_file() for path in kept):
@@ -2498,6 +2592,14 @@ def _asset_file(context: ApiContext, raw_path: str) -> Path:
 
 def _preview_track(job: Job, request: MixPreview, context: ApiContext) -> Path:
     """The track a preview plays in place of the video's music (D-184)."""
+    if request.music_library_id:
+        from voxframe.music.library import MusicLibrary
+
+        library = MusicLibrary(context.settings.library_path / "music")
+        try:
+            return library.file(library.get(request.music_library_id))
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="No such saved music track.") from exc
     if request.music_upload_id:
         return _upload_audio(context, request.music_upload_id)
     kept = job.summary.get("kept_track")
@@ -2573,7 +2675,9 @@ def _music_state(job: Job, plan: ScenePlan) -> dict[str, Any]:
         "style": plan.score.style if plan.score else None,
         "intensity": plan.score.intensity if plan.score else 0.0,
         "seed": plan.score.seed if plan.score else None,
-        "track_name": Path(track).name if track else None,
+        "track_name": ((kept.get("name") if isinstance(kept, dict)
+                        and kept.get("path") == track else None)
+                       or (Path(track).name if track else None)),
         "track_credit": credit or "",
         "styles": [
             {"name": s.name, "label": s.label, "description": s.description}
