@@ -228,7 +228,8 @@ def _captions_above_face(
         bottom_band = height - margin - block
         top_band = margin + block
         extent = face_extent(
-            plan.footage, width, height, scene.footage_start, scene.duration_frames / plan.fps
+            plan.footage, width, height, scene.footage_start, scene.duration_frames / plan.fps,
+            zoom=scene.visual_beat.zoom if scene.visual_beat else 1,
         )
         if extent is None:
             continue
@@ -371,6 +372,11 @@ def render_from_plan(
         scene_treatments={s.index: s.caption_treatment or plan.caption_treatment
                           for s in plan.scenes if s.caption_treatment or plan.caption_treatment},
     )
+
+    if any(s.visual_beat and s.visual_beat.text for s in plan.scenes):
+        from voxframe.render.captions.visual_beats import append_visual_beats
+
+        append_visual_beats(ass_path, plan, style, width, out_height)
 
     srt_path = vtt_path = None
     if write_sidecars:

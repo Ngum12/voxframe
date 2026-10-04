@@ -208,6 +208,7 @@ def render_scene_segments(
                     fps=plan.fps,
                     frames=frames,
                     intermediate_args=_INTERMEDIATE_ARGS,
+                    zoom=scene.visual_beat.zoom if scene.visual_beat else 1,
                 )
                 results.append(SegmentResult(scene.index, segment, frames, True))
 
@@ -330,6 +331,7 @@ def _footage_signature(plan: ScenePlan, scene: PlannedScene, frames: int) -> str
     return (
         f"speaker:{footage.path}:{identity}:{footage.audio_offset:.6f}"
         f":{footage.subject_x:.4f}:{scene.footage_start:.6f}{path}"
+        f":zoom={scene.visual_beat.zoom if scene.visual_beat else 1:.4f}"
     )
 
 

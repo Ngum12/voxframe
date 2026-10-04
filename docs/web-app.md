@@ -165,6 +165,17 @@ The photos and clips Voxframe chooses from.
   downloaded by a search, or folders you added from the command line, keep
   their files and only leave the library.
 
+**Director.** Open **Director** (keyboard **8**) after choosing a 3-60 second
+passage. Preview Clean authority, High energy or Cinematic story; each uses
+word-boundary cuts, selective speaker zooms and transcript text beats.
+Apply direction saves one undoable pass. Matching the captions is optional.
+Select a scene in the timeline, return to Director, and edit its text, role,
+look, position or zoom. Save beat pins it for future passes. Use Scenes to
+choose Speaker/Picture or replace a cutaway. Auto text avoids captions and
+tracked faces and is hidden if there is no room; preview manual placement.
+Previews include voice, footage and graphics. Added music is heard after
+Update video, which exports your saved edit.
+
 ## Privacy and security
 
 - The app listens on `127.0.0.1` only and checks every request's host name,

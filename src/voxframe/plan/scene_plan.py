@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field, model_validator
 from voxframe.config.captions import CaptionTreatment
 from voxframe.config.settings import AspectRatio
 from voxframe.config.transitions import TransitionTreatment
+from voxframe.config.visuals import VisualBeat
 from voxframe.models.asset import Asset, AssetKind
 from voxframe.models.transcript import Word
 from voxframe.plan.audio_mix import AudioMix
@@ -298,6 +299,8 @@ class PlannedScene(BaseModel):
     caption_treatment: CaptionTreatment | None = None
     caption_emphasis: tuple[int, ...] = Field(default=())
     transition_after: TransitionTreatment | None = None
+    visual_beat: VisualBeat | None = None
+    director_join: bool = False
 
     #: Displayed words with real timings, so a re-render highlights as
     #: precisely as the first render did.

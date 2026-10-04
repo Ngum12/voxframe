@@ -245,6 +245,7 @@ export interface PlannedScene {
   caption_treatment?: CaptionTreatment | null;
   caption_emphasis?: number[];
   transition_after?: TransitionTreatment | null;
+  visual_beat?: VisualBeat | null;
   words: PlanWord[];
   card_kind: string;
   card_text: string;
@@ -937,3 +938,16 @@ export const saveShort = (jobId: string, choice: ShortChoice) =>
   request<PlanEditResult>(`/api/jobs/${jobId}/shorts`, { method: "PUT", body: JSON.stringify(choice) });
 export const previewShort = (jobId: string, choice: ShortChoice) =>
   request<ShortPreview>(`/api/jobs/${jobId}/shorts/preview`, { method: "POST", body: JSON.stringify(choice) });
+
+export interface VisualBeat {
+  text: string; kind: "opening" | "keypoint" | "number" | "closing";
+  look: "authority" | "energy" | "cinema"; position: "auto" | "top" | "center";
+  zoom: number; source: "director" | "user";
+}
+export interface DirectionControls { revision: string; looks: Record<string, { label: string; seconds: number; zoom: number }> }
+export interface DirectionChoice { revision: string; look: VisualBeat["look"]; match_captions: boolean }
+export const getDirection = (id: string) => request<DirectionControls>(`/api/jobs/${id}/direction`);
+export const directVideo = (id: string, choice: DirectionChoice) => request<PlanEditResult>(`/api/jobs/${id}/direction`, {method: "PUT", body: JSON.stringify(choice)});
+export const previewDirection = (id: string, choice: DirectionChoice) => request<ShortPreview>(`/api/jobs/${id}/direction/preview`, {method: "POST", body: JSON.stringify(choice)});
+export const saveVisual = (id: string, index: number, revision: string, beat: VisualBeat | null) => request<PlanEditResult>(`/api/jobs/${id}/scenes/${index}/visual`, {method: "PUT", body: JSON.stringify({revision, beat})});
+export const previewVisual = (id: string, index: number, revision: string, beat: VisualBeat) => request<ShortPreview>(`/api/jobs/${id}/scenes/${index}/visual/preview`, {method: "POST", body: JSON.stringify({revision, beat})});

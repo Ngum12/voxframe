@@ -63,6 +63,7 @@ from voxframe.config.userprefs import (
     save_preferences,
     sourcing_active,
 )
+from voxframe.config.visuals import VisualBeat
 from voxframe.jobs.pipeline import JobOptions, PipelineOutcome, Stage
 from voxframe.jobs.store import Job, JobStore, ProgressEvent
 from voxframe.library.db import AssetLibrary
@@ -307,6 +308,17 @@ class CaptionLook(BaseModel):
     treatment: CaptionTreatment | None = None
     emphasis: tuple[int, ...] = Field(default=(), max_length=400)
     all_scenes: bool = False
+
+
+class DirectionEdit(BaseModel):
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    look: Literal["authority", "energy", "cinema"] = "authority"
+    match_captions: bool = False
+
+
+class VisualEdit(BaseModel):
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    beat: VisualBeat | None = None
 
 
 class ShortEdit(BaseModel):
@@ -1573,6 +1585,77 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             raise HTTPException(status_code=404, detail="No such short preview.")
         return _file_or_range(request, path)
 
+    @app.get("/api/jobs/{job_id}/direction")
+    def direction_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.config.visuals import LOOKS
+        from voxframe.plan.shorts import revision
+
+        _, _, plan = _editable_plan(context, job_id)
+        return {"revision": revision(plan), "looks": LOOKS}
+
+    def visual_draft(plan: ScenePlan, edit: DirectionEdit | VisualEdit,
+                     index: int | None = None) -> ScenePlan:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.shorts import revision
+        from voxframe.plan.visual_director import direct, set_visual
+
+        if edit.revision != revision(plan):
+            raise HTTPException(status_code=409, detail="The edit changed. Reload Director.")
+        try:
+            if isinstance(edit, DirectionEdit):
+                return direct(plan, edit.look, match_captions=edit.match_captions)
+            assert index is not None
+            return set_visual(plan, index, edit.beat)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    def direction_preview_result(job_id: str, draft: ScenePlan,
+                                 context: ApiContext) -> dict[str, Any]:
+        from voxframe.render.compose.short_preview import short_preview
+
+        if not 3 <= draft.total_frames / draft.fps <= 60 + 1e-7:
+            raise HTTPException(status_code=422, detail="Choose a 3-60 second passage for preview.")
+        try:
+            path = short_preview(draft, context.store.job_directory(job_id) / "short-previews")
+        except Exception as exc:
+            log.warning("direction.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(status_code=422,
+                                detail="The director preview could not be rendered.") from exc
+        return {"url": f"/api/jobs/{job_id}/short-previews/{path.stem}",
+                "seconds": draft.total_frames / draft.fps,
+                "source_ranges": [],
+                "note": "Draft preview. Added music is heard after Update video."}
+
+    @app.post("/api/jobs/{job_id}/direction/preview")
+    def direction_preview(job_id: str, edit: DirectionEdit,
+                          context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        _, _, plan = _editable_plan(context, job_id)
+        return direction_preview_result(job_id, visual_draft(plan, edit), context)
+
+    @app.put("/api/jobs/{job_id}/direction")
+    def direction_edit(job_id: str, edit: DirectionEdit,
+                       context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        job, path, plan = _editable_plan(context, job_id)
+        updated = visual_draft(plan, edit)
+        saved = _save_plan(updated, path, "visual direction")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
+
+    @app.put("/api/jobs/{job_id}/scenes/{index}/visual")
+    def visual_edit(job_id: str, index: int, edit: VisualEdit,
+                    context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        job, path, plan = _editable_plan(context, job_id)
+        updated = visual_draft(plan, edit, index)
+        saved = _save_plan(updated, path, "a visual beat")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
+
+    @app.post("/api/jobs/{job_id}/scenes/{index}/visual/preview")
+    def visual_preview(job_id: str, index: int, edit: VisualEdit,
+                       context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        _, _, plan = _editable_plan(context, job_id)
+        return direction_preview_result(job_id, visual_draft(plan, edit, index), context)
+
     @app.get("/api/jobs/{job_id}/pacing")
     def pacing_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
         from voxframe.plan.pacing import suggest_cuts
@@ -2638,6 +2721,7 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
             scene.caption_treatment,
             scene.caption_emphasis,
             scene.transition_after,
+            scene.visual_beat,
             scene.card_kind,
             scene.card_text,
             scene.start_frame,

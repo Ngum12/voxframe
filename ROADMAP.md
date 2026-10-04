@@ -102,7 +102,8 @@ video**. Built in this order, each step usable on its own:
 **Delivered first:** the Pacing tab reviews long transcript gaps, including
 pauses crossing scene boundaries. Choose cuts, listen around them and save;
 voice, footage and captions move together. Undo/redo restores full timelines.
-Filler/false-start detection and emphasis-driven punch-ins remain next.
+The Director now adds emphasis-driven punch-ins. Filler/false-start detection
+remains next.
 
 - **Silences, "um"s and false starts removed**, cut on the word timestamps,
   so sound and picture stay together. Every cut is shown and can be undone.
@@ -113,8 +114,19 @@ Filler/false-start detection and emphasis-driven punch-ins remain next.
 **Delivered:** the Shorts tab offers up to three distinct passages with quoted
 openings, full transcripts and visible reasons. Choose first/last words, preview
 real voice/footage/captions in 9:16, then save a reversible short selection.
-The original source clocks survive earlier pause cuts. Next: visual direction,
-emphasis punch-ins, text beats and platform-safe composition.
+The original source clocks survive earlier pause cuts.
+
+**Visual direction delivered:** the Director tab builds three editable looks:
+Clean authority, High energy and Cinematic story. It adds word-boundary beats,
+selective speaker punch-ins, existing matched-image cutaways, and opening,
+emphasis and closing text quoted from the transcript. You can edit text,
+placement and zoom, pin beats, preview without saving, and undo a whole pass.
+Changing the look replaces the director's own joins while preserving source
+cuts and manual choices. Auto text avoids captions and tracked faces; when
+there is no room, the text is omitted. Added music is heard on final export.
+
+Next: platform export presets and safe margins, progress indicators, and
+filler/false-start review before the next music stage.
 
 - **Suggested Shorts:** 3 to 60 seconds, aiming near 30, with sentence-based
   candidates ranked by questions, numbers and explanation/contrast cues.

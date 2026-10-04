@@ -6321,3 +6321,33 @@ captions, card boundaries, quoted candidates, stale edits, authentication,
 undo/redo, real 25 fps source footage in 30 fps vertical exports, previous pause
 cuts, delayed sound streams, cache reuse, and the Chromium trim/preview/save/
 history/export flow. Tests seed plans and require no transcription downloads.
+
+### D-200 · Reversible visual direction and editable transcript beats
+
+Three looks split a short at timed words and existing emphasis choices.
+Voice and footage positions advance independently by the same frame offset;
+the output duration and word order remain unchanged. Original joins survive.
+Director-created internal joins are marked so changing the look can restore
+its own splits and replace cadence rather than accumulating cuts. Restore
+requires continuous source ranges and compatible scene settings; manual
+shots, assets and pinned visual beats prevent automatic merging.
+
+VisualBeat stores editable text (96 characters), role, look, position and
+speaker zoom (1-1.25). Automatic text quotes up to eight transcript words;
+manual edits are pinned. Existing shot selection supplies matched cutaways,
+returns to the speaker at both ends and limits automatic image coverage.
+Caption styling changes only when explicitly requested. Footage zoom uses
+the existing face-following crop and participates in the segment cache key.
+
+Text plates are ASS layers on the exact scene clock, with a short fade,
+wrapped text and escaped control characters. Auto placement avoids the
+caption region and the tracked face at the actual zoom. No safe zone means
+no extra text; manual positioning requires preview. SRT/VTT remain spoken
+captions only. These margins are generic, not platform-specific guarantees.
+
+Direction and per-beat preview use the actual draft export without saving
+history or refitting added music. Saving uses full-plan history; full-plan
+revision checks protect scene indices. Checks cover words and clocks,
+caption corrections, cutaway budgets, manual overrides, replacing cadence,
+auto placement, actual zoomed frames, 25 fps footage at 30 fps, delayed audio,
+combined pacing/selection/direction and Chromium preview/save/undo/export.
