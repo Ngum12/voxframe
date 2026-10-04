@@ -27,6 +27,7 @@ from typing import Self
 import structlog
 from pydantic import BaseModel, Field, model_validator
 
+from voxframe.config.captions import CaptionTreatment
 from voxframe.config.settings import AspectRatio
 from voxframe.models.asset import Asset, AssetKind
 from voxframe.models.transcript import Word
@@ -293,6 +294,8 @@ class PlannedScene(BaseModel):
     #: heard next to what they corrected it to, and so re-applying a correction
     #: is idempotent.
     caption_text: str = Field(default="")
+    caption_treatment: CaptionTreatment | None = None
+    caption_emphasis: tuple[int, ...] = Field(default=())
 
     #: Displayed words with real timings, so a re-render highlights as
     #: precisely as the first render did.
@@ -436,6 +439,7 @@ class ScenePlan(BaseModel):
     total_frames: int = Field(gt=0)
     aspect: AspectRatio = Field(default=AspectRatio.HORIZONTAL)
     style: str = Field(default="clean-educational")
+    caption_treatment: CaptionTreatment | None = None
 
     scenes: tuple[PlannedScene, ...]
 

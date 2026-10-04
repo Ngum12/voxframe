@@ -171,6 +171,7 @@ def _scenes_for_captions(plan: ScenePlan) -> tuple[Scene, ...]:
                 # Scene.text is derived from its words, so the corrected text
                 # arrives with them and must not be passed separately.
                 words=words,
+                emphasis=tuple(i for i in planned.caption_emphasis if 0 <= i < len(words)),
             )
         )
 
@@ -190,20 +191,20 @@ def _captions_above_face(
     from voxframe.config.style import CaptionPosition
     from voxframe.render.compose.footage import face_extent
 
-    captions = style.captions
     if plan.footage is None or not plan.footage.track:
         return frozenset()
-    if captions.position is not CaptionPosition.BOTTOM:
-        return frozenset()
-    margin = captions.margin_vertical_px(width, height)
-    # The tallest the caption block can be: every line, with line spacing.
-    block = captions.max_lines * captions.font_size_px(height) * 1.3
-    bottom_band = height - margin - block
-    top_band = margin + block
     moved = set()
     for scene in plan.scenes:
         if not plan.shows_speaker(scene) or scene.footage_start is None:
             continue
+        treatment = scene.caption_treatment or plan.caption_treatment
+        captions = treatment.apply(style.captions) if treatment else style.captions
+        if captions.position is not CaptionPosition.BOTTOM:
+            continue
+        margin = captions.margin_vertical_px(width, height)
+        block = captions.max_lines * captions.font_size_px(height) * 1.3
+        bottom_band = height - margin - block
+        top_band = margin + block
         extent = face_extent(
             plan.footage, width, height, scene.footage_start, scene.duration_frames / plan.fps
         )
@@ -339,6 +340,8 @@ def render_from_plan(
     write_ass(
         ass_path, caption_scenes, style.captions, width, out_height, plan.fps,
         top_scenes=_captions_above_face(plan, style, width, out_height),
+        scene_treatments={s.index: s.caption_treatment or plan.caption_treatment
+                          for s in plan.scenes if s.caption_treatment or plan.caption_treatment},
     )
 
     srt_path = vtt_path = None

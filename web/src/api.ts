@@ -242,6 +242,8 @@ export interface PlannedScene {
   end_frame: number;
   text: string;
   caption_text: string;
+  caption_treatment?: CaptionTreatment | null;
+  caption_emphasis?: number[];
   words: PlanWord[];
   card_kind: string;
   card_text: string;
@@ -276,6 +278,7 @@ export interface ScenePlan {
   total_frames: number;
   aspect: string;
   style: string;
+  caption_treatment?: CaptionTreatment | null;
   language: string;
   language_probability: number;
   transcribe_model: string;
@@ -858,4 +861,28 @@ export const correctCaption = (jobId: string, index: number, text: string) =>
   request<EditResult>(`/api/jobs/${jobId}/scenes/${index}/caption`, {
     method: "PUT",
     body: JSON.stringify({ text }),
+  });
+
+export interface CaptionTreatment {
+  animation: "highlight" | "karaoke" | "pop" | "typewriter" | "emphasis" | "plain" | "spotlight" | "pulse";
+  position: "bottom" | "center" | "top";
+  accent: string; color: string; size: number;
+  backing: "box" | "band" | "outline"; uppercase: boolean;
+  words_per_page: number; max_lines: number; lift: number; emphasis_scale: number;
+}
+export interface CaptionControls {
+  treatment: CaptionTreatment; emphasis: number[]; words: PlanWord[];
+  presets: Record<string, CaptionTreatment>; inherited: boolean;
+}
+export const getCaptionControls = (jobId: string, index: number) =>
+  request<CaptionControls>(`/api/jobs/${jobId}/scenes/${index}/captions`);
+export const saveCaptionLook = (jobId: string, index: number, treatment: CaptionTreatment | null, emphasis: number[], all_scenes: boolean) =>
+  request<PlanEditResult>(`/api/jobs/${jobId}/scenes/${index}/captions`, {
+    method: "PUT", body: JSON.stringify({ treatment, emphasis, all_scenes }),
+  });
+export const suggestCaptionEmphasis = (jobId: string, index: number) =>
+  request<{ emphasis: number[]; method: string }>(`/api/jobs/${jobId}/scenes/${index}/captions/suggest`, { method: "POST" });
+export const previewCaptions = (jobId: string, index: number, treatment: CaptionTreatment, emphasis: number[]) =>
+  request<{ url: string; note: string }>(`/api/jobs/${jobId}/scenes/${index}/captions/preview`, {
+    method: "POST", body: JSON.stringify({ treatment, emphasis }),
   });

@@ -243,7 +243,8 @@ def correct_caption(plan: ScenePlan, index: int, text: str) -> ScenePlan:
 
     original = " ".join(scene.text.split())
     edited = scene.model_copy(
-        update={"caption_text": "" if cleaned == original else cleaned}
+        update={"caption_text": "" if cleaned == original else cleaned,
+                "caption_emphasis": () if cleaned != scene.display_text else scene.caption_emphasis}
     )
 
     log.info(
