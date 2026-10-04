@@ -2495,3 +2495,53 @@ main:has(.welcome) {
 @keyframes caption-settle { from { transform: scale(.92); } to { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .caption-demo-word { animation: none !important; } }
 @media (max-width: 420px) { .caption-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Transition studio */
+.transition-studio { display: grid; gap: 16px; padding-bottom: 24px; }
+.transition-studio h3 { margin: 7px 0; font-size: 1.5rem; letter-spacing: -.035em; }
+.transition-studio .label { display: grid; gap: 6px; }
+.transition-boundary { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+.transition-boundary > div { position: relative; min-height: 85px; overflow: hidden; background: var(--sunken); border: 1px solid var(--line-strong); border-radius: 9px; display: grid; place-content: center; padding: 12px; }
+.transition-boundary img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .35; }
+.transition-boundary span, .transition-boundary small { position: relative; font-size: .75rem; }
+.transition-boundary small { margin-top: 5px; color: var(--ink-muted); }
+.transition-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.transition-presets button { display: grid; gap: 5px; text-align: left; border: 1px solid var(--line-strong); border-radius: 9px; padding: 11px; color: var(--ink); background: var(--sunken); cursor: pointer; }
+.transition-presets button[aria-pressed=true] { outline: 2px solid var(--accent); outline-offset: 1px; }
+.transition-presets span { font-size: .7rem; color: var(--ink-muted); }
+.transition-stage { position: relative; overflow: hidden; background: #18212b; border-radius: 12px; max-height: 360px; width: 100%; margin: auto; }
+.transition-stage video { display: block; width: 100%; height: 100%; }
+.transition-sketch { position: absolute; inset: 0; display: grid; place-content: center; padding: 15%; color: #fff; text-align: center; font-size: 1.1rem; font-weight: 700; background: linear-gradient(140deg, #33496b, #18212b); }
+.transition-sketch.incoming { background: linear-gradient(140deg, #745739, #18212b); }
+.transition-sketch img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.transition-sketch span { position: relative; text-shadow: 0 2px 4px #000; }
+.transition-stage-note { position: absolute; top: 13px; left: 14px; font-size: .58rem; letter-spacing: .13em; color: #fff; background: #0009; padding: 5px; border-radius: 4px; }
+.transition-stage .incoming { animation: join-fade var(--join-cycle) infinite; animation-play-state: paused; }
+.transition-stage.playing .incoming { animation-play-state: running; }
+.transition-stage.kind-cut .incoming { animation-name: join-cut; }
+.transition-stage.kind-dip_to_black .incoming { animation-name: join-dip; }
+.transition-stage.kind-slide .incoming { animation-name: join-slide; }
+.transition-stage.kind-push .incoming { animation-name: join-push; }
+.transition-stage.kind-zoom .incoming { animation-name: join-zoom; }
+.transition-stage.kind-soft_blur .incoming { animation-name: join-blur; }
+.transition-stage.direction-left { --join-x: 100%; --join-y: 0%; }
+.transition-stage.direction-right { --join-x: -100%; --join-y: 0%; }
+.transition-stage.direction-up { --join-x: 0%; --join-y: 100%; }
+.transition-stage.direction-down { --join-x: 0%; --join-y: -100%; }
+.transition-controls { border: 0; padding: 0; margin: 0; display: grid; gap: 12px; min-width: 0; }
+.transition-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.transition-timing { background: var(--sunken); padding: 12px; border-radius: 8px; font-size: .8rem; }
+.transition-join-map { display: flex; flex-wrap: wrap; gap: 7px; }
+.transition-join-map button { display: grid; gap: 4px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--sunken); color: var(--ink); padding: 8px; cursor: pointer; }
+.transition-join-map small { font-size: .65rem; color: var(--ink-muted); }
+.transition-join-map button[aria-pressed=true] { border-color: var(--accent); }
+@keyframes join-fade { 0%, 30% { opacity: 0; } 55%, 90% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes join-cut { 0%, 44.9% { opacity: 0; } 45%, 90% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes join-dip { 0%, 30% { opacity: 0; filter: brightness(0); } 45% { opacity: 1; filter: brightness(0); } 60%, 90% { opacity: 1; filter: brightness(1); } 100% { opacity: 0; } }
+@keyframes join-slide { 0%, 30% { transform: translate(var(--join-x), var(--join-y)); } 55%, 90% { transform: translate(0, 0); } 100% { transform: translate(var(--join-x), var(--join-y)); } }
+@keyframes join-push { 0%, 30% { transform: translate(var(--join-x), var(--join-y)) scale(.9); opacity: 0; } 55%, 90% { transform: translate(0, 0) scale(1); opacity: 1; } 100% { opacity: 0; } }
+@keyframes join-zoom { 0%, 30% { transform: scale(.7); opacity: 0; } 55%, 90% { transform: scale(1); opacity: 1; } 100% { opacity: 0; } }
+@keyframes join-blur { 0%, 30% { filter: blur(12px); opacity: 0; } 55%, 90% { filter: blur(0); opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .transition-stage .incoming { animation: none; } }
+.transition-stage.portrait { width: min(100%, 202px); }
+.transition-stage.square { width: min(100%, 360px); }

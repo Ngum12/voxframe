@@ -10,7 +10,7 @@ on anything large.
 
 Three additions to the studio, built in this order.
 
-### 1. Caption studio — implemented on `feat/caption-studio`
+### 1. Caption studio — implemented
 
 - **Styles:**
   - **Highlight** (today's): the line, with the spoken word coloured;
@@ -37,16 +37,25 @@ Three additions to the studio, built in this order.
 - **Reversible:** save for one scene or the whole video; undo/redo restores
   the saved look. Re-rendering keeps the original word timestamps and audio.
 
-**Next build: transitions**, followed by the reusable music library below.
+**Next build: the reusable music library below.**
 
-### 2. Transitions
+### 2. Transition studio — implemented on `feat/transition-studio`
 
 - **Kinds:** cut, crossfade, dip to black, slide, push, zoom and soft blur.
 - **Presets:** each template has its own transition, and any join between
   two scenes can be changed in the studio.
 - **Frame-exact:** a transition never shifts the sound or the captions.
-- **Quick to change:** changing a transition remakes only that join, not
-  the scenes.
+- **Quick to change:** saved transitions use cached scene footage and cached
+  join windows. Changing a kind or direction remakes the affected join; a
+  duration change also rebuilds its neighboring trim pieces. Scenes keep
+  their original duration, motion and source timestamps.
+- **Studio controls:** choose any join, apply a preset, set direction and
+  duration, save for that join or all joins, or return to template defaults.
+- **Preview and history:** render a short picture preview with the same
+  effect as the export, then save. Previewing leaves the plan unchanged;
+  undo/redo covers every saved transition choice.
+- **Short joins stay readable:** blends take at most a quarter of the shorter
+  scene, and a join too short for four frames becomes a cut.
 
 ### 3. A music library
 

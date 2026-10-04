@@ -70,6 +70,10 @@ class TransitionKind(StrEnum):
     CUT = "cut"
     CROSSFADE = "crossfade"
     DIP_TO_BLACK = "dip_to_black"
+    SLIDE = "slide"
+    PUSH = "push"
+    ZOOM = "zoom"
+    SOFT_BLUR = "soft_blur"
 
 
 class CaptionStyle(BaseModel):

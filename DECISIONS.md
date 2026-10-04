@@ -6216,3 +6216,45 @@ stay in the draft until the user saves. No additional model download is needed.
 Validated through API history/authentication checks, rendered tests for all
 eight presets and French portrait fitting, and a browser flow that previews,
 saves, undoes/redoes, applies a whole-video look and renders the result.
+
+### D-197 · Transition studio: deliberate joins over cached, unpadded scenes
+
+The owner asked to build the next roadmap item after merging captions.
+Seven kinds are available: cut, crossfade, dip to black, slide, push, zoom
+and soft blur. Slide brings the next picture over the previous one; Push
+moves both. Both support left, right, up and down. Presets and duration
+controls can apply to one outgoing-scene join or the whole video.
+
+Scene overrides and a video default live in the plan. An absent choice
+keeps template rules: pauses and repeated images still make automatic cuts.
+A deliberate choice overrides that automatic decision, with a safety limit
+of a quarter of the shorter scene. Fewer than four blend frames means cut.
+Applying a video default clears scene overrides; resetting restores the
+template rules. Each operation is one reversible edit-history change.
+
+Old plans retain D-097's padded-segment renderer. Saved transition choices
+use canonical, unpadded scenes: no transition changes their duration, motion
+or footage timestamps. At a join, the outgoing last frame is held while the
+incoming frames continue on their original clock. The short join window
+replaces those incoming frames, so neither the video nor its captions lose
+a frame. Sound is assembled separately and never faded by this visual effect.
+
+Canonical scenes, trimmed body pieces and join windows have separate caches.
+A kind or direction change remakes one window; duration changes also remake
+its neighboring body trims, while original scenes remain cached. The video
+still needs final assembly and caption burning. New cached clips are written
+atomically and their actual frame counts are checked before publication.
+
+A muted preview renders the real pair of scene pictures with the export's
+join effect, about a second either side. It does not save a draft. Its sketch
+is explicitly labelled, and the rendered preview contains pictures only.
+The studio exposes the actual capped frame duration and explains inheritance.
+
+Checks include all seven real exports, unchanged caption sidecars, scene
+and unaffected-join cache reuse, fractional/high frame rates, speaker flash
+and tone synchronization, and a browser edit/preview/undo/redo/export flow.
+
+The join inputs explicitly restore frame rate before edge-frame padding and
+before blending: FFmpeg 7 otherwise clones no frames after a trim, turning
+a nominal blend into a cut. Pixel checks verify a balanced black midpoint
+and a true intermediate crossfade, as well as the output frame count.

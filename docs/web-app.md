@@ -75,6 +75,17 @@ there. Every change is kept and can be undone (**Ctrl+Z**) or redone
 keyboard shortcuts; `[` and `]` fold away the side panel and the timeline,
 whose edges can also be dragged.
 
+**Transitions.** Open the **Transitions** tab (keyboard **5**) and choose a
+join between two scenes. Choose Cut, Crossfade, Dip to black, Slide, Push,
+Zoom or Soft blur; Slide and Push also have a direction. Set the duration,
+then **Preview this join** to see a short, muted picture preview before
+saving. **Save for this join** changes one boundary; **Apply to all joins**
+sets the video's default. Undo/redo covers both. **Use video default** clears
+a scene override, and **Reset all to template** restores automatic choices.
+Blends start at the join and keep the sound and caption clocks in place.
+Short scenes cap the duration, which is shown in frames below the controls.
+Save the choice, then click **Update video** to export it.
+
 **Sound.** Voice polish (Polished, or Original exactly as recorded); the
 voice and music levels; how far the music drops while someone speaks; and
 the loudness for where the video is going. Moving a slider plays 15 seconds
