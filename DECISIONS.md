@@ -6351,3 +6351,35 @@ revision checks protect scene indices. Checks cover words and clocks,
 caption corrections, cutaway budgets, manual overrides, replacing cadence,
 auto placement, actual zoomed frames, 25 fps footage at 30 fps, delayed audio,
 combined pacing/selection/direction and Chromium preview/save/undo/export.
+
+### D-201 · Saved portrait delivery, editable text guides and real-clock progress
+
+ShortExport records platform, output height (1280 or 1920), four safe margins,
+an optional progress rail and its accent. Presets provide conservative starting
+areas for Shorts, TikTok, Reels and WhatsApp. They are editable composition
+guides, not promises about every device's changing app controls. Selection
+requires a 3-60 second passage and chooses 9:16. Voice/music levels and source
+editing stay intact; only the existing mix destination changes (-14/-1 for
+YouTube/social, -15/-1.5 for WhatsApp). Removing the export setting retains the
+current shape and sound destination; full-plan undo restores every choice.
+
+Safe caption composition applies after each individual caption look. Centered
+captions use conservative symmetric side margins, font size reserves room for
+emphasis, and long tokens fit through the word-clock renderer. Face clearance
+and text plates share the same effective styles. Automatic text can be omitted
+when a tracked face and captions occupy the available region; manual placement
+is still constrained to the export area. Spoken SRT/VTT content is unchanged.
+
+The ASS progress rail animates its clip from empty to full on the output frame
+clock, reaching full width on the last frame. It never affects the soundtrack,
+word timing or scene segments. Captioned-picture cache keys include the ASS;
+source segments remain reusable when only delivery graphics change.
+
+Final re-render follows the saved height, while preview uses 480-high drafts.
+The Export tab offers all four presets, custom margins, accent, guides and
+full-plan undo/redo. Preview guides align with the actual portrait video rather
+than its outer container and are never burned into the MP4. Revision checks
+reject stale requests. Tests inspect decoded safe-area pixels for all presets
+and caption looks, measure rail progress, preserve source clap/flash sync,
+and run pacing/selection/direction/export plus download in Chromium. FFmpeg 7
+compatibility is checked separately from the pinned FFmpeg 9 workflow.

@@ -54,13 +54,27 @@ def append_visual_beats(path: Path, plan: ScenePlan, template: StyleTemplate,
         if beat.source == "director" and beat.text not in " ".join(
                 word.text for word in scene.caption_words()):
             continue  # Later word trims or caption corrections invalidate an automatic quote.
-        fontsize, lines = _layout(beat.text, round(width * .73), height)
-        label_size = max(9, round(fontsize * .48))
+        export = plan.short_export
+        safe = export.safe_area if export else None
+        x = width * (safe.left + .01 if safe else .07)
+        box_width = width * (1 - safe.left - safe.right - .02 if safe else .79)
         padding = max(6, round(height * .018))
+        fontsize, lines = _layout(beat.text, max(12, round(box_width - 2 * padding)), height)
+        label_size = max(9, round(fontsize * .48))
         block = padding * 2 + label_size * 1.5 + fontsize * 1.35 * len(lines)
-        choices = [height * .07, height * .43, height * .64]
+        ceiling = height * (safe.top + (.04 if export.progress else .02) if safe else .07)
+        floor = height * (1 - safe.bottom - .01 if safe else .9)
+        choices = ([ceiling, max(ceiling, (ceiling + floor - block) / 2), floor - block]
+                   if safe else [height * .07, height * .43, height * .64])
+        if safe and block > floor - ceiling:
+            continue
         treatment = scene.caption_treatment or plan.caption_treatment
         captions = treatment.apply(template.captions) if treatment else template.captions
+        if safe:
+            from voxframe.config.short_export import safe_caption_style
+
+            captions = safe_caption_style(captions, safe, progress=export.progress,
+                top=scene.index in top_captions and captions.position == CaptionPosition.BOTTOM)
         margin = captions.margin_vertical_px(width, height)
         caption_height = captions.font_size_px(height) * captions.max_lines * 1.3
         if scene.index in top_captions or captions.position == CaptionPosition.TOP:
@@ -75,15 +89,13 @@ def append_visual_beats(path: Path, plan: ScenePlan, template: StyleTemplate,
                                scene.duration_frames / plan.fps, zoom=beat.zoom)
         if beat.position == "auto":
             regions = [caption_region, *([face] if face else [])]
-            clear = [y for y in choices if y + block < height * .9 and
+            clear = [y for y in choices if y >= ceiling and y + block <= floor and
                      all(y + block <= lo or y >= hi for lo, hi in regions)]
             if not clear:
                 continue  # Speech stays readable when no safe text space exists.
             y = clear[0]
         else:
             y = choices[0 if beat.position == "top" else 1]
-        x = width * .07
-        box_width = width * .79
         start, end = scene.start_frame / plan.fps, scene.end_frame / plan.fps
         fade = min(120, round((end - start) * 1000 / 4))
         timing = f"{format_timestamp(start)},{format_timestamp(end)},VoxframeBeat,,0,0,0,,"

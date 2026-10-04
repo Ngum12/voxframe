@@ -223,10 +223,18 @@ def _captions_above_face(
         captions = treatment.apply(style.captions) if treatment else style.captions
         if captions.position is not CaptionPosition.BOTTOM:
             continue
+        top_style = captions
+        if plan.short_export:
+            from voxframe.config.short_export import safe_caption_style
+
+            export = plan.short_export
+            captions = safe_caption_style(captions, export.safe_area, progress=export.progress)
+            top_style = safe_caption_style(captions, export.safe_area,
+                                           progress=export.progress, top=True)
         margin = captions.margin_vertical_px(width, height)
         block = captions.max_lines * captions.font_size_px(height) * 1.3
         bottom_band = height - margin - block
-        top_band = margin + block
+        top_band = top_style.margin_vertical_px(width, height) + block
         extent = face_extent(
             plan.footage, width, height, scene.footage_start, scene.duration_frames / plan.fps,
             zoom=scene.visual_beat.zoom if scene.visual_beat else 1,
@@ -295,6 +303,10 @@ def render_from_plan(
         RenderError: If the audio is missing, libass is unavailable, or the
             rendered frame count disagrees with the plan.
     """
+    if plan.short_export and (plan.aspect.value != "9:16" or
+            not 3 <= plan.total_frames / plan.fps <= 60 + 1e-7):
+        raise RenderError("This export preset needs a 3-60 second portrait edit. "
+                          "Choose it in Shorts.")
     if not audio_path.is_file():
         raise RenderError(f"Audio file not found: {audio_path}")
     if not caps.has_libass:
@@ -369,6 +381,8 @@ def render_from_plan(
     write_ass(
         ass_path, caption_scenes, style.captions, width, out_height, plan.fps,
         top_scenes=_captions_above_face(plan, style, width, out_height),
+        safe_area=plan.short_export.safe_area if plan.short_export else None,
+        progress=bool(plan.short_export and plan.short_export.progress),
         scene_treatments={s.index: s.caption_treatment or plan.caption_treatment
                           for s in plan.scenes if s.caption_treatment or plan.caption_treatment},
     )
@@ -377,6 +391,11 @@ def render_from_plan(
         from voxframe.render.captions.visual_beats import append_visual_beats
 
         append_visual_beats(ass_path, plan, style, width, out_height)
+
+    if plan.short_export:
+        from voxframe.render.captions.short_progress import append_short_progress
+
+        append_short_progress(ass_path, plan, width, out_height)
 
     srt_path = vtt_path = None
     if write_sidecars:

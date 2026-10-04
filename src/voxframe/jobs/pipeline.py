@@ -512,7 +512,7 @@ def render_plan(
         capabilities,
         output,
         quality=quality,
-        height=height,
+        height=plan.short_export.height if plan.short_export else height,
         music=music,
         cache_dir=settings.cache_path / "segments",
     )

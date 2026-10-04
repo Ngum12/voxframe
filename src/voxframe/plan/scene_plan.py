@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from voxframe.config.captions import CaptionTreatment
 from voxframe.config.settings import AspectRatio
+from voxframe.config.short_export import ShortExport
 from voxframe.config.transitions import TransitionTreatment
 from voxframe.config.visuals import VisualBeat
 from voxframe.models.asset import Asset, AssetKind
@@ -449,6 +450,7 @@ class ScenePlan(BaseModel):
     style: str = Field(default="clean-educational")
     caption_treatment: CaptionTreatment | None = None
     transition_treatment: TransitionTreatment | None = None
+    short_export: ShortExport | None = None
 
     scenes: tuple[PlannedScene, ...]
 

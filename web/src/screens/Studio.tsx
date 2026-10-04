@@ -39,10 +39,11 @@ import { TransitionStudio } from "./TransitionStudio";
 import { PacingStudio } from "./PacingStudio";
 import { ShortsStudio } from "./ShortsStudio";
 import { DirectorStudio } from "./DirectorStudio";
+import { ExportStudio } from "./ExportStudio";
 import { SoundPanel } from "./Sound";
 import { Timeline, type TimedWord } from "./Timeline";
 
-type Tab = "scenes" | "captions" | "sound" | "style" | "transitions" | "pacing" | "shorts" | "director";
+type Tab = "scenes" | "captions" | "sound" | "style" | "transitions" | "pacing" | "shorts" | "director" | "export";
 
 /** The studio's panel sizes and whether each is open, kept between sessions (D-183). */
 interface Layout {
@@ -132,6 +133,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "pacing", label: "Pacing" },
   { id: "shorts", label: "Shorts" },
   { id: "director", label: "Director" },
+  { id: "export", label: "Export" },
 ];
 
 const ARTIFACT_LABELS: Record<string, string> = {
@@ -397,7 +399,7 @@ export function Studio({
       } else if (key === "?") shortcuts.current?.showModal();
       else if (key === "[" && !mod) togglePanel();
       else if (key === "]" && !mod) toggleTimeline();
-      else if (["1", "2", "3", "4", "5", "6", "7", "8"].includes(key) && !mod) setTab(TABS[Number(key) - 1].id);
+      else if (["1", "2", "3", "4", "5", "6", "7", "8", "9"].includes(key) && !mod) setTab(TABS[Number(key) - 1].id);
       else if ((key === "+" || key === "=") && !mod) window.dispatchEvent(new CustomEvent("voxframe:zoom", { detail: 1.5 }));
       else if (key === "-" && !mod) window.dispatchEvent(new CustomEvent("voxframe:zoom", { detail: 1 / 1.5 }));
     };
@@ -718,6 +720,8 @@ export function Studio({
             {tab === "director" && <DirectorStudio key={`${jobId}-${planVersion}-${scene.index}`}
               jobId={jobId} plan={plan} sceneIndex={scene.index} onEdited={afterEdit} />}
 
+            {tab === "export" && <ExportStudio jobId={jobId} plan={plan} onEdited={afterEdit} />}
+
             {tab === "sound" && hasVideo && (
               <SoundPanel
                 key={planVersion}
@@ -810,7 +814,7 @@ export function Studio({
           <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Back or forward one second</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Undo the last change</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></dt><dd>Redo</dd>
-          <dt><kbd>1</kbd>–<kbd>8</kbd></dt><dd>Scenes, Captions, Sound, Style, Transitions, Pacing, Shorts, Director</dd>
+          <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Scenes, Captions, Sound, Style, Transitions, Pacing, Shorts, Director, Export</dd>
           <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Zoom the timeline</dd>
           <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Hide or show the side panel, the timeline</dd>
           <dt><kbd>?</kbd></dt><dd>This list</dd>

@@ -176,6 +176,22 @@ tracked faces and is hidden if there is no room; preview manual placement.
 Previews include voice, footage and graphics. Added music is heard after
 Update video, which exports your saved edit.
 
+**Export.** Open **Export** (keyboard **9**) to finish a 3-60 second short.
+Choose YouTube Shorts, TikTok, Instagram Reels or WhatsApp Status, then Full HD
+(1080 x 1920) or a smaller file (720 x 1280). Presets reserve room for app
+controls; adjust the top, bottom and side guides for your device. Captions and
+text beats stay within those conservative margins. The preview can show guides
+but the finished video contains only your captions, text and optional progress
+rail. The rail follows the video's actual frame count and accepts your accent
+colour. Presets retain voice/music levels and choose a destination loudness
+of -14 LUFS/-1 dBTP, or -15 LUFS/-1.5 dBTP for WhatsApp.
+
+Preview export look leaves the saved plan intact and omits added music.
+Save export settings is one undoable edit. Update video uses the saved portrait
+size, fits added music and writes the finished MP4; Download saves it. Use
+project output settings removes the export size, guides and rail while keeping
+the current shape and sound destination. Undo restores the whole previous plan.
+
 ## Privacy and security
 
 - The app listens on `127.0.0.1` only and checks every request's host name,

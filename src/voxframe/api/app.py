@@ -55,6 +55,7 @@ from voxframe.api.security import (
 )
 from voxframe.config.captions import CaptionTreatment
 from voxframe.config.settings import AspectRatio, QualityPreset, Settings, get_settings
+from voxframe.config.short_export import ShortExport
 from voxframe.config.transitions import TransitionTreatment
 from voxframe.config.userprefs import (
     KEY_FIELDS,
@@ -308,6 +309,11 @@ class CaptionLook(BaseModel):
     treatment: CaptionTreatment | None = None
     emphasis: tuple[int, ...] = Field(default=(), max_length=400)
     all_scenes: bool = False
+
+
+class ShortExportEdit(BaseModel):
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    settings: ShortExport | None = None
 
 
 class DirectionEdit(BaseModel):
@@ -1585,6 +1591,41 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             raise HTTPException(status_code=404, detail="No such short preview.")
         return _file_or_range(request, path)
 
+    @app.get("/api/jobs/{job_id}/short-export")
+    def short_export_controls(job_id: str,
+                              context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.short_export import controls
+
+        _, _, plan = _editable_plan(context, job_id)
+        return controls(plan)
+
+    def export_draft(plan: ScenePlan, edit: ShortExportEdit) -> ScenePlan:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.short_export import configure
+        from voxframe.plan.shorts import revision
+
+        if edit.revision != revision(plan):
+            raise HTTPException(status_code=409, detail="The edit changed. Reload Export.")
+        try:
+            return configure(plan, edit.settings)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.put("/api/jobs/{job_id}/short-export")
+    def short_export_edit(job_id: str, edit: ShortExportEdit,
+                          context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        job, path, plan = _editable_plan(context, job_id)
+        updated = export_draft(plan, edit)
+        saved = _save_plan(updated, path, "short export settings")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
+
+    @app.post("/api/jobs/{job_id}/short-export/preview")
+    def short_export_preview(job_id: str, edit: ShortExportEdit,
+                             context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        _, _, plan = _editable_plan(context, job_id)
+        return direction_preview_result(job_id, export_draft(plan, edit), context)
+
     @app.get("/api/jobs/{job_id}/direction")
     def direction_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
         from voxframe.config.visuals import LOOKS
@@ -2733,7 +2774,8 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
         before = shown.scenes[position] if position < len(shown.scenes) else None
         if (before is None or looks(scene) != looks(before)
                 or now.caption_treatment != shown.caption_treatment
-                or now.transition_treatment != shown.transition_treatment):
+                or now.transition_treatment != shown.transition_treatment
+                or now.short_export != shown.short_export):
             changed.append(scene.index)
         if before is None or looks(scene)[0] != looks(before)[0]:
             pictures.append(scene.index)

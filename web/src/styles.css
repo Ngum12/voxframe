@@ -2571,3 +2571,9 @@ main:has(.welcome) {
 .shorts-selection p { margin: 0; font-size: .8rem; }
 .shorts-selection .link-button { justify-self: start; }
 .shorts-preview video { display: block; max-width: 100%; width: 270px; max-height: 480px; border-radius: 10px; background: #141824; margin: 10px auto; }
+
+.export-receipt { display: grid; gap: .4rem; padding: 1rem; border: 1px solid var(--line); border-radius: 12px; font-size: .85rem; }
+.export-player { position: relative; width: 270px; max-width: 100%; aspect-ratio: 9 / 16; margin: 10px auto; overflow: hidden; border-radius: 12px; isolation: isolate; background: #111; }
+.export-player video { display: block; width: 100%; max-height: none; margin: 0; border-radius: 0; }
+.export-guide { position: absolute; pointer-events: none; border: 1px dashed #70f0d0; box-shadow: 0 0 0 1000px #0005; }
+.export-guide span { position: absolute; top: -.1rem; left: .3rem; transform: translateY(-100%); padding: .15rem .3rem; color: #70f0d0; background: #111c; font-size: .55rem; letter-spacing: .12em; }

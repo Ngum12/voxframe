@@ -125,8 +125,16 @@ Changing the look replaces the director's own joins while preserving source
 cuts and manual choices. Auto text avoids captions and tracked faces; when
 there is no room, the text is omitted. Added music is heard on final export.
 
-Next: platform export presets and safe margins, progress indicators, and
-filler/false-start review before the next music stage.
+**Export stage delivered:** the Export tab saves presets for YouTube Shorts,
+TikTok, Instagram Reels and WhatsApp Status. Choose 1080 x 1920 or 720 x 1280,
+adjust conservative text guides, and add a timed progress rail. Captions and
+text beats use those margins; the draft shows guides without burning them into
+the MP4. Each preset selects the existing destination loudness target while
+retaining mix levels. Update video follows the saved output size; undo restores
+both export and sound choices. The full browser flow finishes from pause cuts
+through passage selection and direction to an actual downloaded MP4.
+
+Filler/false-start review remains a later editing improvement. Next: music.
 
 - **Suggested Shorts:** 3 to 60 seconds, aiming near 30, with sentence-based
   candidates ranked by questions, numbers and explanation/contrast cues.
@@ -134,7 +142,8 @@ filler/false-start review before the next music stage.
 - **Bold Shorts captions** (from 0.3.0's caption styles), a hook title over
   the first seconds, and a progress bar.
 - **Export presets** for YouTube Shorts, TikTok, Reels and WhatsApp Status:
-  length, loudness, and captions kept clear of each app's buttons.
+  a 3-60 second portrait edit, saved picture size, destination loudness, and
+  adjustable guides for captions and text. App controls vary by device.
 
 ## Later
 

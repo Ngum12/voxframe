@@ -283,6 +283,7 @@ export interface ScenePlan {
   style: string;
   caption_treatment?: CaptionTreatment | null;
   transition_treatment?: TransitionTreatment | null;
+  short_export?: ShortExport | null;
   language: string;
   language_probability: number;
   transcribe_model: string;
@@ -951,3 +952,18 @@ export const directVideo = (id: string, choice: DirectionChoice) => request<Plan
 export const previewDirection = (id: string, choice: DirectionChoice) => request<ShortPreview>(`/api/jobs/${id}/direction/preview`, {method: "POST", body: JSON.stringify(choice)});
 export const saveVisual = (id: string, index: number, revision: string, beat: VisualBeat | null) => request<PlanEditResult>(`/api/jobs/${id}/scenes/${index}/visual`, {method: "PUT", body: JSON.stringify({revision, beat})});
 export const previewVisual = (id: string, index: number, revision: string, beat: VisualBeat) => request<ShortPreview>(`/api/jobs/${id}/scenes/${index}/visual/preview`, {method: "POST", body: JSON.stringify({revision, beat})});
+
+export interface SafeArea { top: number; bottom: number; left: number; right: number }
+export interface ShortExport {
+  platform: "youtube" | "tiktok" | "reels" | "whatsapp";
+  height: 1280 | 1920; safe_area: SafeArea; progress: boolean; accent: string;
+}
+export interface ExportControls {
+  revision: string; settings: ShortExport | null; seconds: number; note: string;
+  presets: Record<ShortExport["platform"], { label: string; export: ShortExport }>;
+}
+export const getShortExport = (id: string) => request<ExportControls>(`/api/jobs/${id}/short-export`);
+export const saveShortExport = (id: string, revision: string, settings: ShortExport | null) =>
+  request<PlanEditResult>(`/api/jobs/${id}/short-export`, {method: "PUT", body: JSON.stringify({revision, settings})});
+export const previewShortExport = (id: string, revision: string, settings: ShortExport) =>
+  request<ShortPreview>(`/api/jobs/${id}/short-export/preview`, {method: "POST", body: JSON.stringify({revision, settings})});
