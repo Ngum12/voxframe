@@ -165,6 +165,12 @@ export function SoundPanel({
   const player = useRef<HTMLAudioElement>(null);
   const stylePlayer = useRef<HTMLAudioElement>(null);
   const timer = useRef<number | undefined>(undefined);
+  const previewRequest = useRef(0);
+
+  useEffect(() => () => {
+    previewRequest.current += 1;
+    window.clearTimeout(timer.current);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,21 +195,24 @@ export function SoundPanel({
   }, [styleUrl]);
 
   const listen = useCallback(
-    async (settings: AudioMix, onlyVoice: boolean, music: MusicDraft) => {
+    async (settings: AudioMix, onlyVoice: boolean, music: MusicDraft, searchToken?: string) => {
       if (!state?.can_preview) return;
+      const request = ++previewRequest.current;
       try {
         setError(null);
         const url = await previewMix(
           jobId,
           settings,
           Math.max(0, playhead() - 2),
-          onlyVoice || music.choice === "none",
-          previewTrack(music, draftOf(state)),
+          onlyVoice || (!searchToken && music.choice === "none"),
+          searchToken ? {search_token: searchToken} : previewTrack(music, draftOf(state)),
         );
+        if (request !== previewRequest.current) { URL.revokeObjectURL(url); return; }
         setPreviewUrl(url);
         window.setTimeout(() => void player.current?.play().catch(() => undefined), 0);
       } catch (reason) {
-        setError((reason as Error).message);
+        if (request === previewRequest.current) setError((reason as Error).message);
+        if (searchToken) throw reason;
       }
     },
     [jobId, playhead, state],
@@ -397,7 +406,7 @@ export function SoundPanel({
 
         <details className="music-library-picker">
           <summary>Choose from your music library</summary>
-          <MusicLibraryPanel onChoose={(track) => changeMusic({
+          <MusicLibraryPanel onAudition={state.can_preview ? (token) => listen(mix, false, music, token) : undefined} onChoose={(track) => changeMusic({
             ...music, choice: "own", library_id: track.id, upload_id: null,
             upload_name: track.title, credit: track.credit || `${track.title} (supplied by the user)`,
             forget_track: false,

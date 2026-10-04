@@ -62,7 +62,30 @@ Editing a track's details affects future selections. **Hide from library**
 removes it from the list but keeps its audio for existing projects and undo
 history. Importing the same audio again restores it with its existing details.
 The Sound tab's quick upload still adds a track only to that project; save it
-through Library to reuse it. Online music discovery is a later stage.
+through Library to reuse it.
+
+**Discover openly licensed music** is available in Library and the Sound
+picker. Turn on **Allow online music search** there, type your own search,
+and review the results. Image-search consent does not enable music search.
+NonCommercial and NoDerivatives material is excluded; ShareAlike requires
+its separate checkbox. Only the words you type go to Openverse. Your
+recording stays on this computer.
+
+Length, mood and instrumental filters use each page's source metadata, so
+missing tags can mean fewer results. Use the page controls or loosen filters.
+**Preview track** downloads temporary audio and plays up to 15 seconds;
+**Hear under my voice** auditions it locally without saving a project edit.
+**Save to library** keeps an owned copy. **Use this track** also chooses it
+in Sound; **Apply to the video** saves the selection and updates the export.
+
+Credits automatically include the title, creator, license and Openverse
+source page, which links the original provider and license deed. Choosing an
+online result whose audio is already saved refreshes its library credit from
+that source; existing projects keep their credit snapshots. Source metadata
+is retained beside the owned audio. Search results expire after 15 minutes;
+old temporary downloads are cleared on later searches after 24 hours.
+Saved tracks stay available with online search off. Some openly licensed
+tracks are registered with YouTube Content ID and can still receive a claim.
 
 ## Making a video
 

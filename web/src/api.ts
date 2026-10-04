@@ -40,6 +40,7 @@ export interface SourcingSettings {
 export type Theme = "system" | "dark" | "light";
 
 export interface UserSettings {
+  music_search: {enabled: boolean; share_alike: boolean};
   sourcing: SourcingSettings;
   api_keys: Record<string, string>;
   /** The app's look (D-185). */
@@ -383,6 +384,8 @@ export const getSettings = () => request<UserSettings>("/api/settings");
 
 export const saveSettings = (body: {
   sourcing_consent?: boolean;
+  music_search_consent?: boolean;
+  music_share_alike?: boolean;
   api_keys?: Record<string, string>;
   theme?: Theme;
 }) => request<unknown>("/api/settings", { method: "PUT", body: JSON.stringify(body) });
@@ -801,7 +804,7 @@ export async function previewMix(
   start: number,
   voiceOnly: boolean,
   /** A track to hear in place of the video's music (D-184). */
-  track: { upload_id?: string | null; library_id?: string | null; kept?: boolean } = {},
+  track: { upload_id?: string | null; library_id?: string | null; search_token?: string; kept?: boolean } = {},
 ): Promise<string> {
   const response = await fetch(`/api/jobs/${jobId}/mix/preview`, {
     method: "POST",
@@ -812,6 +815,7 @@ export async function previewMix(
       start,
       seconds: 15,
       voice_only: voiceOnly,
+      music_search_token: track.search_token ?? null,
       music_library_id: track.library_id ?? null,
       music_upload_id: track.upload_id ?? null,
       kept_track: track.kept ?? false,
@@ -985,3 +989,13 @@ export const updateMusic = (track: MusicTrack) => request<MusicTrack>(`/api/musi
   method: "PUT", body: JSON.stringify({title: track.title, credit: track.credit, mood: track.mood}),
 });
 export const hideMusic = (id: string) => request<{hidden: boolean}>(`/api/music-library/${id}`, {method: "DELETE"});
+
+export interface OnlineMusicResult {
+  token: string; id: string; title: string; creator: string; license: string;
+  license_url: string; source_url: string; seconds: number; mood: string; instrumental: boolean;
+}
+export const searchMusic = (query: string, page: number, mood: string, min_seconds: number, max_seconds: number, instrumental: boolean) =>
+  request<{results: OnlineMusicResult[]; has_more: boolean}>("/api/music-search", {
+    method: "POST", body: JSON.stringify({query, page, mood, min_seconds, max_seconds, instrumental}),
+  });
+export const saveOnlineMusic = (token: string) => request<{track: MusicTrack; already_there: boolean}>(`/api/music-search/${token}/save`, {method: "POST"});

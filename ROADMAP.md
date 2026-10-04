@@ -37,7 +37,7 @@ Three additions to the studio, built in this order.
 - **Reversible:** save for one scene or the whole video; undo/redo restores
   the saved look. Re-rendering keeps the original word timestamps and audio.
 
-**Current build: Music library — local tracks delivered; online discovery next.
+**Current build: Music library — local reuse and online discovery implemented.
 Shorts pacing, selection, visual direction and portrait delivery are implemented.**
 
 ### 2. Transition studio — implemented
@@ -58,7 +58,7 @@ Shorts pacing, selection, visual direction and portrait delivery are implemented
 - **Short joins stay readable:** blends take at most a quarter of the shorter
   scene, and a join too short for four frames becomes a cut.
 
-### 3. A music library — local tracks implemented
+### 3. A music library — local reuse and online discovery implemented
 
 - **Your tracks, kept.** Library → Save a music track keeps an independent
   local copy, its title, credit and mood. Search and filter saved tracks, listen
@@ -67,11 +67,11 @@ Shorts pacing, selection, visual direction and portrait delivery are implemented
 - **Project-safe changes.** Each selection saves its credit into the project
   and participates in undo/redo. Editing library details affects future
   selections; hiding a track leaves saved projects and their history working.
-- **Next stage:** online discovery below is still planned.
 - **Search online for openly licensed music** (Openverse), with previews and
   filters for length, mood and instrumental. You can hear a track under your
-  own voice before choosing it. It follows the same rules as image search:
-  - **only if you've turned online search on**, and only the words you type
+  own voice before choosing it. A separate **Allow online music search**
+  switch avoids reusing consent given specifically for images:
+  - **only if you've turned music search on**, and only the words you type
     are sent;
   - **the same licence rules:** nothing NonCommercial or NoDerivatives, and
     ShareAlike off unless you turn it on;
@@ -80,6 +80,13 @@ Shorts pacing, selection, visual direction and portrait delivery are implemented
   - **never chosen for you:** online music is only ever added by your click;
   - **a clear note** that some openly licensed music is also registered with
     YouTube's Content ID, so a video using it may still get a claim.
+  - **metadata-based filters:** duration, mood tags and an instrumental tag
+    apply to each result page; unknown tags are not guessed. Previewing
+    downloads temporary audio; only Save or Use keeps it in the library.
+
+The provider contract is covered with controlled responses and real audio
+previews/exports. Live Openverse access remains unverified in this cloud
+environment: its network proxy rejects the API connection with HTTP 403.
 
 ## Current: Shorts Producer
 

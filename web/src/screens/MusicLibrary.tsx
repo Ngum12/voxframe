@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { hideMusic, importMusic, listMusic, updateMusic, uploadAudio, type MusicTrack } from "../api";
 import { Notice } from "../components";
+import { MusicSearch } from "./MusicSearch";
 
 const MOODS = ["other", "calm", "energetic", "cinematic", "reflective", "inspiring"];
 
@@ -37,7 +38,9 @@ function TrackRow({ track, onChoose, onChanged, onError }: {
   </article>;
 }
 
-export function MusicLibraryPanel({ onChoose }: { onChoose?: (track: MusicTrack) => void }) {
+export function MusicLibraryPanel({ onChoose, onAudition }: {
+  onChoose?: (track: MusicTrack) => void; onAudition?: (token: string) => Promise<void>;
+}) {
   const id = useId();
   const [q, setQuery] = useState("");
   const [mood, setMood] = useState("");
@@ -101,6 +104,9 @@ export function MusicLibraryPanel({ onChoose }: { onChoose?: (track: MusicTrack)
         <button className="btn" disabled={busy || !file}>{busy ? "Saving track…" : "Save track"}</button>
       </form>
     </details>
+    <MusicSearch onChoose={onChoose} onAudition={onAudition} onSaved={() => {
+      setQuery(""); setMood(""); setOffset(0); reload();
+    }} />
     <div className="music-filters">
       <label className="field">Search music<input type="search" value={q} maxLength={120} onChange={event => {setQuery(event.target.value); setOffset(0);}} /></label>
       <label className="field">Filter by mood<select aria-label="Filter by mood" value={mood} onChange={event => {setMood(event.target.value); setOffset(0);}}><option value="">All moods</option>{MOODS.map(mood => <option key={mood}>{mood}</option>)}</select></label>

@@ -104,8 +104,9 @@ class MusicLibrary:
                               "LIMIT ? OFFSET ?", [*args, limit, offset]).fetchall()
         return {"tracks": [self.track(row).public() for row in rows], "total": total}
 
-    def import_track(self, source: Path, title: str, credit: str, mood: str) -> tuple[Track, bool]:
-        title, credit, mood = self.clean(title, credit, mood)
+    @staticmethod
+    def inspect_audio(source: Path) -> tuple[float, int]:
+        """Accept standalone audio containers before any preview or music fitting."""
         suffix = source.suffix.lower()
         size = source.stat().st_size
         if suffix not in SUFFIXES or not 0 < size <= MAX_BYTES:
@@ -127,6 +128,12 @@ class MusicLibrary:
             raise ValueError("Choose a track between 0.1 seconds and two hours.")
         run_ffmpeg(caps.ffmpeg_path, ["-v", "error", "-protocol_whitelist", "file,pipe",
             "-i", str(source.resolve()), "-t", "1", "-map", "0:a:0", "-f", "null", "-"])
+        return seconds, size
+
+    def import_track(self, source: Path, title: str, credit: str, mood: str) -> tuple[Track, bool]:
+        title, credit, mood = self.clean(title, credit, mood)
+        seconds, size = self.inspect_audio(source)
+        suffix = source.suffix.lower()
         with source.open("rb") as file:
             key = hashlib.file_digest(file, "sha256").hexdigest()
         with self.connect() as db:

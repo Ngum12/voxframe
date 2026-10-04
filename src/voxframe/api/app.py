@@ -19,6 +19,7 @@ import json
 import os
 import secrets
 import shutil
+import time
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -250,6 +251,15 @@ class MusicMetadata(BaseModel):
     mood: Literal["calm", "energetic", "cinematic", "reflective", "inspiring", "other"] = "other"
 
 
+class OnlineMusicSearch(BaseModel):
+    query: str = Field(min_length=1, max_length=120)
+    page: int = Field(default=1, ge=1, le=20)
+    mood: Literal["", "calm", "energetic", "cinematic", "reflective", "inspiring"] = ""
+    min_seconds: int = Field(default=0, ge=0, le=7200)
+    max_seconds: int = Field(default=7200, ge=1, le=7200)
+    instrumental: bool = False
+
+
 class MusicImport(MusicMetadata):
     upload_id: str = Field(min_length=1, max_length=64)
 
@@ -258,6 +268,8 @@ class SettingsUpdate(BaseModel):
     """Consent and API keys, as the settings screen sends them."""
 
     sourcing_consent: bool | None = None
+    music_search_consent: bool | None = None
+    music_share_alike: bool | None = None
     api_keys: dict[str, str] | None = None
     theme: Literal["system", "dark", "light"] | None = None
 
@@ -298,6 +310,7 @@ class MixPreview(BaseModel):
     music_upload_id: str | None = Field(default=None, max_length=64)
     kept_track: bool = False
     music_library_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    music_search_token: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
 
 
 class MotionEdit(BaseModel):
@@ -845,6 +858,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 "current_version": CONSENT_VERSION,
             },
             "api_keys": preferences.masked_keys(),
+            "music_search": {"enabled": preferences.music_search_consent,
+                             "share_alike": preferences.music_share_alike},
             "theme": preferences.theme,
             "adapters": sorted(KEY_FIELDS),
             "environment_keys": sorted(
@@ -869,6 +884,10 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         if update.sourcing_consent is not None:
             preferences.sourcing_consent = update.sourcing_consent
             preferences.consent_version = CONSENT_VERSION
+        if update.music_search_consent is not None:
+            preferences.music_search_consent = update.music_search_consent
+        if update.music_share_alike is not None:
+            preferences.music_share_alike = update.music_share_alike
         if update.theme is not None:
             preferences.theme = update.theme
 
@@ -891,6 +910,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 "enabled": sourcing_active(context.settings, preferences),
             },
             "api_keys": preferences.masked_keys(),
+            "music_search": {"enabled": preferences.music_search_consent,
+                             "share_alike": preferences.music_share_alike},
             "theme": preferences.theme,
         }
 
@@ -968,6 +989,110 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             return track, library.file(track)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="No such saved music track.") from exc
+
+    from voxframe.music.discovery import Results
+
+    music_results = Results()
+
+    def online_track(token: str) -> Any:
+        from voxframe.sourcing.licenses import LicensePolicy, parse_license
+
+        preferences = load_preferences()
+        if not preferences.music_search_consent:
+            raise HTTPException(status_code=409, detail="Online music search is off.")
+        try:
+            result = music_results.get(token)
+        except KeyError as exc:
+            raise HTTPException(status_code=404,
+                detail="This result expired. Search again.") from exc
+        terms = parse_license("pdm" if result.license == "Public Domain Mark 1.0"
+                              else result.license)
+        if terms is None or not LicensePolicy(
+            allow_share_alike=preferences.music_share_alike).permits(terms):
+            raise HTTPException(status_code=409, detail="This license is no longer enabled.")
+        return result
+
+    def online_audio(token: str, context: ApiContext) -> tuple[Any, Path]:
+        from voxframe.music.discovery import download
+        from voxframe.music.library import MusicLibrary
+
+        result = online_track(token)
+        folder = context.settings.cache_path / "music-search" / token
+        try:
+            path = download(result, folder)
+            MusicLibrary.inspect_audio(path)
+        except Exception as exc:
+            log.warning("music.download_failed", reason=type(exc).__name__)
+            raise HTTPException(status_code=422,
+                detail="This track could not be downloaded. Try another result.") from exc
+        return result, path
+
+    @app.post("/api/music-search")
+    def search_music(request: OnlineMusicSearch,
+                     context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.music.discovery import prune_previews, search
+
+        preferences = load_preferences()
+        if not preferences.music_search_consent:
+            raise HTTPException(status_code=409, detail="Online music search is off.")
+        if not request.query.strip():
+            raise HTTPException(status_code=422, detail="Type a music search first.")
+        if request.min_seconds > request.max_seconds:
+            raise HTTPException(status_code=422, detail="Minimum length must not exceed maximum.")
+        try:
+            prune_previews(context.settings.cache_path / "music-search")
+            found = search(**request.model_dump(exclude={"query"}), query=request.query,
+                           share_alike=preferences.music_share_alike)
+        except Exception as exc:
+            log.warning("music.search_failed", reason=type(exc).__name__)
+            raise HTTPException(status_code=502,
+                detail="Openverse could not be reached. Try again shortly.") from exc
+        return {"results": music_results.remember(found["results"]),
+                "has_more": found["has_more"]}
+
+    @app.get("/api/music-search/{token}/preview")
+    def preview_online_music(token: str, context: ApiContext = Depends(ctx)) -> Response:
+        from voxframe.render.encode.probe import probe_capabilities
+        from voxframe.render.ffpath import run_ffmpeg
+
+        _, source = online_audio(token, context)
+        target = source.parent / "preview.wav"
+        temporary = source.parent / f".{secrets.token_hex(8)}.wav"
+        try:
+            if not target.is_file():
+                run_ffmpeg(probe_capabilities().ffmpeg_path, ["-v", "error",
+                    "-protocol_whitelist", "file,pipe", "-i", str(source), "-t", "15",
+                    "-vn", "-ac", "2", "-ar", "48000", "-y", str(temporary)])
+                temporary.replace(target)
+        except Exception as exc:
+            raise HTTPException(status_code=422,
+                detail="This preview could not be played.") from exc
+        finally:
+            temporary.unlink(missing_ok=True)
+        return FileResponse(target, media_type="audio/wav")
+
+    @app.post("/api/music-search/{token}/save")
+    def save_online_music(token: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        result, source = online_audio(token, context)
+        try:
+            track, duplicate = music_library(context).import_track(
+                source, result.title, result.credit, result.mood)
+            if duplicate:
+                track = music_library(context).update(track.id, track.title,
+                                                      result.credit, track.mood)
+            provenance = music_library(context).file(track).parent / "openverse.json"
+            metadata = result.public(token)
+            metadata.pop("token", None)
+            staged = provenance.with_name(f".{secrets.token_hex(8)}.json")
+            try:
+                staged.write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
+                staged.replace(provenance)
+            finally:
+                staged.unlink(missing_ok=True)
+        except Exception as exc:
+            raise HTTPException(status_code=422,
+                detail="This result could not be saved as audio. Try another track.") from exc
+        return {"track": track.public(), "already_there": duplicate}
 
     @app.get("/api/music-library")
     def list_music(q: str = Query(default="", max_length=120),
@@ -1429,6 +1554,11 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 raise HTTPException(status_code=409,
                     detail="Update the video after timing edits before auditioning music.")
         stems = Stems.load(stems_file)
+        if request.music_search_token:
+            if request.music_library_id or request.music_upload_id or request.kept_track:
+                raise HTTPException(status_code=422, detail="Choose one source for the preview.")
+            _, online_source = online_audio(request.music_search_token, context)
+            stems = _with_track(stems, online_source, request, context)
         if request.music_library_id and (request.music_upload_id or request.kept_track):
             raise HTTPException(status_code=422, detail="Choose one source for the preview.")
         if request.music_library_id or request.music_upload_id or request.kept_track:
@@ -1445,7 +1575,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         folder = stems_file.parent / ".previews"
         folder.mkdir(exist_ok=True)
         for old in folder.glob("*.wav"):
-            old.unlink(missing_ok=True)
+            if old.stat().st_mtime < time.time() - 900:
+                old.unlink(missing_ok=True)
         output = folder / f"{secrets.token_hex(8)}.wav"
         preview(
             stems, request.mix, request.start, request.seconds, output,

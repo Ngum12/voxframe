@@ -6405,3 +6405,32 @@ This stage is local only. Openverse music discovery remains planned; it must
 honor explicit online consent, license rules, attribution and explicit choice.
 The quick upload in Sound remains a project-specific track; reusable storage
 requires Save a music track. No automatic downloading or music selection.
+
+### D-203 · Explicit Openverse music discovery, local auditions and licensed copies
+
+Music has separate persisted consent because the existing consent text names
+images. ShareAlike remains a separate opt-in; NonCommercial, NoDerivatives,
+unknown licenses and unknown versions are rejected. Queries contain only the
+words typed by the person. Audio category, license and mature-content rules
+are sent to Openverse; duration and explicit mood/instrumental tags filter
+returned pages. Unknown metadata is never treated as a listening assessment.
+
+Per-server random tokens hold at most 120 results for 15 minutes. Every
+preview, audition and save rechecks consent and the current license policy.
+No caller can supply a download URL. Downloaded HTTPS sources and redirects
+must resolve to public addresses; reads have byte/time limits. Standalone
+audio is probed and sample-decoded before previews or music fitting, rejecting
+playlists and other containers. Previews return locally encoded WAV audio.
+Temporary download folders older than 24 hours are pruned on later searches.
+
+Previewing never saves music to a project or library. Explicit Save/Use copies
+it to the owned library and records source metadata beside it. Credits name
+title, creator, license and the Openverse detail page linking source/terms.
+When audio already exists, its future library credit is refreshed from the
+chosen licensed source; saved project snapshots remain unchanged. Use fills
+the Sound draft; Apply saves through existing history and renders normally.
+The discovery UI states the possible Content ID claim even for CC music.
+
+Tests use controlled provider responses and audio with real preview/export
+rendering. A live API request was attempted but rejected by the cloud proxy
+(HTTP 403); live provider access and live search coverage are unverified here.
