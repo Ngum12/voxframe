@@ -64,17 +64,20 @@ export function ModelSetup({ onReady }: { onReady?: () => void }) {
 
   // Poll while downloading: the server measures the bytes on disk.
   const downloading = status?.download.state === "downloading";
+  const updating = status?.download.state === "updating";
+  const busy = downloading || updating;
   useEffect(() => {
-    if (!downloading) return;
+    if (!busy) return;
     const timer = window.setInterval(() => void refresh(), 1000);
     return () => window.clearInterval(timer);
-  }, [downloading, refresh]);
+  }, [busy, refresh]);
 
   if (!status) return error ? <Notice tone="error">{error}</Notice> : <p className="muted">Checking…</p>;
 
   const chosen = status.choices.find((choice) => choice.profile === profile) ?? status.choices[0];
   const download = status.download;
-  const done = chosen.ready || download.state === "done";
+  const done = status.profile === profile && status.ready && !busy
+    && download.state !== "failed";
   const percent = download.total_mb ? Math.round((download.received_mb / download.total_mb) * 100) : 0;
 
   const start = async () => {
@@ -89,7 +92,7 @@ export function ModelSetup({ onReady }: { onReady?: () => void }) {
 
   return (
     <div className="model-setup">
-      {!status.profile_from_environment && !downloading && (
+      {!status.profile_from_environment && !busy && (
         <fieldset className="choices">
           <legend className="sr-only">Which models</legend>
           {status.choices.map((choice) => (
@@ -133,6 +136,18 @@ export function ModelSetup({ onReady }: { onReady?: () => void }) {
         </div>
       )}
 
+      {updating && (
+        <div role="status" aria-live="polite">
+          <p>Updating picture matching in your library…</p>
+          <progress max={download.total_assets || 1} value={download.completed_assets}
+            aria-label="Library update progress" />
+          <p>{download.completed_assets} of {download.total_assets} items.</p>
+        </div>
+      )}
+      {!busy && !done && (
+        <p className="muted">Using these models also updates picture matching for your library.</p>
+      )}
+
       {download.state === "failed" && <Notice tone="error">{download.message}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
 
@@ -150,14 +165,18 @@ export function ModelSetup({ onReady }: { onReady?: () => void }) {
           <button
             type="button"
             className="btn btn-primary"
-            disabled={downloading}
+            disabled={busy}
             onClick={() => void start()}
           >
-            {downloading
+            {updating
+              ? "Updating library…"
+              : downloading
               ? "Downloading…"
               : download.state === "failed"
                 ? "Try again"
-                : `Download ${size(chosen.to_download_mb)}`}
+                : chosen.ready
+                  ? `Use ${profile === "standard" ? "Standard" : "Lite"}`
+                  : `Download ${size(chosen.to_download_mb)}`}
           </button>
         )}
       </div>

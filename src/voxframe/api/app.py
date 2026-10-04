@@ -353,6 +353,7 @@ def create_app(context: ApiContext) -> FastAPI:
     )
     app.state.context = context
 
+    app.state.model_change_lock = asyncio.Lock()
     _install_guards(app, context)
     _install_routes(app, context)
     _install_frontend(app)
@@ -494,6 +495,19 @@ def _install_guards(app: FastAPI, context: ApiContext) -> None:
                     )
                 )
 
+        # Serialize model changes with library writes and job submission so
+        # a render cannot start halfway through replacing the library vectors.
+        model_sensitive = path.startswith(("/api/jobs", "/api/library")) or (
+            path == "/api/setup/models/download"
+        )
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"} and model_sensitive:
+            async with app.state.model_change_lock:
+                if context.downloads.snapshot()["state"] in {"downloading", "updating"}:
+                    return _secured(JSONResponse(
+                        {"detail": "Models are changing. Wait for your library to be ready."},
+                        status_code=409,
+                    ))
+                return _secured(await call_next(request))
         return _secured(await call_next(request))
 
 
@@ -632,7 +646,7 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
     def model_status(context: ApiContext = Depends(ctx)) -> dict[str, Any]:
         """What each model profile needs, what is already here, and progress (D-157)."""
         from voxframe.config.settings import ModelProfile
-        from voxframe.model_downloads import hub_cache, is_ready, model_needs
+        from voxframe.model_downloads import hub_cache, is_ready, library_ready, model_needs
 
         preferences = load_preferences()
         current = apply_to_settings(context.settings, preferences)
@@ -657,7 +671,10 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             "profile": current.profile.value,
             "chosen": preferences.model_profile or None,
             "profile_from_environment": "VOXFRAME_PROFILE" in os.environ,
-            "ready": chosen["ready"],
+            "ready": (
+                chosen["ready"] and library_ready(current)
+                and context.downloads.snapshot()["state"] not in {"downloading", "updating"}
+            ),
             "choices": choices,
             "download": context.downloads.snapshot(),
             # Where the libraries really keep them: the app's folder when installed.
@@ -674,11 +691,18 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         from voxframe.config.userprefs import save_preferences
         from voxframe.model_downloads import start_download
 
+        if any(not job.state.is_terminal for job in context.store.all_jobs()):
+            raise HTTPException(
+                status_code=409,
+                detail="Wait for the current video to finish before changing models."
+            )
         preferences = load_preferences()
         if "VOXFRAME_PROFILE" not in os.environ and preferences.model_profile != choice.profile:
             preferences.model_profile = choice.profile
             save_preferences(preferences)
-        start_download(apply_to_settings(context.settings, preferences), context.downloads)
+        start_download(
+            apply_to_settings(context.settings, preferences), context.downloads, update_library=True
+        )
         return context.downloads.snapshot()
 
     @app.post("/api/updates/check")
@@ -1764,7 +1788,9 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
 
             library = AssetLibrary(root)
             result = await run_in_threadpool(
-                add_batch, batch, library, shared_embedder(context.settings), license_info
+                add_batch, batch, library,
+                shared_embedder(apply_to_settings(context.settings, load_preferences())),
+                license_info
             )
         except HTTPException:
             shutil.rmtree(batch.directory, ignore_errors=True)

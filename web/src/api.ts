@@ -511,7 +511,9 @@ export interface ModelChoice {
 }
 
 export interface ModelDownload {
-  state: "idle" | "downloading" | "done" | "failed";
+  completed_assets: number;
+  total_assets: number;
+  state: "idle" | "downloading" | "updating" | "done" | "failed";
   current: string;
   received_mb: number;
   total_mb: number;

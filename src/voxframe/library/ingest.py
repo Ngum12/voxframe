@@ -20,7 +20,7 @@ Two kinds, detected differently:
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -449,6 +449,7 @@ def reembed_library(
     embedder: Embedder,
     *,
     batch_size: int = 8,
+    progress: Callable[[int, int], None] | None = None,
 ) -> IngestResult:
     """Re-embed every asset whose vectors came from a different model.
 
@@ -460,6 +461,7 @@ def reembed_library(
         library: The library to update.
         embedder: The new embedder. Its ``model_id`` becomes the library's.
         batch_size: Images per embedding batch.
+        progress: Items processed (including failures) and the total to update.
 
     Returns:
         What was re-embedded and what failed. Assets whose files have since
@@ -476,19 +478,27 @@ def reembed_library(
 
     log.info("reembed.start", assets=len(stale), model=embedder.model_id)
 
+    def report() -> None:
+        if progress is not None:
+            progress(len(result.added) + len(result.failed), len(stale))
+
+    report()
     batch: list[Asset] = []
     for asset in stale:
         if not asset.path.is_file():
             result.failed.append((asset.path, "file no longer exists"))
+            report()
             continue
 
         batch.append(asset)
         if len(batch) >= batch_size:
             _reembed_batch(batch, library, embedder, result)
+            report()
             batch = []
 
     if batch:
         _reembed_batch(batch, library, embedder, result)
+        report()
 
     log.info("reembed.done", summary=result.summary())
     return result
@@ -501,7 +511,22 @@ def _reembed_batch(
     result: IngestResult,
 ) -> None:
     """Recompute and store embeddings for one batch."""
-    paths = [asset.path for asset in batch]
+    paths: list[Path] = []
+    ready: list[Asset] = []
+    for asset in batch:
+        try:
+            source = asset.path
+            if asset.kind == AssetKind.VIDEO:
+                source = asset.path.parent / ".frames" / f"{asset.sha256[:16]}.jpg"
+                if not source.is_file():
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    _extract_clip_frame(asset.path, source, asset.duration or 0)
+            paths.append(source)
+            ready.append(asset)
+        except Exception as exc:
+            result.failed.append((asset.path, f"could not read clip frame: {exc}"))
+    if not ready:
+        return
 
     try:
         embeddings = embedder.embed_images(paths)
@@ -509,11 +534,11 @@ def _reembed_batch(
         raise
     except Exception as exc:
         log.warning("ingest.embed_failed", files=len(paths), error=str(exc))
-        for asset in batch:
+        for asset in ready:
             result.failed.append((asset.path, f"embedding failed: {exc}"))
         return
 
-    for asset, embedding in zip(batch, embeddings, strict=True):
+    for asset, embedding in zip(ready, embeddings, strict=True):
         try:
             library.add(asset, embedding=embedding, embed_model=embedder.model_id)
             result.added.append(asset)
