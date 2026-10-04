@@ -111,3 +111,18 @@ def test_suggestions_measure_louder_delivery_with_card_offset(plan: ScenePlan) -
     titled = plan.model_copy(update={"total_frames": 120, "scenes": (card, speech)})
     assert suggest_emphasis(titled, 1) == (2,)
     assert titled.scenes[1].caption_emphasis == ()
+
+
+@pytest.mark.needs_ffmpeg
+def test_emphasis_measures_original_source_range_after_a_short_cut(plan: ScenePlan) -> None:
+    samples = np.zeros(13 * 16000, dtype=np.float32)
+    for i, word in enumerate(plan.scenes[0].words):
+        a, b = int((10 + word.start) * 16000), int((10 + word.end) * 16000)
+        samples[a:b] = (.6 if i == 2 else .02) * np.sin(np.arange(b - a) * .1)
+    # The beginning of the source deliberately stresses a different word.
+    first = plan.scenes[0].words[0]
+    a, b = int(first.start * 16000), int(first.end * 16000)
+    samples[a:b] = .9 * np.sin(np.arange(b - a) * .1)
+    sf.write(plan.audio_path, samples, 16000)
+    cut = plan.model_copy(update={"scenes": (plan.scenes[0].model_copy(update={"audio_start": 10}),)})
+    assert suggest_emphasis(cut, 0) == (2,)

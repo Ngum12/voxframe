@@ -29,7 +29,9 @@ from pydantic import BaseModel, Field, model_validator
 
 from voxframe.config.captions import CaptionTreatment
 from voxframe.config.settings import AspectRatio
+from voxframe.config.short_export import ShortExport
 from voxframe.config.transitions import TransitionTreatment
+from voxframe.config.visuals import VisualBeat
 from voxframe.models.asset import Asset, AssetKind
 from voxframe.models.transcript import Word
 from voxframe.plan.audio_mix import AudioMix
@@ -298,6 +300,8 @@ class PlannedScene(BaseModel):
     caption_treatment: CaptionTreatment | None = None
     caption_emphasis: tuple[int, ...] = Field(default=())
     transition_after: TransitionTreatment | None = None
+    visual_beat: VisualBeat | None = None
+    director_join: bool = False
 
     #: Displayed words with real timings, so a re-render highlights as
     #: precisely as the first render did.
@@ -343,6 +347,9 @@ class PlannedScene(BaseModel):
     #: move scenes on the video's clock still show the frames that were
     #: spoken over. ``None`` for a card, or a plan without footage.
     footage_start: float | None = Field(default=None, ge=0)
+
+    #: Original narration clock, independent of cards and jump cuts.
+    audio_start: float | None = Field(default=None, ge=0)
 
     match_score: float = Field(default=0.0)
     semantic_score: float = Field(default=0.0)
@@ -443,6 +450,7 @@ class ScenePlan(BaseModel):
     style: str = Field(default="clean-educational")
     caption_treatment: CaptionTreatment | None = None
     transition_treatment: TransitionTreatment | None = None
+    short_export: ShortExport | None = None
 
     scenes: tuple[PlannedScene, ...]
 
@@ -505,6 +513,14 @@ class ScenePlan(BaseModel):
                 raise PlanError(
                     f"scene {scene.index} shows the speaker but has no footage_start"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _cut_scenes_have_audio_positions(self) -> Self:
+        if any(scene.audio_start is not None for scene in self.scenes):
+            for scene in self.scenes:
+                if not scene.is_card and scene.audio_start is None:
+                    raise PlanError(f"scene {scene.index}: cut timeline has no audio_start")
         return self
 
     def shows_speaker(self, scene: PlannedScene) -> bool:

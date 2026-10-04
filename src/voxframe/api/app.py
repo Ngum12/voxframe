@@ -19,6 +19,7 @@ import json
 import os
 import secrets
 import shutil
+import time
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,6 +32,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Request,
     Response,
     UploadFile,
@@ -55,6 +57,7 @@ from voxframe.api.security import (
 )
 from voxframe.config.captions import CaptionTreatment
 from voxframe.config.settings import AspectRatio, QualityPreset, Settings, get_settings
+from voxframe.config.short_export import ShortExport
 from voxframe.config.transitions import TransitionTreatment
 from voxframe.config.userprefs import (
     KEY_FIELDS,
@@ -63,6 +66,7 @@ from voxframe.config.userprefs import (
     save_preferences,
     sourcing_active,
 )
+from voxframe.config.visuals import VisualBeat
 from voxframe.jobs.pipeline import JobOptions, PipelineOutcome, Stage
 from voxframe.jobs.store import Job, JobStore, ProgressEvent
 from voxframe.library.db import AssetLibrary
@@ -228,6 +232,7 @@ class MusicEdit(BaseModel):
     choice: Literal["none", "own", "score"]
     #: A track uploaded with ``/api/uploads``, for ``own``. Never a path.
     upload_id: str | None = Field(default=None, max_length=64)
+    library_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     #: The track's credit, as the person states it; never invented (D-091).
     #: ``None`` keeps the credit it has.
     credit: str | None = Field(default=None, max_length=300)
@@ -240,10 +245,31 @@ class MusicEdit(BaseModel):
     new_variation: bool = False
 
 
+class MusicMetadata(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    credit: str = Field(default="", max_length=300)
+    mood: Literal["calm", "energetic", "cinematic", "reflective", "inspiring", "other"] = "other"
+
+
+class OnlineMusicSearch(BaseModel):
+    query: str = Field(min_length=1, max_length=120)
+    page: int = Field(default=1, ge=1, le=20)
+    mood: Literal["", "calm", "energetic", "cinematic", "reflective", "inspiring"] = ""
+    min_seconds: int = Field(default=0, ge=0, le=7200)
+    max_seconds: int = Field(default=7200, ge=1, le=7200)
+    instrumental: bool = False
+
+
+class MusicImport(MusicMetadata):
+    upload_id: str = Field(min_length=1, max_length=64)
+
+
 class SettingsUpdate(BaseModel):
     """Consent and API keys, as the settings screen sends them."""
 
     sourcing_consent: bool | None = None
+    music_search_consent: bool | None = None
+    music_share_alike: bool | None = None
     api_keys: dict[str, str] | None = None
     theme: Literal["system", "dark", "light"] | None = None
 
@@ -283,6 +309,8 @@ class MixPreview(BaseModel):
     #: one uploaded now, or the person's track the video switched away from.
     music_upload_id: str | None = Field(default=None, max_length=64)
     kept_track: bool = False
+    music_library_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    music_search_token: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
 
 
 class MotionEdit(BaseModel):
@@ -307,6 +335,33 @@ class CaptionLook(BaseModel):
     treatment: CaptionTreatment | None = None
     emphasis: tuple[int, ...] = Field(default=(), max_length=400)
     all_scenes: bool = False
+
+
+class ShortExportEdit(BaseModel):
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    settings: ShortExport | None = None
+
+
+class DirectionEdit(BaseModel):
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    look: Literal["authority", "energy", "cinema"] = "authority"
+    match_captions: bool = False
+
+
+class VisualEdit(BaseModel):
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    beat: VisualBeat | None = None
+
+
+class ShortEdit(BaseModel):
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    first_word: int = Field(ge=0)
+    last_word: int = Field(ge=0)
+    vertical: bool = True
+
+
+class PacingEdit(BaseModel):
+    cuts: tuple[str, ...] = Field(min_length=1, max_length=100)
 
 
 class TransitionEdit(BaseModel):
@@ -803,6 +858,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 "current_version": CONSENT_VERSION,
             },
             "api_keys": preferences.masked_keys(),
+            "music_search": {"enabled": preferences.music_search_consent,
+                             "share_alike": preferences.music_share_alike},
             "theme": preferences.theme,
             "adapters": sorted(KEY_FIELDS),
             "environment_keys": sorted(
@@ -827,6 +884,10 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         if update.sourcing_consent is not None:
             preferences.sourcing_consent = update.sourcing_consent
             preferences.consent_version = CONSENT_VERSION
+        if update.music_search_consent is not None:
+            preferences.music_search_consent = update.music_search_consent
+        if update.music_share_alike is not None:
+            preferences.music_share_alike = update.music_share_alike
         if update.theme is not None:
             preferences.theme = update.theme
 
@@ -849,6 +910,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 "enabled": sourcing_active(context.settings, preferences),
             },
             "api_keys": preferences.masked_keys(),
+            "music_search": {"enabled": preferences.music_search_consent,
+                             "share_alike": preferences.music_share_alike},
             "theme": preferences.theme,
         }
 
@@ -913,6 +976,165 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             "music_component": _music_component_summary(),
             "score": _score_summary(),
         }
+
+    def music_library(context: ApiContext) -> Any:
+        from voxframe.music.library import MusicLibrary
+
+        return MusicLibrary(context.settings.library_path / "music")
+
+    def library_track(context: ApiContext, key: str) -> tuple[Any, Path]:
+        library = music_library(context)
+        try:
+            track = library.get(key)
+            return track, library.file(track)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="No such saved music track.") from exc
+
+    from voxframe.music.discovery import Results
+
+    music_results = Results()
+
+    def online_track(token: str) -> Any:
+        from voxframe.sourcing.licenses import LicensePolicy, parse_license
+
+        preferences = load_preferences()
+        if not preferences.music_search_consent:
+            raise HTTPException(status_code=409, detail="Online music search is off.")
+        try:
+            result = music_results.get(token)
+        except KeyError as exc:
+            raise HTTPException(status_code=404,
+                detail="This result expired. Search again.") from exc
+        terms = parse_license("pdm" if result.license == "Public Domain Mark 1.0"
+                              else result.license)
+        if terms is None or not LicensePolicy(
+            allow_share_alike=preferences.music_share_alike).permits(terms):
+            raise HTTPException(status_code=409, detail="This license is no longer enabled.")
+        return result
+
+    def online_audio(token: str, context: ApiContext) -> tuple[Any, Path]:
+        from voxframe.music.discovery import download
+        from voxframe.music.library import MusicLibrary
+
+        result = online_track(token)
+        folder = context.settings.cache_path / "music-search" / token
+        try:
+            path = download(result, folder)
+            MusicLibrary.inspect_audio(path)
+        except Exception as exc:
+            log.warning("music.download_failed", reason=type(exc).__name__)
+            raise HTTPException(status_code=422,
+                detail="This track could not be downloaded. Try another result.") from exc
+        return result, path
+
+    @app.post("/api/music-search")
+    def search_music(request: OnlineMusicSearch,
+                     context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.music.discovery import prune_previews, search
+
+        preferences = load_preferences()
+        if not preferences.music_search_consent:
+            raise HTTPException(status_code=409, detail="Online music search is off.")
+        if not request.query.strip():
+            raise HTTPException(status_code=422, detail="Type a music search first.")
+        if request.min_seconds > request.max_seconds:
+            raise HTTPException(status_code=422, detail="Minimum length must not exceed maximum.")
+        try:
+            prune_previews(context.settings.cache_path / "music-search")
+            found = search(**request.model_dump(exclude={"query"}), query=request.query,
+                           share_alike=preferences.music_share_alike)
+        except Exception as exc:
+            log.warning("music.search_failed", reason=type(exc).__name__)
+            raise HTTPException(status_code=502,
+                detail="Openverse could not be reached. Try again shortly.") from exc
+        return {"results": music_results.remember(found["results"]),
+                "has_more": found["has_more"]}
+
+    @app.get("/api/music-search/{token}/preview")
+    def preview_online_music(token: str, context: ApiContext = Depends(ctx)) -> Response:
+        from voxframe.render.encode.probe import probe_capabilities
+        from voxframe.render.ffpath import run_ffmpeg
+
+        _, source = online_audio(token, context)
+        target = source.parent / "preview.wav"
+        temporary = source.parent / f".{secrets.token_hex(8)}.wav"
+        try:
+            if not target.is_file():
+                run_ffmpeg(probe_capabilities().ffmpeg_path, ["-v", "error",
+                    "-protocol_whitelist", "file,pipe", "-i", str(source), "-t", "15",
+                    "-vn", "-ac", "2", "-ar", "48000", "-y", str(temporary)])
+                temporary.replace(target)
+        except Exception as exc:
+            raise HTTPException(status_code=422,
+                detail="This preview could not be played.") from exc
+        finally:
+            temporary.unlink(missing_ok=True)
+        return FileResponse(target, media_type="audio/wav")
+
+    @app.post("/api/music-search/{token}/save")
+    def save_online_music(token: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        result, source = online_audio(token, context)
+        try:
+            track, duplicate = music_library(context).import_track(
+                source, result.title, result.credit, result.mood)
+            if duplicate:
+                track = music_library(context).update(track.id, track.title,
+                                                      result.credit, track.mood)
+            provenance = music_library(context).file(track).parent / "openverse.json"
+            metadata = result.public(token)
+            metadata.pop("token", None)
+            staged = provenance.with_name(f".{secrets.token_hex(8)}.json")
+            try:
+                staged.write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
+                staged.replace(provenance)
+            finally:
+                staged.unlink(missing_ok=True)
+        except Exception as exc:
+            raise HTTPException(status_code=422,
+                detail="This result could not be saved as audio. Try another track.") from exc
+        return {"track": track.public(), "already_there": duplicate}
+
+    @app.get("/api/music-library")
+    def list_music(q: str = Query(default="", max_length=120),
+                   mood: str = Query(default="", max_length=32),
+                   offset: int = Query(default=0, ge=0),
+                   limit: int = Query(default=60, ge=1, le=60),
+                   context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        return music_library(context).list(q, mood, offset, limit)
+
+    @app.post("/api/music-library")
+    def import_music(request: MusicImport, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        source = _upload_audio(context, request.upload_id)
+        try:
+            track, duplicate = music_library(context).import_track(
+                source, request.title, request.credit, request.mood)
+        except Exception as exc:
+            log.warning("music.import_failed", reason=type(exc).__name__)
+            raise HTTPException(status_code=422,
+                detail="The track could not be imported. Choose readable audio up to 200 MB.",
+            ) from exc
+        return {"track": track.public(), "already_there": duplicate}
+
+    @app.get("/api/music-library/{key}/audio")
+    def hear_music(key: str, request: Request, context: ApiContext = Depends(ctx)) -> Response:
+        _, path = library_track(context, key)
+        return _file_or_range(request, path)
+
+    @app.put("/api/music-library/{key}")
+    def metadata_music(key: str, request: MusicMetadata,
+                       context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        library_track(context, key)
+        try:
+            track = music_library(context).update(key, request.title, request.credit, request.mood)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return track.public()
+
+    @app.delete("/api/music-library/{key}")
+    def hide_music(key: str, context: ApiContext = Depends(ctx)) -> dict[str, bool]:
+        library_track(context, key)
+        music_library(context).hide(key)
+        return {"hidden": True}
 
     @app.post("/api/uploads")
     async def upload(
@@ -1227,13 +1449,24 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         from voxframe.plan.score_choice import ScoreChoice, new_seed
 
         job, plan_path, plan = _editable_plan(context, job_id)
+        if edit.library_id and (edit.choice != "own" or edit.upload_id):
+            raise HTTPException(status_code=422, detail="Choose one source for your music track.")
         if plan.music_path:
             # Kept, so the Sound card can switch back to it.
+            previous = job.summary.get("kept_track", {})
+            name = (previous.get("name") if previous.get("path") == plan.music_path else None)
             context.store.remember(
-                job, "kept_track", {"path": plan.music_path, "credit": plan.music_credit}
+                job, "kept_track", {"path": plan.music_path, "credit": plan.music_credit,
+                                    "name": name or Path(plan.music_path).name}
             )
         update: dict[str, Any] = {"music_path": "", "music_credit": "", "score": None}
-        if edit.choice == "own" and edit.upload_id:
+        if edit.choice == "own" and edit.library_id:
+            selected, track = library_track(context, edit.library_id)
+            credit = " ".join((edit.credit or selected.attribution).split())
+            update.update(music_path=str(track), music_credit=credit)
+            context.store.remember(job, "kept_track", {"path": str(track), "credit": credit,
+                                                       "name": selected.title})
+        elif edit.choice == "own" and edit.upload_id:
             track = _named_for_credits(_upload_audio(context, edit.upload_id))
             credit = " ".join((edit.credit or "").split())
             update.update(music_path=str(track), music_credit=credit)
@@ -1307,8 +1540,28 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 status_code=409,
                 detail="Update this video once to hear previews of its sound.",
             )
+        plan_path = context.store.artifact_path(job_id, "plan")
+        rendered = PlanHistory(plan_path).rendered_version() if plan_path else None
+        if plan_path and rendered and rendered.is_file():
+            current, shown = ScenePlan.load(plan_path), ScenePlan.load(rendered)
+
+            def voice_clock(plan: ScenePlan) -> tuple[Any, ...]:
+                return (plan.audio_path, plan.fps, plan.total_frames,
+                        tuple((s.start_frame, s.end_frame, s.audio_start, s.card_kind)
+                              for s in plan.scenes))
+
+            if voice_clock(current) != voice_clock(shown):
+                raise HTTPException(status_code=409,
+                    detail="Update the video after timing edits before auditioning music.")
         stems = Stems.load(stems_file)
-        if request.music_upload_id or request.kept_track:
+        if request.music_search_token:
+            if request.music_library_id or request.music_upload_id or request.kept_track:
+                raise HTTPException(status_code=422, detail="Choose one source for the preview.")
+            _, online_source = online_audio(request.music_search_token, context)
+            stems = _with_track(stems, online_source, request, context)
+        if request.music_library_id and (request.music_upload_id or request.kept_track):
+            raise HTTPException(status_code=422, detail="Choose one source for the preview.")
+        if request.music_library_id or request.music_upload_id or request.kept_track:
             stems = _with_track(stems, _preview_track(job, request, context), request, context)
         kept = [stems.voice, stems.music, stems.voice_polished]
         if any(path is not None and not path.is_file() for path in kept):
@@ -1322,7 +1575,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         folder = stems_file.parent / ".previews"
         folder.mkdir(exist_ok=True)
         for old in folder.glob("*.wav"):
-            old.unlink(missing_ok=True)
+            if old.stat().st_mtime < time.time() - 900:
+                old.unlink(missing_ok=True)
         output = folder / f"{secrets.token_hex(8)}.wav"
         preview(
             stems, request.mix, request.start, request.seconds, output,
@@ -1502,6 +1756,193 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         if not path.is_file():
             raise HTTPException(status_code=404, detail="No such preview.")
         return FileResponse(path, media_type="video/mp4")
+
+    @app.get("/api/jobs/{job_id}/shorts")
+    def shorts_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.shorts import controls
+
+        _, _, plan = _editable_plan(context, job_id)
+        return controls(plan)
+
+    def short_draft(plan: ScenePlan, edit: ShortEdit) -> ScenePlan:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.shorts import build_short, revision
+
+        if edit.revision != revision(plan):
+            raise HTTPException(status_code=409, detail="The transcript changed. Reload Shorts.")
+        try:
+            return build_short(plan, edit.first_word, edit.last_word, vertical=edit.vertical)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.put("/api/jobs/{job_id}/shorts")
+    def shorts_edit(job_id: str, edit: ShortEdit,
+                    context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        job, path, plan = _editable_plan(context, job_id)
+        updated = short_draft(plan, edit)
+        saved = _save_plan(updated, path, "short selection")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
+
+    @app.post("/api/jobs/{job_id}/shorts/preview")
+    def shorts_preview(job_id: str, edit: ShortEdit,
+                       context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.shorts import source_ranges
+        from voxframe.render.compose.short_preview import short_preview
+
+        _, _, plan = _editable_plan(context, job_id)
+        draft = short_draft(plan, edit)
+        try:
+            path = short_preview(draft, context.store.job_directory(job_id) / "short-previews")
+        except Exception as exc:
+            log.warning("short.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(status_code=422,
+                                detail="This short preview could not be rendered.") from exc
+        return {"url": f"/api/jobs/{job_id}/short-previews/{path.stem}",
+                "seconds": draft.total_frames / draft.fps,
+                "source_ranges": source_ranges(draft),
+                "note": "Draft preview of voice, footage and captions. "
+                        "Added music is heard after Update video."}
+
+    @app.get("/api/jobs/{job_id}/short-previews/{key}")
+    def shorts_preview_file(job_id: str, key: str, request: Request,
+                            context: ApiContext = Depends(ctx)) -> Response:
+        import re
+
+        if context.store.get(job_id) is None or re.fullmatch(r"[a-f0-9]{24}", key) is None:
+            raise HTTPException(status_code=404, detail="No such short preview.")
+        path = context.store.job_directory(job_id) / "short-previews" / f"{key}.mp4"
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="No such short preview.")
+        return _file_or_range(request, path)
+
+    @app.get("/api/jobs/{job_id}/short-export")
+    def short_export_controls(job_id: str,
+                              context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.short_export import controls
+
+        _, _, plan = _editable_plan(context, job_id)
+        return controls(plan)
+
+    def export_draft(plan: ScenePlan, edit: ShortExportEdit) -> ScenePlan:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.short_export import configure
+        from voxframe.plan.shorts import revision
+
+        if edit.revision != revision(plan):
+            raise HTTPException(status_code=409, detail="The edit changed. Reload Export.")
+        try:
+            return configure(plan, edit.settings)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.put("/api/jobs/{job_id}/short-export")
+    def short_export_edit(job_id: str, edit: ShortExportEdit,
+                          context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        job, path, plan = _editable_plan(context, job_id)
+        updated = export_draft(plan, edit)
+        saved = _save_plan(updated, path, "short export settings")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
+
+    @app.post("/api/jobs/{job_id}/short-export/preview")
+    def short_export_preview(job_id: str, edit: ShortExportEdit,
+                             context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        _, _, plan = _editable_plan(context, job_id)
+        return direction_preview_result(job_id, export_draft(plan, edit), context)
+
+    @app.get("/api/jobs/{job_id}/direction")
+    def direction_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.config.visuals import LOOKS
+        from voxframe.plan.shorts import revision
+
+        _, _, plan = _editable_plan(context, job_id)
+        return {"revision": revision(plan), "looks": LOOKS}
+
+    def visual_draft(plan: ScenePlan, edit: DirectionEdit | VisualEdit,
+                     index: int | None = None) -> ScenePlan:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.shorts import revision
+        from voxframe.plan.visual_director import direct, set_visual
+
+        if edit.revision != revision(plan):
+            raise HTTPException(status_code=409, detail="The edit changed. Reload Director.")
+        try:
+            if isinstance(edit, DirectionEdit):
+                return direct(plan, edit.look, match_captions=edit.match_captions)
+            assert index is not None
+            return set_visual(plan, index, edit.beat)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    def direction_preview_result(job_id: str, draft: ScenePlan,
+                                 context: ApiContext) -> dict[str, Any]:
+        from voxframe.render.compose.short_preview import short_preview
+
+        if not 3 <= draft.total_frames / draft.fps <= 60 + 1e-7:
+            raise HTTPException(status_code=422, detail="Choose a 3-60 second passage for preview.")
+        try:
+            path = short_preview(draft, context.store.job_directory(job_id) / "short-previews")
+        except Exception as exc:
+            log.warning("direction.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(status_code=422,
+                                detail="The director preview could not be rendered.") from exc
+        return {"url": f"/api/jobs/{job_id}/short-previews/{path.stem}",
+                "seconds": draft.total_frames / draft.fps,
+                "source_ranges": [],
+                "note": "Draft preview. Added music is heard after Update video."}
+
+    @app.post("/api/jobs/{job_id}/direction/preview")
+    def direction_preview(job_id: str, edit: DirectionEdit,
+                          context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        _, _, plan = _editable_plan(context, job_id)
+        return direction_preview_result(job_id, visual_draft(plan, edit), context)
+
+    @app.put("/api/jobs/{job_id}/direction")
+    def direction_edit(job_id: str, edit: DirectionEdit,
+                       context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        job, path, plan = _editable_plan(context, job_id)
+        updated = visual_draft(plan, edit)
+        saved = _save_plan(updated, path, "visual direction")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
+
+    @app.put("/api/jobs/{job_id}/scenes/{index}/visual")
+    def visual_edit(job_id: str, index: int, edit: VisualEdit,
+                    context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        job, path, plan = _editable_plan(context, job_id)
+        updated = visual_draft(plan, edit, index)
+        saved = _save_plan(updated, path, "a visual beat")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
+
+    @app.post("/api/jobs/{job_id}/scenes/{index}/visual/preview")
+    def visual_preview(job_id: str, index: int, edit: VisualEdit,
+                       context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        _, _, plan = _editable_plan(context, job_id)
+        return direction_preview_result(job_id, visual_draft(plan, edit, index), context)
+
+    @app.get("/api/jobs/{job_id}/pacing")
+    def pacing_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.pacing import suggest_cuts
+
+        _, _, plan = _editable_plan(context, job_id)
+        return {"cuts": suggest_cuts(plan), "seconds": plan.total_frames / plan.fps}
+
+    @app.put("/api/jobs/{job_id}/pacing")
+    def pacing_edit(job_id: str, edit: PacingEdit,
+                    context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.pacing import apply_cuts
+
+        job, path, plan = _editable_plan(context, job_id)
+        try:
+            updated = apply_cuts(plan, edit.cuts)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        saved = _save_plan(updated, path, "pause cuts")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
 
     @app.get("/api/jobs/{job_id}/scenes/{index}/transition")
     def transition_controls(
@@ -2282,6 +2723,14 @@ def _asset_file(context: ApiContext, raw_path: str) -> Path:
 
 def _preview_track(job: Job, request: MixPreview, context: ApiContext) -> Path:
     """The track a preview plays in place of the video's music (D-184)."""
+    if request.music_library_id:
+        from voxframe.music.library import MusicLibrary
+
+        library = MusicLibrary(context.settings.library_path / "music")
+        try:
+            return library.file(library.get(request.music_library_id))
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="No such saved music track.") from exc
     if request.music_upload_id:
         return _upload_audio(context, request.music_upload_id)
     kept = job.summary.get("kept_track")
@@ -2357,7 +2806,9 @@ def _music_state(job: Job, plan: ScenePlan) -> dict[str, Any]:
         "style": plan.score.style if plan.score else None,
         "intensity": plan.score.intensity if plan.score else 0.0,
         "seed": plan.score.seed if plan.score else None,
-        "track_name": Path(track).name if track else None,
+        "track_name": ((kept.get("name") if isinstance(kept, dict)
+                        and kept.get("path") == track else None)
+                       or (Path(track).name if track else None)),
         "track_credit": credit or "",
         "styles": [
             {"name": s.name, "label": s.label, "description": s.description}
@@ -2546,6 +2997,7 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
             scene.caption_treatment,
             scene.caption_emphasis,
             scene.transition_after,
+            scene.visual_beat,
             scene.card_kind,
             scene.card_text,
             scene.start_frame,
@@ -2557,7 +3009,8 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
         before = shown.scenes[position] if position < len(shown.scenes) else None
         if (before is None or looks(scene) != looks(before)
                 or now.caption_treatment != shown.caption_treatment
-                or now.transition_treatment != shown.transition_treatment):
+                or now.transition_treatment != shown.transition_treatment
+                or now.short_export != shown.short_export):
             changed.append(scene.index)
         if before is None or looks(scene)[0] != looks(before)[0]:
             pictures.append(scene.index)

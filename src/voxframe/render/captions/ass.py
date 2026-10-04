@@ -33,7 +33,8 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from voxframe.config.captions import CaptionTreatment
+from voxframe.config.captions import CaptionAnimation, CaptionTreatment
+from voxframe.config.short_export import SafeArea, safe_caption_style
 from voxframe.config.style import CaptionBacking, CaptionPosition, CaptionStyle
 from voxframe.models.scene import Scene
 from voxframe.models.transcript import Word
@@ -439,6 +440,8 @@ def build_ass(
     *,
     top_scenes: frozenset[int] = frozenset(),
     scene_treatments: dict[int, CaptionTreatment] | None = None,
+    safe_area: SafeArea | None = None,
+    progress: bool = False,
 ) -> str:
     """Build a complete ASS subtitle document.
 
@@ -471,10 +474,19 @@ def build_ass(
 
     for scene in scenes:
         treatment = (scene_treatments or {}).get(scene.index)
-        if treatment is not None and not scene.is_silent:
+        if (treatment is not None or safe_area is not None) and not scene.is_silent:
             from voxframe.render.captions.animated import scene_events
 
-            current_style = treatment.apply(style)
+            current_style = treatment.apply(style) if treatment else style
+            if safe_area:
+                current_style = safe_caption_style(current_style, safe_area, progress=progress,
+                    top=(scene.index in top_scenes
+                         and current_style.position == CaptionPosition.BOTTOM))
+            if treatment is None:
+                treatment = CaptionTreatment(
+                    animation=(CaptionAnimation.HIGHLIGHT if current_style.highlight_enabled
+                               else CaptionAnimation.PLAIN),
+                    max_lines=current_style.max_lines, position=current_style.position)
             name = f"Caption{scene.index}"
             rows = _styles_block(current_style, width, height).splitlines()[2:]
             rows = [row.replace("Style: VoxframeTop,", f"Style: {name}Top,")
@@ -564,6 +576,8 @@ def write_ass(
     *,
     top_scenes: frozenset[int] = frozenset(),
     scene_treatments: dict[int, CaptionTreatment] | None = None,
+    safe_area: SafeArea | None = None,
+    progress: bool = False,
 ) -> Path:
     """Write an ASS subtitle file.
 
@@ -574,7 +588,7 @@ def write_ass(
         The path written.
     """
     content = build_ass(scenes, style, width, height, fps, top_scenes=top_scenes,
-                        scene_treatments=scene_treatments)
+                        scene_treatments=scene_treatments, safe_area=safe_area, progress=progress)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8", newline="\n")
     return path

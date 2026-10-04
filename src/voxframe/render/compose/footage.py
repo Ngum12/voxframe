@@ -56,14 +56,15 @@ def _even(value: float) -> int:
     return max(2, math.ceil(value / 2) * 2)
 
 
-def crop_window(footage: Footage, width: int, height: int) -> tuple[int, int, int, int]:
+def crop_window(footage: Footage, width: int, height: int,
+                *, zoom: float = 1) -> tuple[int, int, int, int]:
     """How the footage is scaled and where it is cropped to fill the output.
 
     Returns:
         ``(scaled_width, scaled_height, x, y)``: the size the footage is scaled
         to so it covers ``width`` x ``height``, and the crop's top-left corner.
     """
-    scale = max(width / footage.width, height / footage.height)
+    scale = max(width / footage.width, height / footage.height) * zoom
     scaled_w = max(width, _even(footage.width * scale))
     scaled_h = max(height, _even(footage.height * scale))
     # Centred on the speaker, but never past an edge: a crop that ran off the
@@ -85,13 +86,14 @@ def footage_filter_chain(
     *,
     start: float = 0.0,
     seconds: float | None = None,
+    zoom: float = 1,
 ) -> str:
     """The filter chain turning the footage into ``width`` x ``height`` on the grid.
 
     With a camera path (D-193) and the segment's ``start`` (on the sound's
     clock) and length, the crop moves along the path frame by frame.
     """
-    scaled_w, scaled_h, x, y = crop_window(footage, width, height)
+    scaled_w, scaled_h, x, y = crop_window(footage, width, height, zoom=zoom)
     crop = f"crop={width}:{height}:{x}:{y}"
     if footage.track and seconds is not None:
         crop = _moving_crop(footage, width, height, scaled_w, scaled_h, start, seconds)
@@ -154,7 +156,7 @@ HEAD_MARGIN = 0.25
 
 
 def face_extent(
-    footage: Footage, width: int, height: int, start: float, seconds: float
+    footage: Footage, width: int, height: int, start: float, seconds: float, *, zoom: float = 1
 ) -> tuple[float, float] | None:
     """How far up and down the frame the speaker's head reaches in a scene.
 
@@ -168,7 +170,7 @@ def face_extent(
     """
     if not footage.track:
         return None
-    _, scaled_h, _, still_y = crop_window(footage, width, height)
+    _, scaled_h, _, still_y = crop_window(footage, width, height, zoom=zoom)
     top, bottom = float(height), 0.0
     for point in track_between(footage.track, start, start + seconds):
         if point.h <= 0:
@@ -222,6 +224,7 @@ def render_footage_segment(
     fps: float,
     frames: int,
     intermediate_args: Sequence[str],
+    zoom: float = 1,
 ) -> None:
     """Render ``frames`` frames of footage, from ``start`` on the sound's clock.
 
@@ -246,7 +249,7 @@ def render_footage_segment(
             "-ss", f"{seek:.6f}",
             "-i", fp.name if fp.cwd else str(source.resolve()),
             "-vf", footage_filter_chain(
-                footage, width, height, fps, start=start, seconds=frames / fps
+                footage, width, height, fps, start=start, seconds=frames / fps, zoom=zoom
             ),
             # The recording's sound is laid in once, for the whole video.
             "-an", "-sn", "-dn",

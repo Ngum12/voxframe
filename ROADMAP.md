@@ -37,9 +37,10 @@ Three additions to the studio, built in this order.
 - **Reversible:** save for one scene or the whole video; undo/redo restores
   the saved look. Re-rendering keeps the original word timestamps and audio.
 
-**Next build: the reusable music library below.**
+**Current build: Music library — local reuse and online discovery implemented.
+Shorts pacing, selection, visual direction and portrait delivery are implemented.**
 
-### 2. Transition studio — implemented on `feat/transition-studio`
+### 2. Transition studio — implemented
 
 - **Kinds:** cut, crossfade, dip to black, slide, push, zoom and soft blur.
 - **Presets:** each template has its own transition, and any join between
@@ -57,14 +58,20 @@ Three additions to the studio, built in this order.
 - **Short joins stay readable:** blends take at most a quarter of the shorter
   scene, and a join too short for four frames becomes a cut.
 
-### 3. A music library
+### 3. A music library — local reuse and online discovery implemented
 
-- **Your tracks, kept.** Every track you add is saved for reuse, with its
-  credit, and any video can use it again.
+- **Your tracks, kept.** Library → Save a music track keeps an independent
+  local copy, its title, credit and mood. Search and filter saved tracks, listen
+  to them alone, or audition them under your voice from the Sound tab before
+  applying. Any project can reuse them. Duplicate audio shares one copy.
+- **Project-safe changes.** Each selection saves its credit into the project
+  and participates in undo/redo. Editing library details affects future
+  selections; hiding a track leaves saved projects and their history working.
 - **Search online for openly licensed music** (Openverse), with previews and
   filters for length, mood and instrumental. You can hear a track under your
-  own voice before choosing it. It follows the same rules as image search:
-  - **only if you've turned online search on**, and only the words you type
+  own voice before choosing it. A separate **Allow online music search**
+  switch avoids reusing consent given specifically for images:
+  - **only if you've turned music search on**, and only the words you type
     are sent;
   - **the same licence rules:** nothing NonCommercial or NoDerivatives, and
     ShareAlike off unless you turn it on;
@@ -73,8 +80,15 @@ Three additions to the studio, built in this order.
   - **never chosen for you:** online music is only ever added by your click;
   - **a clear note** that some openly licensed music is also registered with
     YouTube's Content ID, so a video using it may still get a claim.
+  - **metadata-based filters:** duration, mood tags and an instrumental tag
+    apply to each result page; unknown tags are not guessed. Previewing
+    downloads temporary audio; only Save or Use keeps it in the library.
 
-## Then: Shorts
+The provider contract is covered with controlled responses and real audio
+previews/exports. Live Openverse access remains unverified in this cloud
+environment: its network proxy rejects the API connection with HTTP 403.
+
+## Current: Shorts Producer
 
 Short vertical videos with real editing, made from a recording **or a
 video**. Built in this order, each step usable on its own:
@@ -98,19 +112,51 @@ video**. Built in this order, each step usable on its own:
 
 ### 3. Jump cuts
 
+**Delivered first:** the Pacing tab reviews long transcript gaps, including
+pauses crossing scene boundaries. Choose cuts, listen around them and save;
+voice, footage and captions move together. Undo/redo restores full timelines.
+The Director now adds emphasis-driven punch-ins. Filler/false-start detection
+remains next.
+
 - **Silences, "um"s and false starts removed**, cut on the word timestamps,
   so sound and picture stay together. Every cut is shown and can be undone.
 - **Zoom punch-ins** on the words you stress.
 
 ### 4. Clips from a long recording
 
-- **Suggested Shorts:** 15 to 60 seconds each, starting and ending on a
-  sentence, scored by the same plain signals as highlights. You preview,
-  trim and choose; nothing is posted or chosen for you.
+**Delivered:** the Shorts tab offers up to three distinct passages with quoted
+openings, full transcripts and visible reasons. Choose first/last words, preview
+real voice/footage/captions in 9:16, then save a reversible short selection.
+The original source clocks survive earlier pause cuts.
+
+**Visual direction delivered:** the Director tab builds three editable looks:
+Clean authority, High energy and Cinematic story. It adds word-boundary beats,
+selective speaker punch-ins, existing matched-image cutaways, and opening,
+emphasis and closing text quoted from the transcript. You can edit text,
+placement and zoom, pin beats, preview without saving, and undo a whole pass.
+Changing the look replaces the director's own joins while preserving source
+cuts and manual choices. Auto text avoids captions and tracked faces; when
+there is no room, the text is omitted. Added music is heard on final export.
+
+**Export stage delivered:** the Export tab saves presets for YouTube Shorts,
+TikTok, Instagram Reels and WhatsApp Status. Choose 1080 x 1920 or 720 x 1280,
+adjust conservative text guides, and add a timed progress rail. Captions and
+text beats use those margins; the draft shows guides without burning them into
+the MP4. Each preset selects the existing destination loudness target while
+retaining mix levels. Update video follows the saved output size; undo restores
+both export and sound choices. The full browser flow finishes from pause cuts
+through passage selection and direction to an actual downloaded MP4.
+
+Filler/false-start review remains a later editing improvement. Next: music.
+
+- **Suggested Shorts:** 3 to 60 seconds, aiming near 30, with sentence-based
+  candidates ranked by questions, numbers and explanation/contrast cues.
+  You review the ending, trim and choose; no semantic story judgement is claimed.
 - **Bold Shorts captions** (from 0.3.0's caption styles), a hook title over
   the first seconds, and a progress bar.
 - **Export presets** for YouTube Shorts, TikTok, Reels and WhatsApp Status:
-  length, loudness, and captions kept clear of each app's buttons.
+  a 3-60 second portrait edit, saved picture size, destination loudness, and
+  adjustable guides for captions and text. App controls vary by device.
 
 ## Later
 

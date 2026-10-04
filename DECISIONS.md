@@ -6258,3 +6258,179 @@ The join inputs explicitly restore frame rate before edge-frame padding and
 before blending: FFmpeg 7 otherwise clones no frames after a trim, turning
 a nominal blend into a cut. Pixel checks verify a balanced black midpoint
 and a true intermediate crossfade, as well as the output frame count.
+
+### D-198 · Reviewable pause cuts with original source clocks
+
+The first Shorts Producer stage is a Pacing tab. Interior transcript gaps of
+at least one second are offered for review, including gaps across scene
+boundaries. No suggestion is selected automatically: missing transcription
+is not evidence of silence. Cards and corrected-caption scenes form protected
+boundaries. Removal keeps about 180 ms on each side, quantized inward to the
+frame grid, and never overlaps any timed word. Fillers, false starts, hook
+selection and punch-ins are separate future stages.
+
+Saving splits retained spans, renumbers scenes and moves words to output time.
+Each non-card scene stores audio_start on the original narration clock;
+footage_start stays on the original footage's sound clock. This handles
+already-extracted highlights whose audio and footage have different origins.
+The renderer trims original audio by these positions, inserts silent card
+spans and concatenates. Input timestamps are normalized before trimming to
+handle delayed sound streams. Source files are never rewritten. New jump
+boundaries explicitly cut even with a whole-video blend selected.
+
+Source ranges shape the voice cache key. Long narration graphs live in a file
+to avoid Windows command-length limits, using FFmpeg's file-valued option on
+7+ and its legacy script option on earlier versions. Existing uncut narration
+keeps its original graph path. Save is one full-plan history operation; undo
+restores all cuts in that batch and redo reapplies them. Stale/duplicate choices
+are rejected. Studio listening is disabled while a saved edit awaits export.
+
+Checks cover frame grids, crossing boundaries and empty scenes, protected
+captions, authentication, save/undo/redo, actual 25 fps footage exported at
+30 fps, silent cards, delayed sound/picture streams, subtitle timing, and a
+Chromium review/save/history/export flow. No transcription model is rerun.
+
+### D-199 · Quoted Shorts candidates, editable word boundaries and real drafts
+
+The second producer stage keeps a contiguous passage in source order. Up to
+three candidates use sentence boundaries and visible opening cues (question,
+number, explanation/contrast), aim near 30 seconds and fit 3–60 seconds.
+Overlap is limited so options differ. Openings and endings are quoted from
+the displayed transcript; punctuation-free endings and context-dependent
+openings are flagged. These are reviewable signals, not semantic story
+understanding or predicted engagement. Cards and untimed text separate
+suggestion groups; an overlong sentence is not arbitrarily cut into a candidate.
+
+The person can select first/last words and 9:16 or the current shape. A short
+retains matching scene attributes and caption corrections, rebases words,
+remaps emphasis and records original audio_start and footage_start independently.
+It omits cards, preserves earlier jump boundaries, and keeps the source file.
+Applying the selection is one full-plan history edit; undo restores the full
+edit. A 24-character full-plan revision protects word indices from stale edits.
+
+Draft previews run the actual export renderer at height 480 with source voice,
+footage and captions. Added music/score fitting is deferred to final export;
+saved music settings remain intact. Drafts do not save plans or edit history.
+Files are keyed by the draft and source timestamps, rendered in a temporary
+folder, and published only after successful verification. Playback is session
+authenticated, job-scoped, range-aware, and accepts only hexadecimal ids.
+Caption emphasis measurement now follows audio_start after a saved cut.
+
+Checks include source-clock separation for highlights, frame grids, corrected
+captions, card boundaries, quoted candidates, stale edits, authentication,
+undo/redo, real 25 fps source footage in 30 fps vertical exports, previous pause
+cuts, delayed sound streams, cache reuse, and the Chromium trim/preview/save/
+history/export flow. Tests seed plans and require no transcription downloads.
+
+### D-200 · Reversible visual direction and editable transcript beats
+
+Three looks split a short at timed words and existing emphasis choices.
+Voice and footage positions advance independently by the same frame offset;
+the output duration and word order remain unchanged. Original joins survive.
+Director-created internal joins are marked so changing the look can restore
+its own splits and replace cadence rather than accumulating cuts. Restore
+requires continuous source ranges and compatible scene settings; manual
+shots, assets and pinned visual beats prevent automatic merging.
+
+VisualBeat stores editable text (96 characters), role, look, position and
+speaker zoom (1-1.25). Automatic text quotes up to eight transcript words;
+manual edits are pinned. Existing shot selection supplies matched cutaways,
+returns to the speaker at both ends and limits automatic image coverage.
+Caption styling changes only when explicitly requested. Footage zoom uses
+the existing face-following crop and participates in the segment cache key.
+
+Text plates are ASS layers on the exact scene clock, with a short fade,
+wrapped text and escaped control characters. Auto placement avoids the
+caption region and the tracked face at the actual zoom. No safe zone means
+no extra text; manual positioning requires preview. SRT/VTT remain spoken
+captions only. These margins are generic, not platform-specific guarantees.
+
+Direction and per-beat preview use the actual draft export without saving
+history or refitting added music. Saving uses full-plan history; full-plan
+revision checks protect scene indices. Checks cover words and clocks,
+caption corrections, cutaway budgets, manual overrides, replacing cadence,
+auto placement, actual zoomed frames, 25 fps footage at 30 fps, delayed audio,
+combined pacing/selection/direction and Chromium preview/save/undo/export.
+
+### D-201 · Saved portrait delivery, editable text guides and real-clock progress
+
+ShortExport records platform, output height (1280 or 1920), four safe margins,
+an optional progress rail and its accent. Presets provide conservative starting
+areas for Shorts, TikTok, Reels and WhatsApp. They are editable composition
+guides, not promises about every device's changing app controls. Selection
+requires a 3-60 second passage and chooses 9:16. Voice/music levels and source
+editing stay intact; only the existing mix destination changes (-14/-1 for
+YouTube/social, -15/-1.5 for WhatsApp). Removing the export setting retains the
+current shape and sound destination; full-plan undo restores every choice.
+
+Safe caption composition applies after each individual caption look. Centered
+captions use conservative symmetric side margins, font size reserves room for
+emphasis, and long tokens fit through the word-clock renderer. Face clearance
+and text plates share the same effective styles. Automatic text can be omitted
+when a tracked face and captions occupy the available region; manual placement
+is still constrained to the export area. Spoken SRT/VTT content is unchanged.
+
+The ASS progress rail animates its clip from empty to full on the output frame
+clock, reaching full width on the last frame. It never affects the soundtrack,
+word timing or scene segments. Captioned-picture cache keys include the ASS;
+source segments remain reusable when only delivery graphics change.
+
+Final re-render follows the saved height, while preview uses 480-high drafts.
+The Export tab offers all four presets, custom margins, accent, guides and
+full-plan undo/redo. Preview guides align with the actual portrait video rather
+than its outer container and are never burned into the MP4. Revision checks
+reject stale requests. Tests inspect decoded safe-area pixels for all presets
+and caption looks, measure rail progress, preserve source clap/flash sync,
+and run pacing/selection/direction/export plus download in Chromium. FFmpeg 7
+compatibility is checked separately from the pinned FFmpeg 9 workflow.
+
+### D-202 · Reusable local music, owned copies and project credit snapshots
+
+Explicit Library imports save audio under the configured library's music
+folder, indexed separately in SQLite. SHA-256 ids deduplicate identical bytes;
+metadata holds title, user-supplied credit and one mood. Imports validate an
+actual audio stream and duration (0.1 seconds to two hours), decode a sample,
+and cap size at 200 MB. Network protocols are excluded from probing/decoding.
+No paths are accepted or returned by the music library API.
+
+Sound can audition a saved track under the kept voice without editing the
+plan. Applying selects its owned path and a credit snapshot, through normal
+plan history and music fitting. Timing edits must be rendered before sound
+previews so the old voice cannot be mistaken for the new cut. Hiding only
+removes a track from browsing and selection: bytes stay for project/history
+references. Reimporting restores it with its existing metadata. Changing
+metadata affects future selections, never rewrites existing project credits.
+
+This stage is local only. Openverse music discovery remains planned; it must
+honor explicit online consent, license rules, attribution and explicit choice.
+The quick upload in Sound remains a project-specific track; reusable storage
+requires Save a music track. No automatic downloading or music selection.
+
+### D-203 · Explicit Openverse music discovery, local auditions and licensed copies
+
+Music has separate persisted consent because the existing consent text names
+images. ShareAlike remains a separate opt-in; NonCommercial, NoDerivatives,
+unknown licenses and unknown versions are rejected. Queries contain only the
+words typed by the person. Audio category, license and mature-content rules
+are sent to Openverse; duration and explicit mood/instrumental tags filter
+returned pages. Unknown metadata is never treated as a listening assessment.
+
+Per-server random tokens hold at most 120 results for 15 minutes. Every
+preview, audition and save rechecks consent and the current license policy.
+No caller can supply a download URL. Downloaded HTTPS sources and redirects
+must resolve to public addresses; reads have byte/time limits. Standalone
+audio is probed and sample-decoded before previews or music fitting, rejecting
+playlists and other containers. Previews return locally encoded WAV audio.
+Temporary download folders older than 24 hours are pruned on later searches.
+
+Previewing never saves music to a project or library. Explicit Save/Use copies
+it to the owned library and records source metadata beside it. Credits name
+title, creator, license and the Openverse detail page linking source/terms.
+When audio already exists, its future library credit is refreshed from the
+chosen licensed source; saved project snapshots remain unchanged. Use fills
+the Sound draft; Apply saves through existing history and renders normally.
+The discovery UI states the possible Content ID claim even for CC music.
+
+Tests use controlled provider responses and audio with real preview/export
+rendering. A live API request was attempted but rejected by the cloud proxy
+(HTTP 403); live provider access and live search coverage are unverified here.

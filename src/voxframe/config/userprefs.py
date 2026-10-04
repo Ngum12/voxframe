@@ -97,6 +97,8 @@ class UserPreferences:
 
     api_keys: dict[str, str] = field(default_factory=dict)
     sourcing_consent: bool | None = None
+    music_search_consent: bool = False
+    music_share_alike: bool = False
     consent_version: int = 0
     #: The name the person credits their own uploads to, remembered so the
     #: Library's upload form is filled in next time (D-146).
@@ -141,6 +143,8 @@ class UserPreferences:
             "version": 1,
             "api_keys": self.api_keys,
             "sourcing_consent": self.sourcing_consent,
+            "music_search_consent": self.music_search_consent,
+            "music_share_alike": self.music_share_alike,
             "consent_version": self.consent_version,
             "library_author": self.library_author,
             "library_path": self.library_path,
@@ -175,6 +179,8 @@ def load_preferences(path: Path | None = None) -> UserPreferences:
             if name in KEY_FIELDS and isinstance(value, str) and value
         },
         sourcing_consent=payload.get("sourcing_consent"),
+        music_search_consent=payload.get("music_search_consent") is True,
+        music_share_alike=payload.get("music_share_alike") is True,
         consent_version=int(payload.get("consent_version") or 0),
         model_profile=(
             payload["model_profile"]

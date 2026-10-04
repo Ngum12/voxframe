@@ -1,3 +1,4 @@
+import { MusicLibraryPanel } from "./MusicLibrary";
 /**
  * Screen 6 — the library (D-146).
  *
@@ -296,6 +297,8 @@ export function Library({ onChanged }: { onChanged: () => void }) {
 
       {error && <Notice tone="error">{error}</Notice>}
       {message && <Notice tone="info">{message}</Notice>}
+
+      <MusicLibraryPanel />
 
       <Uploader
         author={page?.author ?? ""}

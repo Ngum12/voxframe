@@ -196,7 +196,7 @@ def test_a_track_of_your_own_is_added_heard_switched_and_removed(made, server) -
         lambda request: request.url.endswith("/mix/preview")
         and '"music_upload_id":"' in (request.post_data or "")
     ):
-        card.locator("input[type=file]").set_input_files(str(second))
+        card.get_by_label("Choose a music track", exact=True).set_input_files(str(second))
     chip = card.get_by_role("button", name="Your track: second song.wav")
     assert chip.get_attribute("aria-pressed") == "true"
     card.locator("#track-credit").fill("Second song by the test")

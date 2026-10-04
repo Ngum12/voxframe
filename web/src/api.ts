@@ -40,6 +40,7 @@ export interface SourcingSettings {
 export type Theme = "system" | "dark" | "light";
 
 export interface UserSettings {
+  music_search: {enabled: boolean; share_alike: boolean};
   sourcing: SourcingSettings;
   api_keys: Record<string, string>;
   /** The app's look (D-185). */
@@ -104,6 +105,7 @@ export type ScoreLevels = Record<ScoreGroup, number>;
 
 /** The video's music as the Sound card changes it (D-179). */
 export interface MusicDraft {
+  library_id?: string | null;
   choice: "none" | "own" | "score";
   style: string | null;
   intensity: number;
@@ -245,6 +247,7 @@ export interface PlannedScene {
   caption_treatment?: CaptionTreatment | null;
   caption_emphasis?: number[];
   transition_after?: TransitionTreatment | null;
+  visual_beat?: VisualBeat | null;
   words: PlanWord[];
   card_kind: string;
   card_text: string;
@@ -265,6 +268,7 @@ export interface PlannedScene {
   shot_reason?: string;
   /** Where the scene starts in the recording; null for a card or no footage. */
   footage_start?: number | null;
+  audio_start?: number | null;
   match_score: number;
   semantic_score: number;
   match_reason: string;
@@ -281,6 +285,7 @@ export interface ScenePlan {
   style: string;
   caption_treatment?: CaptionTreatment | null;
   transition_treatment?: TransitionTreatment | null;
+  short_export?: ShortExport | null;
   language: string;
   language_probability: number;
   transcribe_model: string;
@@ -379,6 +384,8 @@ export const getSettings = () => request<UserSettings>("/api/settings");
 
 export const saveSettings = (body: {
   sourcing_consent?: boolean;
+  music_search_consent?: boolean;
+  music_share_alike?: boolean;
   api_keys?: Record<string, string>;
   theme?: Theme;
 }) => request<unknown>("/api/settings", { method: "PUT", body: JSON.stringify(body) });
@@ -758,6 +765,7 @@ export const saveMusic = (jobId: string, music: MusicDraft) =>
       style: music.style,
       intensity: music.intensity,
       seed: music.seed,
+      library_id: music.choice === "own" ? music.library_id ?? null : null,
       upload_id: music.choice === "own" ? music.upload_id ?? null : null,
       credit: music.choice === "own" ? music.credit ?? null : null,
       forget_track: music.forget_track ?? false,
@@ -796,7 +804,7 @@ export async function previewMix(
   start: number,
   voiceOnly: boolean,
   /** A track to hear in place of the video's music (D-184). */
-  track: { upload_id?: string | null; kept?: boolean } = {},
+  track: { upload_id?: string | null; library_id?: string | null; search_token?: string; kept?: boolean } = {},
 ): Promise<string> {
   const response = await fetch(`/api/jobs/${jobId}/mix/preview`, {
     method: "POST",
@@ -807,6 +815,8 @@ export async function previewMix(
       start,
       seconds: 15,
       voice_only: voiceOnly,
+      music_search_token: track.search_token ?? null,
+      music_library_id: track.library_id ?? null,
       music_upload_id: track.upload_id ?? null,
       kept_track: track.kept ?? false,
     }),
@@ -908,3 +918,84 @@ export const previewTransition = (jobId: string, index: number, treatment: Trans
   request<{ url: string; note: string }>(`/api/jobs/${jobId}/scenes/${index}/transition/preview`, {
     method: "POST", body: JSON.stringify({ treatment }),
   });
+
+export interface PacingControls {
+  seconds: number;
+  cuts: { id: string; scene: number; start_frame: number; end_frame: number;
+    start: number; end: number; seconds: number; before: string; after: string }[];
+}
+export const getPacing = (jobId: string) => request<PacingControls>(`/api/jobs/${jobId}/pacing`);
+export const savePacing = (jobId: string, cuts: string[]) =>
+  request<PlanEditResult>(`/api/jobs/${jobId}/pacing`, { method: "PUT", body: JSON.stringify({ cuts }) });
+
+export interface ShortCandidate {
+  id: string; first_word: number; last_word: number; start: number; end: number;
+  seconds: number; opening: string; ending: string; text: string; reasons: string[];
+}
+export interface ShortsControls {
+  revision: string; suggestions: ShortCandidate[];
+  words: { index: number; text: string; start: number; end: number }[];
+}
+export interface ShortChoice { revision: string; first_word: number; last_word: number; vertical: boolean }
+export interface ShortPreview {
+  url: string; seconds: number; note: string;
+  source_ranges: { audio_start: number; footage_start: number | null; seconds: number }[];
+}
+export const getShorts = (jobId: string) => request<ShortsControls>(`/api/jobs/${jobId}/shorts`);
+export const saveShort = (jobId: string, choice: ShortChoice) =>
+  request<PlanEditResult>(`/api/jobs/${jobId}/shorts`, { method: "PUT", body: JSON.stringify(choice) });
+export const previewShort = (jobId: string, choice: ShortChoice) =>
+  request<ShortPreview>(`/api/jobs/${jobId}/shorts/preview`, { method: "POST", body: JSON.stringify(choice) });
+
+export interface VisualBeat {
+  text: string; kind: "opening" | "keypoint" | "number" | "closing";
+  look: "authority" | "energy" | "cinema"; position: "auto" | "top" | "center";
+  zoom: number; source: "director" | "user";
+}
+export interface DirectionControls { revision: string; looks: Record<string, { label: string; seconds: number; zoom: number }> }
+export interface DirectionChoice { revision: string; look: VisualBeat["look"]; match_captions: boolean }
+export const getDirection = (id: string) => request<DirectionControls>(`/api/jobs/${id}/direction`);
+export const directVideo = (id: string, choice: DirectionChoice) => request<PlanEditResult>(`/api/jobs/${id}/direction`, {method: "PUT", body: JSON.stringify(choice)});
+export const previewDirection = (id: string, choice: DirectionChoice) => request<ShortPreview>(`/api/jobs/${id}/direction/preview`, {method: "POST", body: JSON.stringify(choice)});
+export const saveVisual = (id: string, index: number, revision: string, beat: VisualBeat | null) => request<PlanEditResult>(`/api/jobs/${id}/scenes/${index}/visual`, {method: "PUT", body: JSON.stringify({revision, beat})});
+export const previewVisual = (id: string, index: number, revision: string, beat: VisualBeat) => request<ShortPreview>(`/api/jobs/${id}/scenes/${index}/visual/preview`, {method: "POST", body: JSON.stringify({revision, beat})});
+
+export interface SafeArea { top: number; bottom: number; left: number; right: number }
+export interface ShortExport {
+  platform: "youtube" | "tiktok" | "reels" | "whatsapp";
+  height: 1280 | 1920; safe_area: SafeArea; progress: boolean; accent: string;
+}
+export interface ExportControls {
+  revision: string; settings: ShortExport | null; seconds: number; note: string;
+  presets: Record<ShortExport["platform"], { label: string; export: ShortExport }>;
+}
+export const getShortExport = (id: string) => request<ExportControls>(`/api/jobs/${id}/short-export`);
+export const saveShortExport = (id: string, revision: string, settings: ShortExport | null) =>
+  request<PlanEditResult>(`/api/jobs/${id}/short-export`, {method: "PUT", body: JSON.stringify({revision, settings})});
+export const previewShortExport = (id: string, revision: string, settings: ShortExport) =>
+  request<ShortPreview>(`/api/jobs/${id}/short-export/preview`, {method: "POST", body: JSON.stringify({revision, settings})});
+
+export interface MusicTrack {
+  id: string; title: string; credit: string; mood: string;
+  seconds: number; bytes: number; added_at: string;
+}
+export const listMusic = (q = "", mood = "", offset = 0) =>
+  request<{tracks: MusicTrack[]; total: number}>(`/api/music-library?${new URLSearchParams({q, mood, offset: String(offset)})}`);
+export const importMusic = (upload_id: string, title: string, credit: string, mood: string) =>
+  request<{track: MusicTrack; already_there: boolean}>("/api/music-library", {
+    method: "POST", body: JSON.stringify({upload_id, title, credit, mood}),
+  });
+export const updateMusic = (track: MusicTrack) => request<MusicTrack>(`/api/music-library/${track.id}`, {
+  method: "PUT", body: JSON.stringify({title: track.title, credit: track.credit, mood: track.mood}),
+});
+export const hideMusic = (id: string) => request<{hidden: boolean}>(`/api/music-library/${id}`, {method: "DELETE"});
+
+export interface OnlineMusicResult {
+  token: string; id: string; title: string; creator: string; license: string;
+  license_url: string; source_url: string; seconds: number; mood: string; instrumental: boolean;
+}
+export const searchMusic = (query: string, page: number, mood: string, min_seconds: number, max_seconds: number, instrumental: boolean) =>
+  request<{results: OnlineMusicResult[]; has_more: boolean}>("/api/music-search", {
+    method: "POST", body: JSON.stringify({query, page, mood, min_seconds, max_seconds, instrumental}),
+  });
+export const saveOnlineMusic = (token: string) => request<{track: MusicTrack; already_there: boolean}>(`/api/music-search/${token}/save`, {method: "POST"});
