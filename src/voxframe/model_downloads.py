@@ -157,12 +157,14 @@ def _stack_problem(need: ModelNeed) -> str | None:
 class Download:
     """One download run, read by the Getting-ready screen."""
 
-    state: str = "idle"  # idle, downloading, done, failed
+    state: str = "idle"  # idle, downloading, updating, done, failed
     current: str = ""
     received_mb: float = 0.0
     total_mb: float = 0.0
     seconds_left: float | None = None
     message: str = ""
+    completed_assets: int = 0
+    total_assets: int = 0
     _started_bytes: int = 0
     _started_at: float = field(default_factory=time.monotonic)
     _lock: threading.Lock = field(default_factory=threading.Lock)
@@ -176,6 +178,8 @@ class Download:
                 "total_mb": round(self.total_mb, 1),
                 "seconds_left": None if self.seconds_left is None else round(self.seconds_left),
                 "message": self.message,
+                "completed_assets": self.completed_assets,
+                "total_assets": self.total_assets,
             }
 
 
@@ -235,23 +239,64 @@ def _all_bytes(needs: list[ModelNeed]) -> int:
     return sum(_repo_bytes(repo) for need in needs for repo in need.repos)
 
 
-def start_download(settings: Settings, download: Download) -> Download:
+def library_ready(settings: Settings) -> bool:
+    """Whether the actual app library can be searched with these settings."""
+    from voxframe.library.db import AssetLibrary
+    from voxframe.library.embeddings import EMBEDDING_MODELS
+
+    if not (settings.library_path / "library.db").is_file():
+        return True
+    model_id = "/".join(EMBEDDING_MODELS[settings.resolved_embed_model][:2])
+    stored = AssetLibrary(settings.library_path).embedding_models()
+    return not stored or stored == {model_id}
+
+
+def _update_library(settings: Settings, download: Download) -> None:
+    from voxframe.library.db import AssetLibrary
+    from voxframe.library.ingest import reembed_library
+    from voxframe.library.manage import shared_embedder
+
+    if library_ready(settings):
+        return
+    with download._lock:
+        download.state = "updating"
+        download.current = "Updating picture matching in your library"
+
+    def progress(completed: int, total: int) -> None:
+        with download._lock:
+            download.completed_assets = completed
+            download.total_assets = total
+
+    library = AssetLibrary(settings.library_path)
+    result = reembed_library(library, shared_embedder(settings), progress=progress)
+    if result.failed or not library_ready(settings):
+        raise RuntimeError(
+            f"Could not update {len(result.failed)} library items. "
+            "Check that the original pictures and clips are still available, then try again."
+        )
+
+
+def start_download(
+    settings: Settings, download: Download, *, update_library: bool = False
+) -> Download:
     """Fetch every missing model on a background thread, measuring as it goes.
 
     Idempotent: while a run is in progress, a second call changes nothing.
     """
     with download._lock:
-        if download.state == "downloading":
+        if download.state in {"downloading", "updating"}:
             return download
         missing = [need for need in model_needs(settings) if not is_ready(need)]
-        download.state = "downloading" if missing else "done"
+        download.state = "downloading" if missing or update_library else "done"
         download.total_mb = float(sum(need.megabytes for need in missing))
         download.received_mb = 0.0
         download.seconds_left = None
         download.message = ""
+        download.completed_assets = 0
+        download.total_assets = 0
         download._started_bytes = _all_bytes(missing)
         download._started_at = time.monotonic()
-    if not missing:
+    if not missing and not update_library:
         return download
 
     stop = threading.Event()
@@ -276,6 +321,8 @@ def start_download(settings: Settings, download: Download) -> Download:
                     download.current = need.label
                 log.info("models.download.start", model=need.key, mb=need.megabytes)
                 _fetch(need)
+            if update_library:
+                _update_library(settings, download)
             with download._lock:
                 download.state = "done"
                 download.received_mb = download.total_mb
@@ -286,8 +333,11 @@ def start_download(settings: Settings, download: Download) -> Download:
                 "models.download.failed", error=type(exc).__name__, detail=str(exc)[:300]
             )
             with download._lock:
+                download.message = (
+                    f"Your library could not be updated: {exc}. Try again before making a video."
+                    if download.state == "updating" else _failure_message(exc)
+                )
                 download.state = "failed"
-                download.message = _failure_message(exc)
         finally:
             stop.set()
 
