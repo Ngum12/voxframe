@@ -33,6 +33,7 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+from voxframe.config.captions import CaptionTreatment
 from voxframe.config.style import CaptionBacking, CaptionPosition, CaptionStyle
 from voxframe.models.scene import Scene
 from voxframe.models.transcript import Word
@@ -437,6 +438,7 @@ def build_ass(
     fps: float,
     *,
     top_scenes: frozenset[int] = frozenset(),
+    scene_treatments: dict[int, CaptionTreatment] | None = None,
 ) -> str:
     """Build a complete ASS subtitle document.
 
@@ -468,6 +470,21 @@ def build_ass(
     events = [f"[Events]\nFormat: {', '.join(_EVENT_FIELDS)}"]
 
     for scene in scenes:
+        treatment = (scene_treatments or {}).get(scene.index)
+        if treatment is not None and not scene.is_silent:
+            from voxframe.render.captions.animated import scene_events
+
+            current_style = treatment.apply(style)
+            name = f"Caption{scene.index}"
+            rows = _styles_block(current_style, width, height).splitlines()[2:]
+            rows = [row.replace("Style: VoxframeTop,", f"Style: {name}Top,")
+                    .replace("Style: Voxframe,", f"Style: {name},") for row in rows]
+            parts[1] += "\n".join(rows) + "\n"
+            # Face avoidance applies to bottom captions only; deliberate top/centre stays put.
+            if scene.index in top_scenes and treatment.position == CaptionPosition.BOTTOM:
+                name += "Top"
+            events.extend(scene_events(scene, current_style, treatment, width, height, fps, name))
+            continue
         if scene.is_silent:
             continue
 
@@ -546,6 +563,7 @@ def write_ass(
     fps: float,
     *,
     top_scenes: frozenset[int] = frozenset(),
+    scene_treatments: dict[int, CaptionTreatment] | None = None,
 ) -> Path:
     """Write an ASS subtitle file.
 
@@ -555,7 +573,8 @@ def write_ass(
     Returns:
         The path written.
     """
-    content = build_ass(scenes, style, width, height, fps, top_scenes=top_scenes)
+    content = build_ass(scenes, style, width, height, fps, top_scenes=top_scenes,
+                        scene_treatments=scene_treatments)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8", newline="\n")
     return path

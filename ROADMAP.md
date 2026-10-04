@@ -6,11 +6,11 @@ what has shipped. If you'd like to help with any of this, see
 [CONTRIBUTING.md](CONTRIBUTING.md), and please open an issue before starting
 on anything large.
 
-## Next: 0.3.0
+## Studio expansion after 2.1.0
 
 Three additions to the studio, built in this order.
 
-### 1. Caption styles and animations
+### 1. Caption studio — implemented on `feat/caption-studio`
 
 - **Styles:**
   - **Highlight** (today's): the line, with the spoken word coloured;
@@ -27,6 +27,17 @@ Three additions to the studio, built in this order.
   you stressed most, and nothing changes until you click.
 - **Captions stay frame-exact.** Timing still comes only from each word's
   own timestamp.
+- **Eight ready-to-use looks:** Classic, Electric, Cinema, Karaoke, Impact,
+  Spotlight, Pulse and Quiet. Spotlight follows one word; Pulse gives the
+  spoken word a small bounce.
+- **Make a look yours:** accent/text colours, backing, size, page length,
+  line count, capitalisation, position and emphasis strength.
+- **Two previews:** an immediate sketch and a locally rendered preview
+  using the export's caption renderer, up to the first 12 seconds of a scene.
+- **Reversible:** save for one scene or the whole video; undo/redo restores
+  the saved look. Re-rendering keeps the original word timestamps and audio.
+
+**Next build: transitions**, followed by the reusable music library below.
 
 ### 2. Transitions
 

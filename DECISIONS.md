@@ -6186,3 +6186,33 @@ fixed at its cause:
   16,155 on Windows, about 15,000 on Linux, against a threshold of 16,000).
   It now uses a fixed, realistic AppData-length path: about 13,800 to 14,700
   everywhere.
+
+### D-196 · Caption studio: saved looks, spoken-word animation and real previews
+
+The owner asked to build the caption expansion in D-186 and go beyond its
+six modes. Eight presets now combine eight animations with colour, backing,
+position, lift, size, page length, line count and emphasis controls. Spotlight
+shows one word at a time; Pulse settles the spoken word into place.
+
+The plan owns both a whole-video treatment and optional scene overrides,
+plus indices into each scene's displayed words. Old plans keep their original
+caption rendering. Styling enters the existing edit history as one change.
+Text corrections clear stale emphasis indices, keeping the chosen treatment.
+
+Animations follow actual word starts, including pauses, rather than adding
+word durations into a second clock. Wrapping reserves emphasis space; long
+unbroken words shrink to fit portrait frames. Positioning honours explicit
+top/centre choices and keeps bottom captions clear of tracked faces.
+
+The immediate browser sketch is labelled as a sketch. Exact previews are
+short, neutral-background MP4s generated locally by the export's ASS/libass
+renderer. They do not save a draft or change the source video. Full exports
+reuse unaffected caches and keep the original recording and word timestamps.
+
+Emphasis suggestions measure word-level RMS and duration in the local
+recording. They are acoustic suggestions, not semantic understanding, and
+stay in the draft until the user saves. No additional model download is needed.
+
+Validated through API history/authentication checks, rendered tests for all
+eight presets and French portrait fitting, and a browser flow that previews,
+saves, undoes/redoes, applies a whole-video look and renders the result.

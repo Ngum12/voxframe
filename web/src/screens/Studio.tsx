@@ -34,6 +34,7 @@ import {
 } from "../api";
 import { Notice } from "../components";
 import { SceneDetail, TitleAdder, sceneThumbnail, showsSpeaker } from "./Filmstrip";
+import { CaptionStudio } from "./CaptionStudio";
 import { SoundPanel } from "./Sound";
 import { Timeline, type TimedWord } from "./Timeline";
 
@@ -675,6 +676,9 @@ export function Studio({
                       </button>
                     ))}
                   </div>
+                  <CaptionStudio key={`${scene.index}-${planVersion}-look`}
+                    jobId={jobId} scene={scene} fps={plan.fps} aspect={plan.aspect}
+                    onEdited={afterEdit} />
                   <SceneDetail
                     key={`${scene.index}-${planVersion}-caption`}
                     jobId={jobId}

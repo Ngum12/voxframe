@@ -53,6 +53,7 @@ from voxframe.api.security import (
     host_is_loopback,
     resolve_within,
 )
+from voxframe.config.captions import CaptionTreatment
 from voxframe.config.settings import AspectRatio, QualityPreset, Settings, get_settings
 from voxframe.config.userprefs import (
     KEY_FIELDS,
@@ -299,6 +300,12 @@ class CaptionEdit(BaseModel):
     """What a scene's captions should say."""
 
     text: str = Field(max_length=4000)
+
+
+class CaptionLook(BaseModel):
+    treatment: CaptionTreatment | None = None
+    emphasis: tuple[int, ...] = Field(default=(), max_length=400)
+    all_scenes: bool = False
 
 
 class CardText(BaseModel):
@@ -1388,6 +1395,108 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         return {"scene": edited.scenes[index].model_dump(mode="json"),
                 "pending_edits": job.summary.get("pending_edits", 0)}
 
+    @app.get("/api/jobs/{job_id}/scenes/{index}/captions")
+    def caption_controls(
+        job_id: str, index: int, context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        from voxframe.config.captions import CAPTION_PRESETS, CaptionTreatment
+        from voxframe.config.style import get_template
+        from voxframe.render.compose.from_plan import _scenes_for_captions
+
+        _, _, plan = _editable_plan(context, job_id)
+        _scene_or_404(plan, index)
+        scene = plan.scenes[index]
+        base = get_template(plan.style).captions
+        default = CaptionTreatment(
+            accent="#" + base.highlight_color[-2:] + base.highlight_color[-4:-2]
+            + base.highlight_color[-6:-4],
+            color="#" + base.primary_color[-2:] + base.primary_color[-4:-2]
+            + base.primary_color[-6:-4],
+            position=base.position, backing=base.backing, uppercase=base.uppercase,
+            max_lines=min(3, base.max_lines),
+        )
+        words = next((s.words for s in _scenes_for_captions(plan) if s.index == index), ())
+        return {
+            "treatment": (scene.caption_treatment or plan.caption_treatment or default)
+            .model_dump(mode="json"),
+            "emphasis": scene.caption_emphasis,
+            "words": [w.model_dump(mode="json") for w in words],
+            "presets": {k: v.model_dump(mode="json") for k, v in CAPTION_PRESETS.items()},
+            "inherited": scene.caption_treatment is None,
+        }
+
+    @app.put("/api/jobs/{job_id}/scenes/{index}/captions")
+    def caption_style_edit(
+        job_id: str, index: int, edit: CaptionLook, context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        from voxframe.plan.caption_studio import set_captions
+        from voxframe.plan.editing import EditError
+
+        job, path, plan = _editable_plan(context, job_id)
+        try:
+            updated = set_captions(plan, index, edit.treatment, edit.emphasis,
+                                   all_scenes=edit.all_scenes)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        saved = _save_plan(updated, path, "caption styling")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
+
+    @app.post("/api/jobs/{job_id}/scenes/{index}/captions/suggest")
+    def caption_suggest(
+        job_id: str, index: int, context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        from voxframe.plan.caption_studio import suggest_emphasis
+
+        _, _, plan = _editable_plan(context, job_id)
+        _scene_or_404(plan, index)
+        try:
+            suggestions = suggest_emphasis(plan, index)
+        except Exception as exc:
+            log.info("captions.suggestion_unavailable", reason=type(exc).__name__)
+            raise HTTPException(
+                status_code=422,
+                detail="The voice could not be measured. You can choose emphasis words yourself.",
+            ) from exc
+        return {"emphasis": suggestions,
+                "method": "Voice energy and delivery length; suggestions only."}
+
+    @app.post("/api/jobs/{job_id}/scenes/{index}/captions/preview")
+    def caption_preview_edit(
+        job_id: str, index: int, edit: CaptionLook, context: ApiContext = Depends(ctx),
+    ) -> dict[str, Any]:
+        from voxframe.plan.caption_studio import set_captions
+        from voxframe.render.captions.preview import caption_preview
+
+        _, _, plan = _editable_plan(context, job_id)
+        _scene_or_404(plan, index)
+        if edit.treatment is None:
+            raise HTTPException(status_code=422, detail="Choose a caption look to preview.")
+        try:
+            set_captions(plan, index, edit.treatment, edit.emphasis)
+            path = caption_preview(plan, index, edit.treatment, edit.emphasis,
+                                   context.store.job_directory(job_id) / "caption-previews")
+        except Exception as exc:
+            log.warning("captions.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(
+                status_code=422, detail="The caption preview could not be made."
+            ) from exc
+        return {"url": f"/api/jobs/{job_id}/caption-previews/{path.stem}",
+                "note": "Rendered on a neutral background; first 12 seconds at most."}
+
+    @app.get("/api/jobs/{job_id}/caption-previews/{key}")
+    def caption_preview_video(
+        job_id: str, key: str, context: ApiContext = Depends(ctx),
+    ) -> FileResponse:
+        import re
+
+        if context.store.get(job_id) is None or re.fullmatch(r"[a-f0-9]{24}", key) is None:
+            raise HTTPException(status_code=404, detail="No such preview.")
+        path = context.store.job_directory(job_id) / "caption-previews" / f"{key}.mp4"
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="No such preview.")
+        return FileResponse(path, media_type="video/mp4")
+
     @app.post("/api/jobs/{job_id}/scenes/{index}/image/own")
     async def own_image(
         job_id: str,
@@ -2346,6 +2455,8 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
             "speaker" if now.shows_speaker(scene) else (scene.asset.id if scene.asset else None),
             scene.motion,
             scene.caption_text,
+            scene.caption_treatment,
+            scene.caption_emphasis,
             scene.card_kind,
             scene.card_text,
             scene.start_frame,
@@ -2355,7 +2466,8 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
     changed, pictures = [], []
     for position, scene in enumerate(now.scenes):
         before = shown.scenes[position] if position < len(shown.scenes) else None
-        if before is None or looks(scene) != looks(before):
+        if (before is None or looks(scene) != looks(before)
+                or now.caption_treatment != shown.caption_treatment):
             changed.append(scene.index)
         if before is None or looks(scene)[0] != looks(before)[0]:
             pictures.append(scene.index)

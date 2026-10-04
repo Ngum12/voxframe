@@ -48,6 +48,7 @@ __all__ = [
     "drawtext_filter",
     "movie_source",
     "needs_staging",
+    "relative_ass_filter",
     "stage_for_filters",
     "subtitles_filter",
 ]
@@ -307,3 +308,17 @@ def stage_for_filters(paths: dict[str, Path], staging_dir: Path | None = None) -
         staged[name] = destination
 
     return staged
+
+
+def relative_ass_filter(subtitle_name: str, fonts_name: str) -> str:
+    """Build a caption filter using safe local names in the caller's working directory.
+
+    This lets a preview stage subtitles and fonts together even when the
+    Windows temporary directory contains apostrophes. Never accepts a path.
+    """
+    import re
+
+    for name in (subtitle_name, fonts_name):
+        if name in {".", ".."} or re.fullmatch(r"[A-Za-z0-9_.-]+", name) is None:
+            raise ValueError("Use a simple staged filename for caption previews.")
+    return f"ass=filename='{subtitle_name}':fontsdir='{fonts_name}'"
