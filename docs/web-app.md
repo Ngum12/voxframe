@@ -252,3 +252,15 @@ Scene plans record the version of the renderer that made them. Plans made
 before the first release are **not supported**: rendering one shows a warning,
 because its captions may be out of step after a title or chapter card. Make
 the video again from the recording instead.
+
+## Editing on different screens
+
+The studio shows all nine tools in a three-column grid. With a tool focused,
+use Left/Right for adjacent tools, Up/Down for the row above/below, and
+Home/End for the first/last tool. Number shortcuts 1–9 still select tools.
+
+On larger screens, scroll the editor while the player stays in view. On
+narrow screens or short windows, the player and editor stack: scroll the page,
+and the tool grid stays at the top while you work. Switching tools returns to
+the start of its controls. Saved panel sizes adapt to available space. Each
+new screen opens at the top, and the first keyboard link skips to its content.

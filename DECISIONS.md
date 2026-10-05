@@ -6434,3 +6434,25 @@ The discovery UI states the possible Content ID claim even for CC music.
 Tests use controlled provider responses and audio with real preview/export
 rendering. A live API request was attempted but rejected by the cloud proxy
 (HTTP 403); live provider access and live search coverage are unverified here.
+
+### D-204 · VoxFrame identity and reachable responsive editing
+
+The voice-in-a-frame mark, frame corners on uploads and Ember/Paper role
+colours carry one visual identity across the shell, library and studio.
+All nine editors appear in a three-column tab grid; arrow keys follow the
+grid, Home/End reach its first/last tool, and number shortcuts remain intact.
+Switching tools starts the editor at its top without moving the desktop player.
+
+Desktop editing keeps its player fixed and scrolls panel contents separately.
+At widths up to 1000px or heights up to 640px, the studio stacks and uses page
+scrolling with sticky editor tabs. Saved panel widths are bounded by available
+space, and timeline lanes by viewport height, without rewriting preferences.
+Phone navigation has a dedicated row; controls wrap, long filenames break,
+and dialogs stay within the viewport. Hidden upload fields retain their
+screen-reader-only dimensions. Changing screens resets page scroll, and the
+skip link focuses the main content.
+
+Browser regressions exercise every editor at 320, 390, 768, 1024 and 1440px,
+real wheel scrolling, keyboard tab navigation, large saved panels, short
+windows, download menus, theme switching and the skip link. They use a real
+render from a seeded plan, so layout coverage needs no transcription model.

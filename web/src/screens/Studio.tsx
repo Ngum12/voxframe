@@ -207,10 +207,17 @@ export function Studio({
   const video = useRef<HTMLVideoElement>(null);
   const frame = useRef<HTMLDivElement>(null);
   const shortcuts = useRef<HTMLDialogElement>(null);
+  const editPanel = useRef<HTMLElement>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const resumeAt = useRef(0);
   useEffect(() => {
-    document.getElementById(`tab-${tab}`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const panel = document.getElementById(`panel-${tab}`);
+    if (panel) panel.scrollTop = 0;
+    // Stacked editors use the page's scroll, not a second scrollable well.
+    if (window.matchMedia("(max-width: 1000px), (max-height: 640px)").matches &&
+        editPanel.current && editPanel.current.getBoundingClientRect().top < 0) {
+      editPanel.current.scrollIntoView({ block: "start", behavior: "instant" });
+    }
   }, [tab, layout.panelOpen]);
 
   const say = useCallback((text: string) => {
@@ -524,7 +531,7 @@ export function Studio({
       >
         <section className="studio-stage" aria-label="Player">
           <div className="studio-player">
-            <div className="studio-frame" ref={frame} style={{ aspectRatio: plan.aspect.replace(":", " / ") }}>
+            <div className="studio-frame" data-aspect={plan.aspect} ref={frame} style={{ aspectRatio: plan.aspect.replace(":", " / ") }}>
               {hasVideo && (
                 <video
                   ref={video}
@@ -606,7 +613,7 @@ export function Studio({
           />
         )}
         {layout.panelOpen && (
-        <aside className="studio-panel" aria-label="Edit">
+        <aside ref={editPanel} className="studio-panel" aria-label="Edit">
           <div className="studio-tabs" role="tablist" aria-label="Edit">
             {TABS.map((entry, index) => (
               <button
@@ -620,13 +627,19 @@ export function Studio({
                 title={`${entry.label} (${index + 1})`}
                 onClick={() => setTab(entry.id)}
                 onKeyDown={(event) => {
-                  if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+                  const move: Record<string, number> = {
+                    ArrowRight: 1, ArrowLeft: -1, ArrowDown: 3, ArrowUp: -3,
+                  };
+                  if (!(event.key in move) && event.key !== "Home" && event.key !== "End") return;
                   event.preventDefault();
-                  const next = TABS[(index + (event.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+                  const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? TABS.length - 1
+                    : (index + move[event.key] + TABS.length) % TABS.length;
+                  const next = TABS[nextIndex];
                   setTab(next.id);
                   document.getElementById(`tab-${next.id}`)?.focus();
                 }}
               >
+                <span className="studio-tab-key" aria-hidden="true">{index + 1}</span>
                 {entry.label}
               </button>
             ))}

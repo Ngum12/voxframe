@@ -94,6 +94,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [screen]);
+
+  useEffect(() => {
     void (async () => {
       const ok = await establishSession();
       setAuthorised(ok);
@@ -174,7 +178,12 @@ export function App() {
 
       <header className="masthead">
         <span className="wordmark">
-          Voxframe <small>local</small>
+          <svg className="brand-symbol" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+            <path d="M13 7H7v6m20-6h6v6M7 27v6h6m20-6v6h-6" />
+            <path className="brand-wave" d="M12 18v4m4-8v12m4-16v20m4-16v12m4-8v4" />
+          </svg>
+          <span className="brand-name">Vox<span>Frame</span></span>
+          <small>LOCAL STUDIO</small>
         </span>
         <nav aria-label="Sections">
           <button
@@ -203,7 +212,7 @@ export function App() {
         </nav>
       </header>
 
-      <main id="main" className={screen === "result" ? "main-studio" : undefined}>
+      <main id="main" tabIndex={-1} className={screen === "result" ? "main-studio" : undefined}>
         {screen !== "preferences" && screen !== "plan" && screen !== "library" && screen !== "result" && (
           <Steps steps={STEPS} current={screen} />
         )}
