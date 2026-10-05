@@ -264,3 +264,19 @@ narrow screens or short windows, the player and editor stack: scroll the page,
 and the tool grid stays at the top while you work. Switching tools returns to
 the start of its controls. Saved panel sizes adapt to available space. Each
 new screen opens at the top, and the first keyboard link skips to its content.
+
+## Delete an unwanted project
+
+On **Make a video**, find the project under **Recent videos** and click its
+**Delete** control. The confirmation names the project; choose **Cancel** to
+keep it or **Delete project** to permanently remove it.
+
+Deletion removes the recent entry, its edits, previews and private working
+files. It keeps your original recording, shared image/music libraries and
+videos saved outside the project, including downloads and the videos-folder
+copy. Delete those separate copies yourself if you no longer want them.
+
+A rendering project cannot be deleted until its worker stops. If VoxFrame
+cannot save the deletion, the project stays intact. If Windows or another
+program locks working files, the app reports that some files remain in app
+storage even though the recent entry was removed.

@@ -2696,3 +2696,15 @@ input[type="checkbox"], input[type="radio"] { flex: none; }
   .caption-toolbar, .transition-toolbar, .caption-actions, .transition-actions { flex-wrap: wrap; }
   .studio-dialog { padding: 16px; }
 }
+
+/* Project deletion is separate from opening a recent video. */
+.recent-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.recent-delete { display: flex; gap: 6px; align-items: center; min-height: 44px; padding: 8px; font-size: 12px; }
+.recent-delete:hover:not(:disabled) { color: var(--error); background: var(--error-soft); }
+.recent-entry .recent-video { grid-template-columns: 80px minmax(0, 1fr); }
+.project-delete-name { font-weight: 600; overflow-wrap: anywhere; }
+.project-delete-dialog p { font-size: 14px; }
+@media (max-width: 600px) {
+  .recent-entry { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .recent-delete { justify-self: end; }
+}

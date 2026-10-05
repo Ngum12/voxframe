@@ -1230,6 +1230,21 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             raise HTTPException(status_code=404, detail="No such job.")
         return job.snapshot()
 
+    @app.delete("/api/jobs/{job_id}")
+    def delete_job(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        """Delete a stopped project, preserving original files and shared assets."""
+        try:
+            cleaned = context.store.delete(job_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="No such project.") from None
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from None
+        except OSError:
+            raise HTTPException(
+                status_code=500, detail="The project could not be deleted. Try again."
+            ) from None
+        return {"removed": True, "files_deleted": cleaned}
+
     @app.post("/api/jobs/{job_id}/cancel")
     def cancel(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
         """Ask a render to stop at its next stage boundary.

@@ -440,6 +440,9 @@ export const getJob = (id: string) => request<Job>(`/api/jobs/${id}`);
 
 export const listJobs = () => request<{ jobs: Job[] }>("/api/jobs");
 
+export const deleteProject = (jobId: string) =>
+  request<{ removed: boolean; files_deleted: boolean }>(`/api/jobs/${jobId}`, { method: "DELETE" });
+
 export const cancelJob = (id: string) =>
   request<unknown>(`/api/jobs/${id}/cancel`, { method: "POST" });
 

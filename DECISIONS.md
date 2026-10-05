@@ -6456,3 +6456,24 @@ Browser regressions exercise every editor at 320, 390, 768, 1024 and 1440px,
 real wheel scrolling, keyboard tab navigation, large saved panels, short
 windows, download menus, theme switching and the skip link. They use a real
 render from a seeded plan, so layout coverage needs no transcription model.
+
+### D-205 · Explicit project deletion from Recent videos
+
+Each recent video has a separate Delete control. A native modal starts on
+Cancel, names the project and explains permanent removal of its edits,
+previews and private working files. Original recordings, shared libraries,
+external artifacts and separately saved exports remain untouched. The list
+backfills its six visible entries after deletion and reports success or failure.
+
+The authenticated DELETE job route refuses active states and unfinished
+workers. Only the canonical UUID working directory under the job root can
+be removed; symlinked project roots are refused. State is persisted atomically
+and strictly before file removal. Persistence failure restores the in-memory
+entry and leaves files intact. File cleanup failure is reported separately;
+the deleted entry remains removed, while some working files may remain in
+app storage. No artifact or source path from the plan is followed for deletion.
+
+Tests cover other projects and external-file preservation, restart persistence,
+active-worker refusal, failed writes, locked files and symlinked project roots.
+Real browser checks cover Cancel, Escape, initial safe focus, server errors,
+retry, deletion, reload and opening another project at desktop and phone sizes.
