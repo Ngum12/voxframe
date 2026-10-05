@@ -132,29 +132,22 @@ def clip_filter_chain(
     aspect differs from the output. `increase` fills the frame and the crop
     takes the centre, matching how stills are framed.
     """
-    parts: list[str] = []
-
-    if strategy.speed > 1.0:
-        # setpts multiplies presentation timestamps: >1 slows the clip.
-        parts.append(f"setpts={strategy.speed:.6f}*PTS")
-
-    if strategy.held_seconds > 0:
-        # tpad clones the final frame. `stop_mode=clone` freezes rather than
-        # padding with black, which would read as a dropout.
-        parts.append(
-            f"tpad=stop_mode=clone:stop_duration={strategy.held_seconds:.3f}"
-        )
-
-    parts.extend(
-        [
-            f"scale={width}:{height}:force_original_aspect_ratio=increase",
-            f"crop={width}:{height}",
-            # Normalise frame rate to the grid. Without this a 24fps clip and a
-            # 30fps render disagree about how many frames a scene holds.
-            f"fps={fps}",
-            "setsar=1",
-        ]
-    )
+    # Rebase timestamps before resampling: downloaded media may start late or
+    # use a variable frame rate. -frames:v is only a maximum, not a guarantee
+    # that the source supplies that many frames.
+    parts = [
+        (f"setpts={strategy.speed:.6f}*(PTS-STARTPTS)"
+         if strategy.speed > 1.0 else "setpts=PTS-STARTPTS"),
+        # Preserve even a single decoded frame at fractional output rates.
+        f"fps={fps}:start_time=0:eof_action=pass",
+        # EOF can arrive early even when duration metadata says the clip fits.
+        # Clone only as needed; the output frame limit trims every strategy to
+        # the exact slot. Never loop the clip or add black frames.
+        "tpad=stop_mode=clone:stop=-1",
+        f"scale={width}:{height}:force_original_aspect_ratio=increase",
+        f"crop={width}:{height}",
+        "setsar=1",
+    ]
 
     return ",".join(parts)
 

@@ -104,8 +104,8 @@ class TestClipFilterChain:
     def test_square_pixels_are_forced(self) -> None:
         assert "setsar=1" in self._chain(12.0, 5.0)
 
-    def test_a_trimmed_clip_has_no_setpts(self) -> None:
-        assert "setpts" not in self._chain(12.0, 5.0)
+    def test_a_trimmed_clip_rebases_without_changing_speed(self) -> None:
+        assert "setpts=PTS-STARTPTS" in self._chain(12.0, 5.0)
 
     def test_a_slowed_clip_has_setpts(self) -> None:
         assert "setpts" in self._chain(3.0, 5.0)

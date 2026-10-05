@@ -301,3 +301,14 @@ If an older export has repeating background speech, install the updated
 VoxFrame and choose **Update video**, then download the new MP4. Updating
 regenerates the polished voice without looping samples of the recording;
 a previously downloaded copy cannot change automatically.
+
+## Fitting clips to scene time
+
+Selected video clips fit the scene automatically. Longer clips are cut to
+the scene's length. Shorter clips use gentle slow motion up to 2.5 times,
+then hold the last frame if more time is needed. Small gaps are also filled
+with the last frame. The narration and captions keep their original timing.
+
+After installing this fix, choose **Update video** on a project that failed
+with a transition frame-count error. Older cached segments are rebuilt
+automatically; you do not need to delete the project or clear its cache.

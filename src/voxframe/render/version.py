@@ -18,4 +18,5 @@ __all__ = ["RENDERER_VERSION"]
 #:
 #: 2: still segments forced to square pixels (D-125).
 #: 3: card text wrapped and centred line by line (D-145).
-RENDERER_VERSION = 3
+#: 4: every downloaded clip fills its exact frame slot before transitions.
+RENDERER_VERSION = 4
