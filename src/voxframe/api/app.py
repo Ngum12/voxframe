@@ -720,6 +720,9 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
 
         preferences = load_preferences()
         current = apply_to_settings(context.settings, preferences)
+        # Read the worker once, before checking the library: completion may
+        # happen during this request, but its response must stay consistent.
+        download = context.downloads.snapshot()
         choices = []
         for profile in ModelProfile:
             needs = model_needs(current.model_copy(update={"profile": profile}))
@@ -743,10 +746,10 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             "profile_from_environment": "VOXFRAME_PROFILE" in os.environ,
             "ready": (
                 chosen["ready"] and library_ready(current)
-                and context.downloads.snapshot()["state"] not in {"downloading", "updating"}
+                and download["state"] not in {"downloading", "updating"}
             ),
             "choices": choices,
-            "download": context.downloads.snapshot(),
+            "download": download,
             # Where the libraries really keep them: the app's folder when installed.
             "models_folder": str(hub_cache()),
         }

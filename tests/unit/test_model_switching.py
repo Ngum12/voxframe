@@ -93,6 +93,30 @@ def test_downloaded_models_are_not_ready_with_an_incompatible_library(setup):  #
     assert not status["ready"]
 
 
+def test_status_uses_one_worker_snapshot_when_update_finishes(setup, monkeypatch):  # type: ignore[no-untyped-def]
+    client, context, _, _ = setup
+    client.post("/api/setup/models/download", json={"profile": "standard"})
+    assert wait(client)["ready"]
+    download = context.downloads
+    original = download.snapshot
+    with download._lock:
+        download.state = "updating"
+
+    def finish_after_snapshot():
+        snapshot = original()
+        with download._lock:
+            download.state = "done"
+        return snapshot
+
+    monkeypatch.setattr(download, "snapshot", finish_after_snapshot)
+    status = client.get("/api/setup/models").json()
+    assert status["download"]["state"] == "updating"
+    assert not status["ready"]
+    status = client.get("/api/setup/models").json()
+    assert status["download"]["state"] == "done"
+    assert status["ready"]
+
+
 def test_missing_original_is_reported_and_can_be_retried(setup):  # type: ignore[no-untyped-def]
     client, _, library, image = setup
     image.unlink()
