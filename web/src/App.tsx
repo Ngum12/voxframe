@@ -93,6 +93,23 @@ export function App() {
     setNeedsConsent(!settings.sourcing.has_been_asked);
   }, []);
 
+  // Only one audible player owns playback. Muted visual sketches may keep looping.
+  useEffect(() => {
+    const exclusive = (event: Event) => {
+      const active = event.target;
+      if (!(active instanceof HTMLMediaElement) || active.paused || active.muted || active.volume === 0) return;
+      document.querySelectorAll<HTMLMediaElement>("audio, video").forEach((other) => {
+        if (other !== active && !other.muted && other.volume > 0) other.pause();
+      });
+    };
+    document.addEventListener("play", exclusive, true);
+    document.addEventListener("volumechange", exclusive, true);
+    return () => {
+      document.removeEventListener("play", exclusive, true);
+      document.removeEventListener("volumechange", exclusive, true);
+    };
+  }, []);
+
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [screen]);

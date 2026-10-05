@@ -15,8 +15,8 @@ is unclear, D-172):
    6.5 dB from a talk's high frequencies -- music under the voice set it off --
    and the milder one 0.06 dB.
 5. **Evenness**: gentle compression, 2.5:1 (``acompressor``).
-6. **Room tone**: the recording's own quietest stretch, looped under the voice
-   at about -60 dBFS, so pauses are never dead digital silence.
+6. **Room tone** is left in the recording; no recorded samples are looped.
+   Quiet stretches may still contain speech and must never become ambience.
 
 Then it is checked, because "never robotic" is measured, not hoped: the pauses
 must still hold sound, and the voice must keep its high frequencies.
@@ -40,17 +40,12 @@ __all__ = ["POLISH_VERSION", "PolishReport", "music_underneath", "noise_floor", 
 log = structlog.get_logger(__name__)
 
 #: Bumped whenever the polish changes, so cached polished stems are not reused.
-POLISH_VERSION = 3
+POLISH_VERSION = 4
 
 #: The most noise reduction ever applied, dB.
 MAX_REDUCTION_DB = 12.0
 #: The least, when there is any noise to speak of.
 MIN_REDUCTION_DB = 3.0
-
-#: Room tone's level under the voice, dBFS (RMS).
-ROOM_TONE_DB = -60.0
-#: How much room tone is taken to loop.
-ROOM_TONE_SECONDS = 2.0
 
 #: The pauses must stay above this after polishing: below it they are dead.
 DEAD_PAUSE_DB = -75.0
@@ -187,29 +182,6 @@ def _high_change(before: np.ndarray, after: np.ndarray, rate: int) -> float:
     return round(tilt(a_power) - tilt(b_power), 2)
 
 
-def _room_tone(signal: np.ndarray, rate: int) -> np.ndarray:
-    """The quietest real stretch of the recording: its own room."""
-    length = int(ROOM_TONE_SECONDS * rate)
-    if len(signal) < 2 * length:
-        return np.zeros(0, dtype=np.float32)
-    step = rate // 10
-    best, best_level = 0, math.inf
-    for start in range(0, len(signal) - length, step):
-        chunk = signal[start : start + length]
-        level = float(np.sqrt(np.mean(chunk.astype(np.float64) ** 2)))
-        if 1e-6 < level < best_level:  # quiet, but not the renderer's digital zeros
-            best, best_level = start, level
-    if best_level is math.inf:
-        return np.zeros(0, dtype=np.float32)
-    tone = signal[best : best + length].astype(np.float32).copy()
-    # Fade its ends so the loop joins without a click.
-    fade = int(0.05 * rate)
-    ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)
-    tone[:fade] *= ramp
-    tone[-fade:] *= ramp[::-1]
-    return tone
-
-
 def _bandwidth(signal: np.ndarray, rate: int, size: int) -> float:
     """The highest frequency the recording holds, Hz: its spectrum within 60 dB of its peak."""
     starts = np.linspace(0, max(0, len(signal) - size), num=min(200, max(1, len(signal) // size)))
@@ -319,8 +291,6 @@ def polish_voice(
         pauses: Gaps between words (seconds in the stem), where the noise is
             measured.
     """
-    import soundfile as sf
-
     from voxframe.render.ffpath import run_ffmpeg
 
     voice, rate = _read(raw)
@@ -362,28 +332,9 @@ def polish_voice(
         ],
     )
 
-    tone = _room_tone(voice, rate)
-    tone_db = ROOM_TONE_DB
-    if tone.size:
-        level = 20 * math.log10(max(float(np.sqrt(np.mean(tone.astype(np.float64) ** 2))), 1e-9))
-        # Never louder than the room really was.
-        tone_db = min(ROOM_TONE_DB, level)
-        tone *= 10 ** ((tone_db - level) / 20)
-    partial = output.with_suffix(".partial.wav")
-    with (
-        sf.SoundFile(str(filtered)) as source,
-        sf.SoundFile(str(partial), "w", samplerate=rate, channels=1, subtype="FLOAT") as sink,
-    ):
-        position = 0
-        for block in source.blocks(blocksize=BLOCK, dtype="float32"):
-            block = block.reshape(-1)
-            if tone.size:
-                index = np.arange(position, position + len(block)) % len(tone)
-                block = block + tone[index]
-            sink.write(block)
-            position += len(block)
-    filtered.unlink(missing_ok=True)
-    partial.replace(output)
+    # Never recycle recording samples as ambience: even its quietest window
+    # can contain speech, which would become a repeating word in the export.
+    filtered.replace(output)
 
     polished, _ = _read(output)
     report = PolishReport(
@@ -391,7 +342,7 @@ def polish_voice(
         reduction_db=round(reduction, 1),
         reduction_note=note,
         boxiness_cut=boxy,
-        room_tone_db=round(tone_db, 1),
+        room_tone_db=-120.0,
         pause_floor_db=round(noise_floor(polished, rate), 1),
         high_change_db=_high_change(voice, polished, rate),
         music_in_recording=music_underneath(floor, flatness, speech),

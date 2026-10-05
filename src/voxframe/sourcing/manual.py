@@ -2,9 +2,9 @@
 
 The automatic path searches, downloads and matches for every scene that needs
 imagery. This is the person doing it for one scene: they type what they want,
-see what the sources offer, and choose. Nothing is downloaded in full until
-they choose, and what they choose keeps its licence, author and source exactly
-as an automatic download does (D-035).
+see what the sources offer, and choose. Video previews download a temporary
+clip to make a muted MP4; images use small thumbnails. The chosen source keeps
+its licence, author and source exactly as an automatic download does (D-035).
 
 Results are remembered per job under random tokens, so the browser names a
 result it was shown and never a URL: a page cannot make the server fetch an
@@ -18,6 +18,7 @@ import urllib.error
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from threading import Lock
 
 import structlog
@@ -97,8 +98,9 @@ def search(
     *,
     policy: LicensePolicy = DEFAULT_POLICY,
     limit: int = RESULTS_PER_SEARCH,
+    kind: AssetKind = AssetKind.IMAGE,
 ) -> tuple[list[Candidate], list[str]]:
-    """Search every configured source for images.
+    """Search every configured source for the requested media type.
 
     Returns:
         The candidates, interleaved by source, and the names of any sources
@@ -119,7 +121,7 @@ def search(
         SearchRequest(
             query=query,
             orientation=_orientation_for(plan),
-            kind=AssetKind.IMAGE,
+            kind=kind,
             limit=limit,
             language=plan.language,
             commercial_only=not policy.allow_non_commercial,
@@ -128,6 +130,62 @@ def search(
     failed = sorted({_source_name(name) for name, _ in failures})
     log.info("search.manual", results=len(found), failed=failed)
     return found[:limit], failed
+
+
+def video_info(path: Path) -> tuple[int, int, float]:
+    """Probe a downloaded standalone clip without allowing playlist/network reads."""
+    import json
+
+    from voxframe.render.encode.probe import probe_capabilities
+    from voxframe.render.ffpath import run_ffmpeg
+
+    caps = probe_capabilities()
+    if not caps.ffprobe_path:
+        raise SearchError("FFprobe is needed to read video clips.")
+    try:
+        payload = json.loads(run_ffmpeg(caps.ffprobe_path, ["-v", "error",
+            "-protocol_whitelist", "file,pipe", "-select_streams", "v:0",
+            "-show_entries", "stream=width,height:format=duration,format_name",
+            "-of", "json", str(path.resolve())]).stdout)
+        stream = payload["streams"][0]
+        form = payload["format"]
+        width, height = int(stream["width"]), int(stream["height"])
+        seconds = float(form["duration"])
+        if (not set(form["format_name"].split(",")) & {"mov", "mp4", "matroska", "webm"}
+                or width <= 0 or height <= 0 or not 0 < seconds <= 7200):
+            raise ValueError("invalid clip")
+    except Exception as exc:
+        raise SearchError("That download is not a readable standalone video clip.") from exc
+    return width, height, seconds
+
+
+def fetch_video_preview(
+    candidate: Candidate, directory: Path, token: str, settings: Settings,
+) -> Path:
+    """A muted, browser-compatible MP4 preview of the first 15 seconds."""
+    from voxframe.render.encode.probe import probe_capabilities
+    from voxframe.render.ffpath import run_ffmpeg
+
+    target = directory / f"{token}.mp4"
+    if target.is_file():
+        return target
+    directory.mkdir(parents=True, exist_ok=True)
+    partial = target.with_suffix(".partial.mp4")
+    try:
+        with TemporaryDirectory(prefix="clip-", dir=directory) as temporary:
+            source, _, _ = fetch_choice(candidate, Path(temporary), "preview", settings)
+            run_ffmpeg(probe_capabilities().ffmpeg_path, ["-v", "error",
+                "-protocol_whitelist", "file,pipe", "-i", str(source.resolve()), "-t", "15",
+                "-an", "-vf",
+                "scale=480:480:force_original_aspect_ratio=decrease:force_divisible_by=2",
+                "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
+                "-movflags", "+faststart", "-y", str(partial.resolve())])
+        partial.replace(target)
+    except Exception as exc:
+        raise SearchError("This clip preview could not be made. Try another result.") from exc
+    finally:
+        partial.unlink(missing_ok=True)
+    return target
 
 
 def fetch_preview(candidate: Candidate, directory: Path, token: str) -> Path:
@@ -176,7 +234,7 @@ def fetch_choice(
         The file, and its width and height.
 
     Raises:
-        SearchError: If it cannot be downloaded or is not a readable image.
+        SearchError: If it cannot be downloaded or is not readable media.
     """
     stem_directory = directory / secrets.token_hex(8)
     result = download_candidates(
@@ -187,10 +245,13 @@ def fetch_choice(
     )
     if not result.downloaded:
         raise SearchError(
-            f"{_source_name(candidate.license.source)} did not send the image. "
+            f"{_source_name(candidate.license.source)} did not send the requested media. "
             "Try another one."
         )
     path = result.downloaded[0]
+    if candidate.kind is AssetKind.VIDEO:
+        width, height, _ = video_info(path)
+        return path, width, height
     try:
         from PIL import Image
 

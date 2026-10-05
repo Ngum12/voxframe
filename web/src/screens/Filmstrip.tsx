@@ -248,6 +248,7 @@ function OnlineSearch({
   onChoose: (token: string, query: string) => void;
 }) {
   const [query, setQuery] = useState(scene.queries[0] ?? "");
+  const [kind, setKind] = useState<"image" | "video">("image");
   const [searched, setSearched] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [failed, setFailed] = useState<string[]>([]);
@@ -259,7 +260,7 @@ function OnlineSearch({
     setSearching(true);
     setError(null);
     try {
-      const response = await searchImages(jobId, scene.index, query);
+      const response = await searchImages(jobId, scene.index, query, kind);
       setResults(response.results);
       setFailed(response.failed_sources);
       setSearched(query);
@@ -293,6 +294,13 @@ function OnlineSearch({
         </div>
       </form>
 
+      <label className="field">Search media type
+        <select aria-label="Search media type" value={kind} disabled={searching || busy}
+          onChange={(event) => { setKind(event.target.value as "image" | "video"); setResults(null); }}>
+          <option value="image">Photos</option><option value="video">Video clips</option>
+        </select>
+      </label>
+      {kind === "video" && <p className="hint">Clips come from Pexels or Pixabay; configure a free source key in Settings. Previews download a temporary copy and play without sound.</p>}
       {error && <Notice tone="error">{error}</Notice>}
       {failed.length > 0 && (
         <Notice tone="warn">
@@ -309,11 +317,13 @@ function OnlineSearch({
             const creditId = `credit-${result.token}`;
             return (
               <li className="candidate" key={result.token}>
-                <img
+                {result.kind === "video" ? <video controls muted playsInline preload="none"
+                  src={searchPreviewUrl(jobId, result.token)} aria-label={`Preview clip: ${result.title || result.author}`}
+                  onError={() => setError("This clip preview could not be downloaded or played. Try another result.")} /> : <img
                   src={searchPreviewUrl(jobId, result.token)}
-                  alt={result.title || `Image by ${result.author}`}
-                  loading="lazy"
-                />
+                  alt={result.title || `Image by ${result.author}`} loading="lazy"
+                  onError={() => setError("This image preview could not be fetched. Try another result.")} />}
+
                 <p className="candidate-note" id={creditId}>
                   {result.author} · {result.source} · {result.license}
                 </p>

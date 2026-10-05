@@ -116,30 +116,78 @@ class PublicRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+class DownloadError(ValueError):
+    """A safe explanation for a source that cannot provide standalone audio."""
+
+
+def _audio_suffix(data: bytes) -> str:
+    """Recognize common audio headers when a download host omits its type."""
+    if data.startswith(b"RIFF") and data[8:12] == b"WAVE":
+        return ".wav"
+    if data.startswith(b"fLaC"):
+        return ".flac"
+    if data.startswith(b"OggS"):
+        return ".opus" if b"OpusHead" in data[:256] else ".ogg"
+    if data[4:8] == b"ftyp":
+        return ".m4a"
+    if data.startswith(b"ID3"):
+        return ".mp3"
+    if len(data) >= 2 and data[0] == 255:
+        if data[1] & 0xF6 == 0xF0:
+            return ".aac"
+        if data[1] & 0xE0 == 0xE0:
+            return ".mp3"
+    if data.startswith(bytes.fromhex("3026b2758e66cf11a6d900aa0062ce6c")):
+        return ".wma"
+    return ""
+
+
 def download(result: Result, directory: Path) -> Path:
     suffix = Path(urllib.parse.urlsplit(result.url).path).suffix.lower()
-    if suffix not in SUFFIXES:
-        raise ValueError("This result has no supported audio file.")
-    target = directory / f"source{suffix}"
-    if target.is_file():
-        return target
+    if suffix in {".m3u", ".m3u8", ".pls"}:
+        raise DownloadError("This result has no supported audio file.")
+    for extension in sorted(SUFFIXES):
+        cached = directory / f"source{extension}"
+        if cached.is_file():
+            return cached
     public_url(result.url)
     directory.mkdir(parents=True, exist_ok=True)
     temporary = directory / f".{secrets.token_hex(8)}.partial"
     request = urllib.request.Request(result.url, headers={"User-Agent": "voxframe/2.1"})
     try:
         with urllib.request.build_opener(PublicRedirect()).open(request, timeout=20) as response:
+            # Providers often serve /download?id=... rather than /song.mp3.
+            # Accept the response's audio type, then inspect the actual bytes
+            # before they can be previewed or imported (online_audio).
+            if suffix not in SUFFIXES:
+                content_type = response.headers.get("Content-Type", "")
+                content_type = content_type.split(";", 1)[0].lower().strip()
+                suffix = {"audio/mpeg": ".mp3", "audio/mp3": ".mp3", "audio/wav": ".wav",
+                    "audio/x-wav": ".wav", "audio/flac": ".flac", "audio/x-flac": ".flac",
+                    "audio/ogg": ".ogg", "application/ogg": ".ogg", "audio/opus": ".opus",
+                    "audio/mp4": ".m4a", "audio/aac": ".aac", "audio/x-ms-wma": ".wma",
+                }.get(content_type, "")
+                if not suffix and content_type not in {
+                        "", "application/octet-stream", "binary/octet-stream"}:
+                    raise DownloadError("This source did not return a supported audio file.")
             length = response.headers.get("Content-Length")
             if length and int(length) > MAX_BYTES:
-                raise ValueError("This track is larger than 200 MB.")
+                raise DownloadError("This track is larger than 200 MB.")
             size = 0
             deadline = time.monotonic() + 60
             with temporary.open("wb") as output:
                 while chunk := response.read(64 * 1024):
                     size += len(chunk)
                     if size > MAX_BYTES or time.monotonic() > deadline:
-                        raise ValueError("This track is too large or took too long to download.")
+                        raise DownloadError("This track is too large or took too long to download.")
+                    if not suffix:
+                        suffix = _audio_suffix(chunk)
+                        if not suffix:
+                            raise DownloadError("This source did not return recognizable audio.")
                     output.write(chunk)
+            if not size:
+                raise DownloadError("This source returned an empty audio file.")
+            target = directory / f"source{suffix}"
         temporary.replace(target)
     finally:
         temporary.unlink(missing_ok=True)

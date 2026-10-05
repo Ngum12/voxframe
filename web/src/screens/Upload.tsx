@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
+  deleteProject,
   listJobs,
   thumbnailUrl,
   uploadAudio,
@@ -23,13 +24,45 @@ const ACCEPTED = ".wav,.mp3,.m4a,.aac,.flac,.ogg,.opus,.mp4,.mov,.mkv";
 
 function RecentVideos({ onOpen }: { onOpen: (job: Job) => void }) {
   const [jobs, setJobs] = useState<Job[] | null>(null);
+  const [deleting, setDeleting] = useState<Job | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const confirmation = useRef<HTMLDialogElement>(null);
+  const recentTitle = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (deleting) confirmation.current?.showModal();
+    else {
+      confirmation.current?.close();
+      if (message) recentTitle.current?.focus();
+    }
+  }, [deleting, message]);
+
+  const remove = async () => {
+    if (!deleting || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await deleteProject(deleting.id);
+      setJobs((current) => current?.filter((job) => job.id !== deleting.id) ?? []);
+      setMessage(result.files_deleted
+        ? "Project deleted. Your original recording, library assets and separately saved videos were kept."
+        : "Project removed from Recent videos. Some working files could not be removed from app storage. Your original recording, library assets and separately saved videos were kept.");
+      setDeleting(null);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "The project could not be deleted. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
     listJobs()
       .then(({ jobs: all }) => {
         if (!cancelled) {
-          setJobs(all.filter((job) => job.state === "succeeded" && job.artifacts.includes("video")).slice(0, 6));
+          setJobs(all.filter((job) => job.state === "succeeded" && job.artifacts.includes("video")));
         }
       })
       .catch(() => !cancelled && setJobs([]));
@@ -38,13 +71,14 @@ function RecentVideos({ onOpen }: { onOpen: (job: Job) => void }) {
     };
   }, []);
 
-  if (!jobs || jobs.length === 0) return null;
+  if (!jobs || (jobs.length === 0 && !message)) return null;
   return (
     <section className="recent" aria-labelledby="recent-title">
-      <h2 id="recent-title">Recent videos</h2>
+      <h2 id="recent-title" ref={recentTitle} tabIndex={-1}>Recent videos</h2>
+      {message && <Notice live>{message}</Notice>}
       <ul>
-        {jobs.map((job) => (
-          <li key={job.id}>
+        {jobs.slice(0, 6).map((job) => (
+          <li key={job.id} className="recent-entry">
             <button type="button" className="recent-video" onClick={() => onOpen(job)}>
               <span className="recent-thumb" aria-hidden="true">
                 <img
@@ -65,9 +99,44 @@ function RecentVideos({ onOpen }: { onOpen: (job: Job) => void }) {
                 </small>
               </span>
             </button>
+            <button
+              type="button"
+              className="btn btn-quiet recent-delete"
+              aria-label={`Delete project: ${job.audio_name}`}
+              title="Delete project"
+              onClick={() => { setError(null); setMessage(null); setDeleting(job); }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" />
+              </svg>
+              <span>Delete</span>
+            </button>
           </li>
         ))}
       </ul>
+      <dialog
+        ref={confirmation}
+        className="studio-dialog project-delete-dialog"
+        aria-labelledby="delete-project-title"
+        aria-describedby="delete-project-description"
+        onCancel={(event) => { if (busy) event.preventDefault(); else setDeleting(null); }}
+        onClose={() => { if (!confirmation.current?.open) setDeleting(null); }}
+      >
+        <h2 id="delete-project-title">Delete this project?</h2>
+        <p className="project-delete-name">{deleting?.audio_name}</p>
+        <p id="delete-project-description">
+          This permanently removes the project from Recent videos, including its edits,
+          previews and working files. You cannot undo this.
+        </p>
+        <p>Your original recording, shared image and music libraries, and videos saved outside the project are kept.</p>
+        {error && <Notice tone="error">{error}</Notice>}
+        <div className="actions">
+          <button type="button" className="btn" autoFocus disabled={busy} onClick={() => setDeleting(null)}>Cancel</button>
+          <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void remove()}>
+            {busy ? "Deleting…" : "Delete project"}
+          </button>
+        </div>
+      </dialog>
     </section>
   );
 }

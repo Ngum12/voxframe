@@ -440,6 +440,9 @@ export const getJob = (id: string) => request<Job>(`/api/jobs/${id}`);
 
 export const listJobs = () => request<{ jobs: Job[] }>("/api/jobs");
 
+export const deleteProject = (jobId: string) =>
+  request<{ removed: boolean; files_deleted: boolean }>(`/api/jobs/${jobId}`, { method: "DELETE" });
+
 export const cancelJob = (id: string) =>
   request<unknown>(`/api/jobs/${id}/cancel`, { method: "POST" });
 
@@ -714,6 +717,8 @@ export const deleteLibraryAsset = (assetId: string) =>
 
 /** One online search result. Named by a token; its address stays on the server. */
 export interface SearchResult {
+  kind?: "image" | "video";
+  duration?: number | null;
   token: string;
   title: string;
   author: string;
@@ -730,10 +735,10 @@ export interface SearchResponse {
 }
 
 /** Search the image services for one scene (D-142). */
-export const searchImages = (jobId: string, index: number, query: string) =>
+export const searchImages = (jobId: string, index: number, query: string, kind: "image" | "video" = "image") =>
   request<SearchResponse>(`/api/jobs/${jobId}/scenes/${index}/search`, {
     method: "POST",
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, kind }),
   });
 
 export const searchPreviewUrl = (jobId: string, token: string) =>

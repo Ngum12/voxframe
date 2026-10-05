@@ -6456,3 +6456,56 @@ Browser regressions exercise every editor at 320, 390, 768, 1024 and 1440px,
 real wheel scrolling, keyboard tab navigation, large saved panels, short
 windows, download menus, theme switching and the skip link. They use a real
 render from a seeded plan, so layout coverage needs no transcription model.
+
+### D-205 · Explicit project deletion from Recent videos
+
+Each recent video has a separate Delete control. A native modal starts on
+Cancel, names the project and explains permanent removal of its edits,
+previews and private working files. Original recordings, shared libraries,
+external artifacts and separately saved exports remain untouched. The list
+backfills its six visible entries after deletion and reports success or failure.
+
+The authenticated DELETE job route refuses active states and unfinished
+workers. Only the canonical UUID working directory under the job root can
+be removed; symlinked project roots are refused. State is persisted atomically
+and strictly before file removal. Persistence failure restores the in-memory
+entry and leaves files intact. File cleanup failure is reported separately;
+the deleted entry remains removed, while some working files may remain in
+app storage. No artifact or source path from the plan is followed for deletion.
+
+Tests cover other projects and external-file preservation, restart persistence,
+active-worker refusal, failed writes, locked files and symlinked project roots.
+Real browser checks cover Cancel, Escape, initial safe focus, server errors,
+retry, deletion, reload and opening another project at desktop and phone sizes.
+
+### D-206 · Preserve room sound without repeating recorded speech
+
+Voice polish keeps the filtered recording's existing pauses and room sound.
+It no longer loops a supposedly quiet two-second sample: that sample can
+contain a syllable, repeating speech throughout the finished export. Polish
+version 4 invalidates older cached stems when a video is updated. Existing
+MP4 copies must be rendered again. Studio players also pause other audible
+players when playback starts; muted visual previews can continue.
+
+A real polished AAC export regression checks a voiced passage followed by
+silence, ensuring no recorded speech returns in the tail. Browser checks
+exercise switching between the main video, music and mixed voice previews.
+
+### D-207 · Playable online music and clip search
+
+Music download endpoints may lack filename extensions. Accept supported audio
+response types or recognize common audio headers for generic binary responses;
+then probe the downloaded bytes before preview or import. Keep public HTTPS,
+redirect validation, byte/time limits and playlist refusal. Invalid cached
+files are discarded so retries can succeed. Host refusals receive a safe,
+actionable explanation. Autoplay rejection leaves visible native Play controls.
+
+Scene search explicitly selects photos or video clips. Clips require a
+configured video provider, keep licensing metadata and are probed locally
+for dimensions and duration before selection. Temporary source downloads
+produce a muted, browser-compatible MP4 preview up to 15 seconds long and
+are removed afterward. Only selecting a result changes the plan; Update video
+renders it. The original clip's audio stays excluded from the export.
+
+Browser regressions use real media and controlled provider responses to
+preview, select, save and render. They do not assert live provider availability.

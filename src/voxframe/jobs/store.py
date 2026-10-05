@@ -20,6 +20,7 @@ the CLI (D-101).
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 import uuid
 from collections import deque
@@ -329,6 +330,36 @@ class JobStore:
                 self._jobs.values(), key=lambda job: job.created_at, reverse=True
             )
 
+    def delete(self, job_id: str) -> bool:
+        """Remove a stopped project and its private workspace, never external assets.
+
+        Returns whether all working files were removed. State must be durably
+        saved before removing files; a failed save leaves the project intact.
+        A locked file may prevent cleanup, but cannot resurrect a deleted entry.
+        """
+        with self._lock:
+            job = self._jobs[job_id]
+            if not job.state.is_terminal or (job.future is not None and not job.future.done()):
+                raise ValueError("Wait for this project's render to stop before deleting it.")
+            directory = self.job_directory(job_id)
+            if (len(job_id) != 32 or any(c not in "0123456789abcdef" for c in job_id)
+                    or directory.is_symlink() or directory.resolve().parent != self.root.resolve()):
+                raise ValueError("This project's working folder cannot be safely removed.")
+            del self._jobs[job_id]
+            try:
+                self._persist(strict=True)
+            except OSError:
+                self._jobs[job_id] = job
+                raise
+            self._subscribers.pop(job_id, None)
+            try:
+                if directory.exists():
+                    shutil.rmtree(directory)
+            except OSError:
+                log.warning("job.delete_cleanup_failed", job=job_id)
+                return False
+            return True
+
     def submit(self, job: Job, work: Callable[[Job], None]) -> None:
         """Queue ``work`` for a job on the worker pool.
 
@@ -627,7 +658,7 @@ class JobStore:
     def _state_file(self) -> Path:
         return self._root / "jobs.json"
 
-    def _persist(self) -> None:
+    def _persist(self, *, strict: bool = False) -> None:
         """Write job state. Caller holds the lock.
 
         Written to a temporary file and renamed, so a crash mid-write cannot
@@ -656,6 +687,8 @@ class JobStore:
             # A failed write must not kill a running render; the jobs are still
             # correct in memory and the next update will try again.
             log.warning("job.persist_failed", path=str(self._state_file))
+            if strict:
+                raise
 
     def _load(self) -> None:
         """Restore jobs from a previous run.

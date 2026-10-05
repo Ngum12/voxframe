@@ -31,6 +31,11 @@ export function MusicSearch({onChoose, onSaved, onAudition}: {
     return () => { active = false; };
   }, []);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview.url); }, [preview]);
+  useEffect(() => {
+    if (preview) void player.current?.play().catch(() => {
+      setMessage("Preview is ready. Press Play below to listen; your browser paused automatic playback.");
+    });
+  }, [preview]);
   const action = async (work: () => Promise<void>) => {
     setBusy(true); setError(null); setMessage(null);
     try { await work(); } catch (error) { setError((error as Error).message); }
@@ -96,7 +101,8 @@ export function MusicSearch({onChoose, onSaved, onAudition}: {
           <button className="btn" disabled={busy} onClick={() => save(result, false)}>Save to library</button>
           {onChoose && <button className="btn" disabled={busy} onClick={() => save(result, true)}>Use this track</button>}
         </div>
-        {preview?.token === result.token && <audio ref={player} controls autoPlay src={preview.url} aria-label={`Online preview: ${result.title}`} />}
+        {preview?.token === result.token && <audio ref={player} controls src={preview.url} aria-label={`Online preview: ${result.title}`}
+          onError={() => setError("This preview could not be played. Try Preview track again or choose another result.")} />}
       </article>)}
       {results && <div className="music-track-actions"><button className="btn btn-quiet" disabled={busy || page === 1} onClick={() => find(page - 1)}>Previous search page</button><span>Page {page}</span><button className="btn btn-quiet" disabled={busy || !more} onClick={() => find(page + 1)}>Next search page</button></div>}
     </>}

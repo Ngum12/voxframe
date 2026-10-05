@@ -264,3 +264,40 @@ narrow screens or short windows, the player and editor stack: scroll the page,
 and the tool grid stays at the top while you work. Switching tools returns to
 the start of its controls. Saved panel sizes adapt to available space. Each
 new screen opens at the top, and the first keyboard link skips to its content.
+
+## Delete an unwanted project
+
+On **Make a video**, find the project under **Recent videos** and click its
+**Delete** control. The confirmation names the project; choose **Cancel** to
+keep it or **Delete project** to permanently remove it.
+
+Deletion removes the recent entry, its edits, previews and private working
+files. It keeps your original recording, shared image/music libraries and
+videos saved outside the project, including downloads and the videos-folder
+copy. Delete those separate copies yourself if you no longer want them.
+
+A rendering project cannot be deleted until its worker stops. If VoxFrame
+cannot save the deletion, the project stays intact. If Windows or another
+program locks working files, the app reports that some files remain in app
+storage even though the recent entry was removed.
+
+## When online previews cannot play
+
+For online scene search, choose Photos or Video clips. Pexels and Pixabay
+video searches require their free API keys in Settings. Openverse remains
+available without a key for photos and openly licensed music.
+
+A clip preview downloads a temporary source and plays up to 15 seconds with
+sound muted. Choose **Use this** and then **Update video** to include it in
+the export. The clip's original audio is excluded, so your voice stays clear.
+
+Music previews download audio from the original host. Some hosts refuse
+access or no longer provide the file even when a search result is listed.
+Try another result, or download the track from its original source and upload
+it yourself. If automatic playback is paused by your browser, press Play in
+the visible player. Previewing does not save or apply a track.
+
+If an older export has repeating background speech, install the updated
+VoxFrame and choose **Update video**, then download the new MP4. Updating
+regenerates the polished voice without looping samples of the recording;
+a previously downloaded copy cannot change automatically.
