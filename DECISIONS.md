@@ -6477,3 +6477,35 @@ Tests cover other projects and external-file preservation, restart persistence,
 active-worker refusal, failed writes, locked files and symlinked project roots.
 Real browser checks cover Cancel, Escape, initial safe focus, server errors,
 retry, deletion, reload and opening another project at desktop and phone sizes.
+
+### D-206 · Preserve room sound without repeating recorded speech
+
+Voice polish keeps the filtered recording's existing pauses and room sound.
+It no longer loops a supposedly quiet two-second sample: that sample can
+contain a syllable, repeating speech throughout the finished export. Polish
+version 4 invalidates older cached stems when a video is updated. Existing
+MP4 copies must be rendered again. Studio players also pause other audible
+players when playback starts; muted visual previews can continue.
+
+A real polished AAC export regression checks a voiced passage followed by
+silence, ensuring no recorded speech returns in the tail. Browser checks
+exercise switching between the main video, music and mixed voice previews.
+
+### D-207 · Playable online music and clip search
+
+Music download endpoints may lack filename extensions. Accept supported audio
+response types or recognize common audio headers for generic binary responses;
+then probe the downloaded bytes before preview or import. Keep public HTTPS,
+redirect validation, byte/time limits and playlist refusal. Invalid cached
+files are discarded so retries can succeed. Host refusals receive a safe,
+actionable explanation. Autoplay rejection leaves visible native Play controls.
+
+Scene search explicitly selects photos or video clips. Clips require a
+configured video provider, keep licensing metadata and are probed locally
+for dimensions and duration before selection. Temporary source downloads
+produce a muted, browser-compatible MP4 preview up to 15 seconds long and
+are removed afterward. Only selecting a result changes the plan; Update video
+renders it. The original clip's audio stays excluded from the export.
+
+Browser regressions use real media and controlled provider responses to
+preview, select, save and render. They do not assert live provider availability.

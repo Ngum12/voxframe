@@ -189,9 +189,15 @@ export function SoundPanel({
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
+  useEffect(() => {
+    if (previewUrl) void player.current?.play().catch(() => setError("Preview is ready. Press Play below to listen."));
+  }, [previewUrl]);
 
   useEffect(() => () => {
     if (styleUrl) URL.revokeObjectURL(styleUrl);
+  }, [styleUrl]);
+  useEffect(() => {
+    if (styleUrl) void stylePlayer.current?.play().catch(() => setError("Style preview is ready. Press Play below to listen."));
   }, [styleUrl]);
 
   const listen = useCallback(
@@ -209,7 +215,6 @@ export function SoundPanel({
         );
         if (request !== previewRequest.current) { URL.revokeObjectURL(url); return; }
         setPreviewUrl(url);
-        window.setTimeout(() => void player.current?.play().catch(() => undefined), 0);
       } catch (reason) {
         if (request === previewRequest.current) setError((reason as Error).message);
         if (searchToken) throw reason;
@@ -223,7 +228,6 @@ export function SoundPanel({
     setError(null);
     try {
       setStyleUrl(await previewStyle(name));
-      window.setTimeout(() => void stylePlayer.current?.play().catch(() => undefined), 0);
     } catch (reason) {
       setError((reason as Error).message);
     } finally {

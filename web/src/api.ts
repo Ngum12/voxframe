@@ -717,6 +717,8 @@ export const deleteLibraryAsset = (assetId: string) =>
 
 /** One online search result. Named by a token; its address stays on the server. */
 export interface SearchResult {
+  kind?: "image" | "video";
+  duration?: number | null;
   token: string;
   title: string;
   author: string;
@@ -733,10 +735,10 @@ export interface SearchResponse {
 }
 
 /** Search the image services for one scene (D-142). */
-export const searchImages = (jobId: string, index: number, query: string) =>
+export const searchImages = (jobId: string, index: number, query: string, kind: "image" | "video" = "image") =>
   request<SearchResponse>(`/api/jobs/${jobId}/scenes/${index}/search`, {
     method: "POST",
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, kind }),
   });
 
 export const searchPreviewUrl = (jobId: string, token: string) =>

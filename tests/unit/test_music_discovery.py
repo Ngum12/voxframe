@@ -5,6 +5,7 @@ import io
 import socket
 import urllib.request
 from dataclasses import replace
+from typing import ClassVar
 
 import pytest
 
@@ -122,3 +123,40 @@ def test_old_preview_cleanup_keeps_recent_and_unrelated_files(tmp_path):  # type
     os.utime(unrelated, (earlier, earlier))
     discovery.prune_previews(tmp_path)
     assert not old.exists() and recent.is_dir() and unrelated.is_dir()
+
+
+@pytest.mark.parametrize("content_type,suffix", [
+    ("audio/mpeg", ".mp3"), ("audio/wav; charset=binary", ".wav"),
+    ("application/octet-stream", ".wav"), ("", ".wav"),
+])
+def test_download_links_without_extensions_use_audio_response_types(monkeypatch, tmp_path, content_type, suffix):
+    monkeypatch.setattr(discovery, "public_url", lambda _: None)
+    data = b"RIFF\x00\x00\x00\x00WAVEaudio bytes" if suffix == ".wav" else b"ID3audio bytes"
+
+    class Response(io.BytesIO):
+        headers: ClassVar = {"Content-Type": content_type}
+
+    class Opener:
+        def open(self, *_args, **_kwargs):
+            return Response(data)
+
+    monkeypatch.setattr(discovery.urllib.request, "build_opener", lambda *_: Opener())
+    path = discovery.download(replace(result(), url="https://example.com/download?id=42"), tmp_path)
+    assert path.suffix == suffix and path.read_bytes() == data
+    assert discovery.download(replace(result(), url="https://example.com/download?id=42"), tmp_path) == path
+
+
+def test_a_provider_web_page_is_not_treated_as_audio(monkeypatch, tmp_path):
+    monkeypatch.setattr(discovery, "public_url", lambda _: None)
+
+    class Response(io.BytesIO):
+        headers: ClassVar = {"Content-Type": "text/html"}
+
+    class Opener:
+        def open(self, *_args, **_kwargs):
+            return Response(b"<html>Sign in</html>")
+
+    monkeypatch.setattr(discovery.urllib.request, "build_opener", lambda *_: Opener())
+    with pytest.raises(discovery.DownloadError, match="supported audio"):
+        discovery.download(replace(result(), url="https://example.com/download"), tmp_path)
+    assert not list(tmp_path.iterdir())

@@ -71,6 +71,7 @@ from voxframe.jobs.pipeline import JobOptions, PipelineOutcome, Stage
 from voxframe.jobs.store import Job, JobStore, ProgressEvent
 from voxframe.library.db import AssetLibrary
 from voxframe.model_downloads import Download
+from voxframe.models.asset import AssetKind
 from voxframe.plan.audio_mix import AudioMix
 from voxframe.plan.scene_plan import PlannedScene, ScenePlan
 from voxframe.sourcing.manual import SearchResults
@@ -391,6 +392,7 @@ class ImageSearch(BaseModel):
     """What to look for online, for one scene."""
 
     query: str = Field(max_length=200)
+    kind: Literal["image", "video"] = "image"
 
 
 class KeyCheck(BaseModel):
@@ -1013,18 +1015,40 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         return result
 
     def online_audio(token: str, context: ApiContext) -> tuple[Any, Path]:
-        from voxframe.music.discovery import download
+        from urllib.error import HTTPError
+
+        from voxframe.music.discovery import DownloadError, download
         from voxframe.music.library import MusicLibrary
 
         result = online_track(token)
         folder = context.settings.cache_path / "music-search" / token
+        path = None
         try:
             path = download(result, folder)
             MusicLibrary.inspect_audio(path)
+        except DownloadError as exc:
+            log.warning("music.download_failed", reason="unsupported_or_bounded_source")
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except HTTPError as exc:
+            detail = (
+                "The music host refused the download. Try another result or download "
+                "the track from its original source and upload it."
+                if exc.code in {401, 403}
+                else "This source audio is unavailable. Try another result."
+            )
+            log.warning("music.download_failed", reason="http", status=exc.code)
+            raise HTTPException(status_code=422, detail=detail) from exc
         except Exception as exc:
+            if path is not None:
+                # Invalid temporary bytes must not poison later retries.
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    log.warning("music.invalid_cache_cleanup_failed")
             log.warning("music.download_failed", reason=type(exc).__name__)
             raise HTTPException(status_code=422,
-                detail="This track could not be downloaded. Try another result.") from exc
+                detail="This source did not provide a readable audio track. Try another result."
+            ) from exc
         return result, path
 
     @app.post("/api/music-search")
@@ -2209,7 +2233,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
 
         try:
             found, failed = search(
-                request.query, plan, apply_to_settings(context.settings, preferences)
+                request.query, plan, apply_to_settings(context.settings, preferences),
+                **({"kind": AssetKind.VIDEO} if request.kind == "video" else {}),
             )
         except SearchError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -2225,6 +2250,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                     "source": candidate.license.source,
                     "width": candidate.width,
                     "height": candidate.height,
+                    "kind": candidate.kind.value,
+                    "duration": candidate.duration,
                 }
                 for token, candidate in zip(tokens, found, strict=True)
             ],
@@ -2243,10 +2270,16 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             raise HTTPException(status_code=404, detail="No such result.")
         directory = context.store.job_directory(job_id) / "search" / "previews"
         try:
-            preview = fetch_preview(candidate, directory, token)
+            if candidate.kind is AssetKind.VIDEO:
+                from voxframe.sourcing.manual import fetch_video_preview
+
+                preview = fetch_video_preview(candidate, directory, token, context.settings)
+            else:
+                preview = fetch_preview(candidate, directory, token)
         except SearchError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-        return FileResponse(preview, media_type="image/jpeg")
+        return FileResponse(preview, media_type=("video/mp4" if candidate.kind is AssetKind.VIDEO
+                                                 else "image/jpeg"))
 
     @app.post("/api/jobs/{job_id}/scenes/{index}/search/{token}")
     def use_search_result(
@@ -2263,7 +2296,7 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         """
         from voxframe.plan.editing import EditError, use_image
         from voxframe.plan.scene_plan import PlanAsset
-        from voxframe.sourcing.manual import SearchError, fetch_choice
+        from voxframe.sourcing.manual import SearchError, fetch_choice, video_info
 
         candidate = context.search_results.get(job_id, token)
         if candidate is None:
@@ -2277,11 +2310,14 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         directory = context.store.job_directory(job.id) / "search"
         try:
             path, width, height = fetch_choice(candidate, directory, request.query, settings)
+            duration = video_info(path)[2] if candidate.kind is AssetKind.VIDEO else None
         except SearchError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
         asset = PlanAsset(
             id=f"search-{token}",
+            kind=candidate.kind,
+            duration=duration,
             path=str(path.resolve()),
             width=width,
             height=height,

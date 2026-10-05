@@ -2708,3 +2708,5 @@ input[type="checkbox"], input[type="radio"] { flex: none; }
   .recent-entry { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .recent-delete { justify-self: end; }
 }
+
+.online-search .candidate video { width: 100%; max-height: 270px; border-radius: 8px; background: var(--sunken); }

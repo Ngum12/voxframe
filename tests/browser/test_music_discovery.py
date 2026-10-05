@@ -19,7 +19,7 @@ pytestmark = pytest.mark.browser
 
 
 def test_search_audition_choose_and_export(server, page, caps, monkeypatch):  # type: ignore[no-untyped-def]
-    import shutil
+    import io
 
     from voxframe.plan.scene_plan import ScenePlan
     from voxframe.render.ffpath import run_ffmpeg
@@ -32,16 +32,20 @@ def test_search_audition_choose_and_export(server, page, caps, monkeypatch):  # 
     calls = []
     def get(self, path, params):  # type: ignore[no-untyped-def]
         calls.append(("search", params["q"]))
-        return {"results": [ITEM, dict(ITEM, license="by-nc"), dict(ITEM, license="by-nd")],
+        return {"results": [dict(ITEM, url="https://music.example/download?id=42"),
+                            dict(ITEM, license="by-nc"), dict(ITEM, license="by-nd")],
                 "page_count": 1}
-    def download(result, directory):  # type: ignore[no-untyped-def]
-        calls.append(("download", result.id))
-        directory.mkdir(parents=True, exist_ok=True)
-        target = directory / "source.wav"
-        shutil.copyfile(source, target)
-        return target
+    class Response(io.BytesIO):
+        def __init__(self):
+            super().__init__(source.read_bytes())
+            self.headers = {"Content-Type": "application/octet-stream"}
+    class Opener:
+        def open(self, *_args, **_kwargs):
+            calls.append(("download", ITEM["id"]))
+            return Response()
     monkeypatch.setattr(discovery.OpenverseAdapter, "_get", get)
-    monkeypatch.setattr(discovery, "download", download)
+    monkeypatch.setattr(discovery, "public_url", lambda _: None)
+    monkeypatch.setattr(discovery.urllib.request, "build_opener", lambda *_: Opener())
 
     _home(page, handle)
     page.get_by_text(job.audio_name, exact=True).first.click()
@@ -62,15 +66,23 @@ def test_search_audition_choose_and_export(server, page, caps, monkeypatch):  # 
     assert calls == [("search", "gentle piano")]
     assert search.locator(".music-track").count() == 1
     assert not ScenePlan.load(plan_path).music_path
+    page.get_by_role("button", name="Play (Space)", exact=True).click()
+    page.wait_for_function("() => !document.querySelector('video[aria-label=\"The video\"]').paused")
     search.get_by_role("button", name="Preview track", exact=True).click()
     preview = search.get_by_label("Online preview: Gentle Piano", exact=True)
     preview.wait_for(timeout=30_000)
     page.wait_for_function("() => document.querySelector('audio[aria-label=\"Online preview: Gentle Piano\"]').readyState >= 1")
     assert preview.evaluate("audio => audio.duration") == pytest.approx(8, abs=.05)
+    page.wait_for_function("() => !document.querySelector('audio[aria-label=\"Online preview: Gentle Piano\"]').paused")
+    assert page.get_by_label("The video", exact=True).evaluate("video => video.paused")
     assert not ScenePlan.load(plan_path).music_path
     assert not list((work / "library" / "music").glob("*/audio.wav"))
     search.get_by_role("button", name="Hear under my voice", exact=True).click()
     sound.get_by_label("Sound preview", exact=True).wait_for(timeout=30_000)
+    page.wait_for_function("() => !document.querySelector('audio[aria-label=\"Sound preview\"]').paused")
+    assert preview.evaluate("audio => audio.paused")
+    page.get_by_role("button", name="Play (Space)", exact=True).click()
+    page.wait_for_function("() => document.querySelector('audio[aria-label=\"Sound preview\"]').paused")
     assert not ScenePlan.load(plan_path).music_path
     search.get_by_role("button", name="Use this track", exact=True).click()
     search.get_by_text("Saved Gentle Piano with its credit and license.", exact=True).wait_for()

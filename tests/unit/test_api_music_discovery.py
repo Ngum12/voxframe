@@ -99,6 +99,43 @@ def test_provider_errors_are_plain_and_do_not_leak_urls(client, monkeypatch):  #
     assert response.status_code == 502 and "private" not in response.text
 
 
+def test_download_failure_explains_a_blocked_host_without_exposing_its_url(client, services, monkeypatch):
+    from urllib.error import HTTPError
+
+    client.put("/api/settings", json={"music_search_consent": True})
+    result = client.post("/api/music-search", json={"query": "piano"}).json()["results"][0]
+
+    def denied(*args):
+        raise HTTPError("https://provider.example/?key=private", 403, "Forbidden", {}, None)
+
+    monkeypatch.setattr(discovery, "download", denied)
+    response = client.get(f"/api/music-search/{result['token']}/preview")
+    assert response.status_code == 422 and "host refused" in response.json()["detail"]
+    assert "private" not in response.text and "provider.example" not in response.text
+
+
+def test_bad_temporary_audio_does_not_poison_retries(client, context, services, monkeypatch, tmp_path):
+    client.put("/api/settings", json={"music_search_consent": True})
+    result = client.post("/api/music-search", json={"query": "piano"}).json()["results"][0]
+    source = audio(tmp_path / "retry.wav")
+    paths = []
+
+    def download(result, directory):
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / "source.wav"
+        if not paths:
+            path.write_bytes(b"<html>Unavailable</html>")
+        else:
+            shutil.copyfile(source, path)
+        paths.append(path)
+        return path
+
+    monkeypatch.setattr(discovery, "download", download)
+    first = client.get(f"/api/music-search/{result['token']}/preview")
+    assert first.status_code == 422 and not paths[0].exists()
+    assert client.get(f"/api/music-search/{result['token']}/preview").status_code == 200
+
+
 def test_duplicate_audio_gets_selected_source_credit(client, context, services, tmp_path):  # type: ignore[no-untyped-def]
     from voxframe.music.library import MusicLibrary
 

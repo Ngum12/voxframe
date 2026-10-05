@@ -280,3 +280,24 @@ A rendering project cannot be deleted until its worker stops. If VoxFrame
 cannot save the deletion, the project stays intact. If Windows or another
 program locks working files, the app reports that some files remain in app
 storage even though the recent entry was removed.
+
+## When online previews cannot play
+
+For online scene search, choose Photos or Video clips. Pexels and Pixabay
+video searches require their free API keys in Settings. Openverse remains
+available without a key for photos and openly licensed music.
+
+A clip preview downloads a temporary source and plays up to 15 seconds with
+sound muted. Choose **Use this** and then **Update video** to include it in
+the export. The clip's original audio is excluded, so your voice stays clear.
+
+Music previews download audio from the original host. Some hosts refuse
+access or no longer provide the file even when a search result is listed.
+Try another result, or download the track from its original source and upload
+it yourself. If automatic playback is paused by your browser, press Play in
+the visible player. Previewing does not save or apply a track.
+
+If an older export has repeating background speech, install the updated
+VoxFrame and choose **Update video**, then download the new MP4. Updating
+regenerates the polished voice without looping samples of the recording;
+a previously downloaded copy cannot change automatically.
