@@ -6509,3 +6509,23 @@ renders it. The original clip's audio stays excluded from the export.
 
 Browser regressions use real media and controlled provider responses to
 preview, select, save and render. They do not assert live provider availability.
+
+### D-208 · Video clips fill exact frame slots before transitions
+
+A clip's output frame limit is a cap, not a promise that its input contains
+that many frames. In particular, the two-percent tolerance for skipping a
+speed change could leave a scene one frame short. Saved transitions then
+failed when trimming the incoming scene's body to its declared length.
+
+Clip filters now rebase timestamps, apply the chosen slowdown and resample
+to the output frame grid before cloning the final frame as needed. The
+output frame limit cuts long inputs and stops padding at the exact scene
+length. Missing or inaccurate provider duration metadata cannot shorten a
+scene. No clip audio or visible looping is introduced. Narration, captions
+and transition boundaries retain their planned times.
+
+Renderer version 4 invalidates old segment caches, so Update video repairs
+existing projects without asking the person to delete cache folders. Real
+render regressions cover long, nearly fitting, slow-motion, held and unknown
+clips; inaccurate metadata, variable rates and nonzero starting timestamps;
+integer and fractional output rates; and a second render from cached scenes.
