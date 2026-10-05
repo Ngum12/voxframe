@@ -745,8 +745,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             "chosen": preferences.model_profile or None,
             "profile_from_environment": "VOXFRAME_PROFILE" in os.environ,
             "ready": (
-                chosen["ready"] and library_ready(current)
-                and download["state"] not in {"downloading", "updating"}
+                download["state"] not in {"downloading", "updating"}
+                and chosen["ready"] and library_ready(current)
             ),
             "choices": choices,
             "download": download,
