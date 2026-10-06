@@ -94,6 +94,7 @@ export interface AudioMix {
   destination: string;
   /** Voice polish (D-173); off, the voice is exactly the recording. */
   voice_polish: boolean;
+  music_arc: "steady" | "rise" | "punch";
   /** A generated score's group levels, dB (D-179). */
   score_levels: ScoreLevels;
 }
@@ -164,6 +165,7 @@ export interface SoundCheck {
 
 export interface MixState {
   audio_mix: AudioMix;
+  story_clock: { opening: number; landing: number; end: number } | null;
   destinations: Destination[];
   too_close: boolean;
   comfortable_margin_db: number;
@@ -925,13 +927,17 @@ export const previewTransition = (jobId: string, index: number, treatment: Trans
   });
 
 export interface PacingControls {
+  revision: string;
   seconds: number;
   cuts: { id: string; scene: number; start_frame: number; end_frame: number;
-    start: number; end: number; seconds: number; before: string; after: string }[];
+    start: number; end: number; seconds: number; before: string; after: string;
+    kind: "pause" | "filler" | "repeat"; removed_text: string; reason: string }[];
 }
 export const getPacing = (jobId: string) => request<PacingControls>(`/api/jobs/${jobId}/pacing`);
-export const savePacing = (jobId: string, cuts: string[]) =>
-  request<PlanEditResult>(`/api/jobs/${jobId}/pacing`, { method: "PUT", body: JSON.stringify({ cuts }) });
+export const savePacing = (jobId: string, cuts: string[], revision?: string) =>
+  request<PlanEditResult>(`/api/jobs/${jobId}/pacing`, { method: "PUT", body: JSON.stringify({ cuts, revision }) });
+export const previewPacing = (jobId: string, cuts: string[], revision: string) =>
+  request<ShortPreview>(`/api/jobs/${jobId}/pacing/preview`, { method: "POST", body: JSON.stringify({ cuts, revision }) });
 
 export interface ShortCandidate {
   id: string; first_word: number; last_word: number; start: number; end: number;
@@ -1013,3 +1019,14 @@ export const searchMusic = (query: string, page: number, mood: string, min_secon
     method: "POST", body: JSON.stringify({query, page, mood, min_seconds, max_seconds, instrumental}),
   });
 export const saveOnlineMusic = (token: string) => request<{track: MusicTrack; already_there: boolean}>(`/api/music-search/${token}/save`, {method: "POST"});
+
+export type FinishAction = "captions" | "director" | "sound" | "scenes" | "export" | "shorts";
+export interface FinishIssue {
+  id: string; category: "captions" | "framing" | "timing" | "sound";
+  title: string; detail: string; action: FinishAction; scene: number | null; at: number;
+}
+export interface FinishReport {
+  revision: string; width: number; height: number; seconds: number;
+  issues: FinishIssue[]; counts: Record<FinishIssue["category"], number>; note: string;
+}
+export const getFinishReview = (jobId: string) => request<FinishReport>(`/api/jobs/${jobId}/finish-review`);

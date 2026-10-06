@@ -6556,3 +6556,120 @@ API regressions verify read-only planning, all three look/save contracts,
 stale-revision refusal and one-step undo. Real browser regressions compare
 three rendered previews, check camera treatment of the spoken hook, reuse a
 previous audition, check phone layout, then save, undo, redo and export.
+
+### D-210 · Story dynamics beneath speech protection
+
+AudioMix stores a validated music_arc: steady (the compatible default), rise
+or punch. A lightweight deterministic envelope follows the retained stems'
+first speech and last-word landing in rendered video time. Shapes are smooth,
+frame-aligned attenuation only, layered beneath existing measured ducking;
+they never raise the music above the person's speech-margin setting. No
+narration is looped, copied or changed. The ring-out still uses existing track
+editing and fades. This shapes dynamics, not semantic meaning or new notes.
+
+Preview and final mixdown use the same envelope, including generated-score
+group stems. The combined knots include both story and ducking boundaries so
+continuous speech does not flatten the arc. Sound offers three descriptions,
+opening/ending audition controls, voice-only comparison and draft undo/redo;
+starting a preview cancels pending slider previews. New score choices must be
+applied before their full story mix can be auditioned, as the card explains.
+The saved setting uses existing plan history and only remixes sound.
+
+Sample-level regressions verify unchanged narration, smooth automation,
+bounded music and valid preview WAVs. API tests cover timing, read-only
+preview, validation, save and undo. Real export tests compare exact frame
+counts and identical encoded picture streams against distinct audio streams.
+Chromium exercises playback, phone layout, draft undo and final update.
+
+### D-211 · Review speech cues alongside pauses
+
+Pacing offers hesitation tokens um, uh, erm and euh, plus immediately
+repeated phrases of two to four words. These lexical cues are suggestions,
+not semantic judgements about mistakes. Ambiguous discourse markers, single
+word emphasis, sentence-separated repeats, long pauses between repeats,
+corrected captions and cards are not offered as speech cuts. Each suggestion
+quotes the removed words with adjacent context and starts unchecked.
+
+Frame-rounded cuts must cover every removed word without touching a kept
+word. Overlapping speech interpretations collapse to one review choice;
+conflicting selected intervals are refused. The existing retained-interval
+engine moves audio, footage and words together, remaps caption emphasis and
+keeps jump cuts explicit. Director-generated quotes that no longer occur in
+a retained fragment are cleared; manual text and zoom choices are preserved.
+Cuts that would invalidate a saved 3-60 second export preset are refused.
+
+The UI sends the plan revision on preview/save, preventing an old selection
+from targeting a changed timeline. Legacy callers without a revision retain
+the previous candidate-ID contract. A read-only draft preview reuses the real
+bounded renderer and shared preview route; it excludes added music as stated
+beside playback. Selecting different cuts clears the previous preview.
+Save records the entire batch in one history entry; Undo and Redo restore the
+original and shortened source clocks.
+
+Regression coverage includes fractional rates, neighboring word overlap,
+false positives, quoted graphics, stale revisions, read-only preview and
+history. Chromium reviews all three speech cues, renders and clears a draft,
+checks phone layout, then saves, undoes, redoes and exports. Real MP4 tests
+measure retained picture/audio markers with source audio/video offsets.
+
+### D-212 · Inspectable finishing review in Export
+
+The authenticated finishing-review endpoint reads saved plan metadata and
+word timings without editing or rendering. Output dimensions use the same
+even-grid helper as export, with a saved short preset taking priority over
+job height. It returns the plan revision, categorized counts and stable cue
+IDs with scene/time, evidence and a destination control panel.
+
+Cues include absent/estimated caption timing, corrected alignment, more than
+four words per second across at least eight words, a single word wider than
+the caption box measured with the renderer's bundled font and safe margins,
+spoken shots under a quarter-second, explicitly coinciding text placements,
+source scaling above 1.5x, recording intervals beyond known footage duration
+including its audio offset, imagery marked as printed text, and close added
+music protection. Missing fonts make width-check availability explicit.
+These are editorial review thresholds, not pass/fail quality claims. No
+pixels, source files, semantic meaning or rendered audio levels are analyzed.
+Wordless lead-in handles and cards do not become brief-shot findings.
+
+Export filters categories, presents eight cues initially, and can reveal all.
+Review opens the relevant scene and controls. Check marks persist within the
+browser session for the same job/revision and reset on saved edits. Pending
+changes are labeled so the person updates the video before judging playback;
+unsaved export preset choices are explicitly outside the review snapshot.
+A clean report still calls for watching and listening.
+
+Tests cover clean reports, immutable plans, sizing, font measurement,
+estimated corrections, pace, manual/auto placement, resolution, source-clock
+and offset limits, music presence, wordless handles, authentication and fresh
+revisions. Chromium checks the targeted second-scene navigation, retained
+check marks, a saved text-placement fix, refreshed findings, category filters,
+phone layout and a final MP4 update alongside the existing producer/export flow.
+
+### D-213 · Compare rendered story auditions on one playhead
+
+Shorts exposes side-by-side comparison after at least two auditions exist for
+the same revision, word range and output shape. Different directions and
+caption matching choices remain separate selectable versions. Comparisons
+reuse the existing cached previews and do not trigger downloads, rerenders
+or saved edits. Changing passage or shape hides incompatible pairs.
+
+A shared transport starts, pauses and scrubs both videos. One selected video
+provides the clock and audible narration; the follower is muted and seeks to
+the clock when drift exceeds 100 ms. Sound can switch during playback, with
+the old voice muted first. Buffering, a playback error or either video's end
+pauses the pair. Choosing a different version resets both to zero; readiness
+also respects an unchanged player's already loaded state. Closing the view
+pauses captured media elements, including detached ones. Playback generation
+checks stop late promises from reviving an old comparison.
+
+Use version A/B saves that audition's exact passage, direction and caption
+choice through the existing revision-checked Shorts route and history. It is
+independent of whichever look is selected in the editor. Source-plan changes
+invalidate cached auditions and guard against late preview/save responses.
+The compact phone layout keeps both pictures visible and labels readable.
+Draft narration is compared; added music remains part of the final update.
+
+Chromium renders three real auditions, measures playhead agreement, verifies
+one audible player through sound switching, scrubs and changes variants,
+checks phone layout, tests detached-player cleanup and incompatible ranges,
+then chooses a different look, undoes, redoes and exports the winning edit.

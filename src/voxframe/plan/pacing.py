@@ -1,12 +1,13 @@
-"""Reviewable transcript-gap cuts, with an explicit original recording clock.
+"""Reviewable pause and speech cuts, with an original recording clock.
 
-A gap in transcription is a suggestion, never proof of silence. No timed word
-is removed; the person listens and chooses before anything changes. Full plans
-in edit history restore cuts along with captions, imagery and source positions.
+A gap is never proof of silence; lexical cues are never proof of a mistake.
+Only an explicitly selected speech cue removes words. Full plans in edit
+history restore cuts along with captions, imagery and source positions.
 """
 from __future__ import annotations
 
 import math
+import re
 from itertools import pairwise
 
 from voxframe.config.transitions import TransitionTreatment
@@ -38,15 +39,93 @@ def suggest_cuts(plan: ScenePlan) -> list[dict]:
                          "start_frame": start, "end_frame": end,
                          "start": start / plan.fps, "end": end / plan.fps,
                          "seconds": (end - start) / plan.fps,
-                         "before": left.text, "after": right.text})
+                         "before": left.text, "after": right.text, "kind": "pause",
+                         "removed_text": "",
+                         "reason": "Long transcript gap; listen before cutting."})
     return cuts
+
+
+def suggest_speech_cuts(plan: ScenePlan) -> list[dict]:
+    """Conservative lexical cues, not a judgement about what the speaker meant.
+
+    Only standalone hesitation tokens and adjacent repeated phrases of two
+    to four words qualify. Never guess timings across scenes or corrections.
+    Frame rounding must not touch a retained word; otherwise omit the cue.
+    """
+    cuts = []
+    for scene in plan.scenes:
+        if scene.is_card or scene.is_corrected:
+            continue
+        words = scene.words
+        normalized = [re.sub(r"[^\w'-]", "", w.text.casefold()) for w in words]
+        proposed = []
+        for index, token in enumerate(normalized):
+            if token in {"um", "uh", "erm", "euh"}:
+                proposed.append((index, index + 1, "filler"))
+        index = 0
+        while index < len(words):
+            for size in range(4, 1, -1):
+                end = index + size
+                repeated = end + size
+                if repeated > len(words):
+                    continue
+                phrase = normalized[index:end]
+                if not all(phrase) or phrase != normalized[end:repeated]:
+                    continue
+                # A sentence boundary or long pause makes repetition especially
+                # ambiguous. Offer only a closely adjacent restart cue.
+                if any(re.search(r"[.!?;:]", w.text) for w in words[index:repeated - 1]):
+                    continue
+                if any(b.start - a.end > .65 for a, b in pairwise(words[index:repeated])):
+                    continue
+                proposed.append((index, end, "repeat"))
+                index = end - 1
+                break
+            index += 1
+        for first, last, kind in proposed:
+            removed = words[first:last]
+            retained = [w for i, w in enumerate(words) if not first <= i < last]
+            if not retained or any(w.end <= w.start for w in removed):
+                continue
+            start = max(scene.start_frame, math.floor(removed[0].start * plan.fps))
+            end = min(scene.end_frame, math.ceil(removed[-1].end * plan.fps))
+            if end <= start or any(w.start < start / plan.fps or w.end > end / plan.fps
+                                   for w in removed):
+                continue
+            if any((w.start < end / plan.fps and w.end > start / plan.fps)
+                   or (w.start == w.end and start / plan.fps <= w.start < end / plan.fps)
+                   for w in retained):
+                continue
+            quote = " ".join(w.text for w in removed)
+            cuts.append({"id": f"{kind}:{scene.index}:{first}:{last}:{start}:{end}:{quote}",
+                "kind": kind, "scene": scene.index, "start_frame": start, "end_frame": end,
+                "start": start / plan.fps, "end": end / plan.fps,
+                "seconds": (end - start) / plan.fps, "removed_text": quote,
+                "before": " ".join(w.text for w in words[max(0, first - 4):first]),
+                "after": " ".join(w.text for w in words[last:last + 4]),
+                "reason": ("Possible hesitation; keep it if it adds personality."
+                           if kind == "filler"
+                           else "Repeated phrase; keep it if the emphasis is intentional.")})
+    # Alternative interpretations can overlap. Prefer the longest phrase;
+    # never offer conflicting word-removal choices in the same review batch.
+    selected = []
+    for cut in sorted(cuts, key=lambda c: (-c["seconds"], c["start_frame"])):
+        if not any(cut["start_frame"] < other["end_frame"]
+                   and cut["end_frame"] > other["start_frame"]
+                   for other in selected):
+            selected.append(cut)
+    return sorted(selected, key=lambda c: c["start_frame"])
+
+
+def review_cuts(plan: ScenePlan) -> list[dict]:
+    return sorted([*suggest_cuts(plan), *suggest_speech_cuts(plan)], key=lambda c: c["start_frame"])
 
 
 def apply_cuts(plan: ScenePlan, ids: tuple[str, ...]) -> ScenePlan:
     """Split retained intervals and move words, voice and footage together."""
-    candidates = {cut["id"]: cut for cut in suggest_cuts(plan)}
+    candidates = {cut["id"]: cut for cut in review_cuts(plan)}
     if not ids or len(set(ids)) != len(ids) or any(key not in candidates for key in ids):
-        raise EditError("These pause suggestions changed. Reload pacing and choose again.")
+        raise EditError("These cut suggestions changed. Reload pacing and choose again.")
     by_scene: dict[int, list[dict]] = {}
     for key in ids:
         cut = candidates[key]
@@ -65,7 +144,7 @@ def apply_cuts(plan: ScenePlan, ids: tuple[str, ...]) -> ScenePlan:
         start = scene.start_frame
         for cut in cuts:
             if cut["start_frame"] < start:
-                raise EditError("Pause suggestions overlap; reload pacing.")
+                raise EditError("Cut suggestions overlap; choose one cut for each interval.")
             if cut["start_frame"] > start:
                 intervals.append((start, cut["start_frame"]))
             start = cut["end_frame"]
@@ -80,7 +159,7 @@ def apply_cuts(plan: ScenePlan, ids: tuple[str, ...]) -> ScenePlan:
             shift = (cursor - first) / plan.fps
             indexed = [(i, w) for i, w in enumerate(scene.words)
                        if not cuts or (w.start < last / plan.fps and w.end > first / plan.fps)
-                       or (w.start == w.end and first / plan.fps <= w.start <= last / plan.fps)]
+                       or (w.start == w.end and first / plan.fps <= w.start < last / plan.fps)]
             words = tuple(w.model_copy(update={
                 "start": min((cursor + last - first) / plan.fps,
                              max(cursor / plan.fps, w.start + shift)),
@@ -97,11 +176,21 @@ def apply_cuts(plan: ScenePlan, ids: tuple[str, ...]) -> ScenePlan:
                 changes.update(text=" ".join(w.text for w in words), caption_text="",
                                caption_emphasis=tuple(n for n, (old, _) in enumerate(indexed)
                                                       if old in scene.caption_emphasis))
+                beat = scene.visual_beat
+                if beat and beat.source == "director" and beat.text:
+                    def normalize(text: str) -> str:
+                        return " ".join(re.findall(r"\w+", text.casefold()))
+                    if f" {normalize(beat.text)} " not in f" {normalize(changes['text'])} ":
+                        changes["visual_beat"] = beat.model_copy(update={"text": ""})
                 # A jump cut stays a cut even with a whole-video blend selected.
                 if part < len(intervals) - 1 or last < scene.end_frame:
                     changes["transition_after"] = TransitionTreatment(kind="cut")
             result.append(scene.model_copy(update=changes))
             cursor += last - first
+    if not result:
+        raise EditError("Keep at least one part of the recording.")
+    if plan.short_export and not 3 <= cursor / plan.fps <= 60 + 1e-7:
+        raise EditError("Keep a 3-60 second story for this export preset.")
     payload = plan.model_dump()
     payload.update(scenes=result, total_frames=cursor,
                    audio_duration=max(1 / plan.fps, plan.audio_duration - removed / plan.fps))

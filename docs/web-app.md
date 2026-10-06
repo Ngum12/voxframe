@@ -335,3 +335,60 @@ plan intact. Music is heard after the final Update video.
 **Use this short** saves the selected passage and direction together. One
 **Undo** restores the original edit. Choose **Update video** for the final
 export, then download your MP4.
+
+### Shape music around the story
+
+In the studio's Sound tab, choose **Steady bed**, **Cinematic rise**, or
+**Punch & breathe**. The selected music gets a level arc across the edited
+speech, with room around the final words; the existing voice protection and
+music timing still apply. Choose **Hear the opening** or **Hear the ending**
+to compare, and use **Voice only** to check the recording. These previews do
+not save changes. **Undo** and **Redo** restore draft choices; **Apply to the
+video** saves the arc and updates the sound while keeping the pictures.
+
+The arc works with an uploaded track or an already generated score. Apply a
+new score style or variation first to hear its finished story mix. Older
+projects default to Steady bed. These controls shape loudness through the
+story; they do not infer meaning or rewrite the music.
+
+### Review hesitation and repeated phrases
+
+The studio's **Pacing** tab groups long pauses, hesitation words and repeated
+phrases. Every suggestion starts unchecked. Read the words that would be
+removed, check the surrounding context, and use **Listen at** to hear the
+original. A repetition may be intentional; keep it when it serves the story.
+
+**Preview selected cuts** renders the shortened 3–60 second story without
+saving. Changing the selection clears the previous preview. Added music is
+heard after updating the video. **Save selected cuts** records the batch;
+**Undo** restores the original recording clock and captions, and **Redo**
+reapplies it. Update the video to make the finished mix and continue listening
+on the new timeline. Corrected captions and overlapping word timings are
+protected rather than guessed.
+
+### Give the finished edit one last review
+
+Open **Export** to see **Finishing review**. It checks the saved edit's caption
+timings and font width, source size and duration, text placement and added
+music settings. Every cue explains its evidence; **Review in…** opens the
+relevant scene and controls. Filter by captions, framing, timing or sound.
+Mark an intentional choice checked; those marks survive panel navigation in
+this browser session and reset when the saved edit changes.
+
+Save export settings before reviewing a different output size. When edits
+are pending, update the video before judging picture and sound playback.
+The report uses saved metadata and does not inspect pixels or understand the
+story. Even when no cues appear, watch and listen before sharing the MP4.
+
+### Compare story edits side by side
+
+In **Shorts**, render at least two creative directions for the same passage
+and picture shape, then choose **Compare rendered edits**. Pick versions A
+and B. **Play comparison** and the shared playhead control both pictures;
+**Hear** chooses which version supplies sound. One preview is always silent.
+Changing a version resets the comparison to the opening.
+
+Choose **Use version A** or **Use version B** to save that exact passage,
+direction and caption choice. Undo restores your previous edit. Update video
+for the finished music mix and export. Different word ranges or shapes need
+their own auditions; closing the comparison stops both players.

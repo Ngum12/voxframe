@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getShorts, getStoryboard, previewShort, saveShort, type ShortsControls, type ShortPreview,
   type ShortChoice, type ScenePlan, type PlanEditResult, type Storyboard, type VisualBeat } from "../api";
+import { StoryComparison, type StoryVariant } from "./StoryComparison";
 import { Notice } from "../components";
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
@@ -15,6 +16,8 @@ export function ShortsStudio({ jobId, plan, canListen, onEdited, onSeek }: {
   jobId: string; plan: ScenePlan; canListen: boolean;
   onEdited: (result: PlanEditResult) => void; onSeek: (seconds: number) => void;
 }) {
+  const generation = useRef(0);
+  const [comparing, setComparing] = useState(false);
   const [data, setData] = useState<ShortsControls | null>(null);
   const [first, setFirst] = useState(0), [last, setLast] = useState(0);
   const [vertical, setVertical] = useState(true), [search, setSearch] = useState("");
@@ -28,6 +31,7 @@ export function ShortsStudio({ jobId, plan, canListen, onEdited, onSeek }: {
   const [boardError, setBoardError] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
+    generation.current++; setBusy(null); setComparing(false);
     setData(null); setPreviews({}); setError(null); setSearch(""); setBoard(null);
     getShorts(jobId).then(d => {
       if (!live) return;
@@ -35,13 +39,19 @@ export function ShortsStudio({ jobId, plan, canListen, onEdited, onSeek }: {
       setFirst(d.suggestions[0]?.first_word ?? 0);
       setLast(d.suggestions[0]?.last_word ?? Math.max(0, d.words.length - 1));
     }).catch(e => { if (live) setError(e.message); });
-    return () => { live = false; };
+    return () => { live = false; generation.current++; };
   }, [jobId, plan]);
   const valid = !!data?.words.length && last >= first;
   const choice: ShortChoice | null = data ? { revision: data.revision, first_word: first,
     last_word: last, vertical, look, match_captions: !!look && match } : null;
   const choiceKey = JSON.stringify(choice);
   const preview = previews[choiceKey];
+  const variants: StoryVariant[] = Object.entries(previews).flatMap(([key, rendered]) => {
+    const candidate: ShortChoice = JSON.parse(key);
+    if (!choice || candidate.revision !== choice.revision || candidate.first_word !== first || candidate.last_word !== last || candidate.vertical !== vertical) return [];
+    const name = looks.find(option => option.id === candidate.look)?.name ?? "Current edit";
+    return [{ key, choice: candidate, preview: rendered, label: `${name} · ${candidate.match_captions ? "matched captions" : "current captions"}` }];
+  });
   useEffect(() => {
     let live = true;
     setBoard(null); setBoardError(null); setExpandedBoard(false);
@@ -61,17 +71,22 @@ export function ShortsStudio({ jobId, plan, canListen, onEdited, onSeek }: {
     if (word && !options.some(w => w.index === i)) options.push(word);
   }
   options.sort((a, b) => a.index - b.index);
-  async function act(action: "preview" | "save") {
-    if (!choice) return;
+  async function act(action: "preview" | "save", chosen = choice) {
+    if (!chosen) return;
+    const current = generation.current;
+    const key = JSON.stringify(chosen);
     setBusy(action); setError(null);
     try {
       if (action === "preview") {
-        const rendered = await previewShort(jobId, choice);
-        setPreviews(current => ({ ...current, [choiceKey]: rendered }));
+        const rendered = await previewShort(jobId, chosen);
+        if (current === generation.current) setPreviews(previews => ({ ...previews, [key]: rendered }));
       }
-      else onEdited(await saveShort(jobId, choice));
-    } catch (e) { setError(e instanceof Error ? e.message : "The short could not be made."); }
-    finally { setBusy(null); }
+      else {
+        const result = await saveShort(jobId, chosen);
+        if (current === generation.current) onEdited(result);
+      }
+    } catch (e) { if (current === generation.current) setError(e instanceof Error ? e.message : "The short could not be made."); }
+    finally { if (current === generation.current) setBusy(null); }
   }
   return <section className="shorts-studio" aria-label="Shorts producer">
     <div className="shorts-heading"><span className="shorts-eyebrow">SHORTS PRODUCER</span><h3>Find your opening.</h3>
@@ -150,6 +165,10 @@ export function ShortsStudio({ jobId, plan, canListen, onEdited, onSeek }: {
         <details><summary>Inspect source ranges</summary>{preview.source_ranges.map((r, i) => <p key={i}>
           Audio {clock(r.audio_start)} → {clock(r.audio_start + r.seconds)}{r.footage_start !== null && <> · Footage {clock(r.footage_start)} → {clock(r.footage_start + r.seconds)}</>}</p>)}</details>
       </div>}
+      {variants.length >= 2 && <>
+        <button className="btn" type="button" disabled={!!busy} onClick={() => setComparing(!comparing)}>{comparing ? "Close comparison" : "Compare rendered edits"}</button>
+        {comparing && <StoryComparison variants={variants} busy={!!busy} onChoose={chosen => void act("save", chosen)} />}
+      </>}
       <p className="hint">Preview leaves your plan intact. Use this short saves a 3–60 second cut in this project; title/chapter cards are omitted. Undo restores your full edit. Update video for final export.</p>
     </>}
   </section>;
