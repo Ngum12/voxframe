@@ -936,12 +936,21 @@ export const savePacing = (jobId: string, cuts: string[]) =>
 export interface ShortCandidate {
   id: string; first_word: number; last_word: number; start: number; end: number;
   seconds: number; opening: string; ending: string; text: string; reasons: string[];
+  hook_type: string; opening_seconds: number; payoff: string; warnings: string[];
+  context_before: string; context_after: string;
 }
 export interface ShortsControls {
   revision: string; suggestions: ShortCandidate[];
   words: { index: number; text: string; start: number; end: number }[];
 }
-export interface ShortChoice { revision: string; first_word: number; last_word: number; vertical: boolean }
+export interface ShortChoice { revision: string; first_word: number; last_word: number; vertical: boolean;
+  look?: VisualBeat["look"] | null; match_captions?: boolean }
+export interface Storyboard { seconds: number; has_speaker: boolean; note: string;
+  beats: { index: number; start: number; end: number; shot: "speaker" | "picture" | "background";
+    reason: string; role: string; text: string; quote: string; zoom: number;
+    audio_start: number; footage_start: number | null }[] }
+export const getStoryboard = (jobId: string, choice: ShortChoice) =>
+  request<Storyboard>(`/api/jobs/${jobId}/shorts/storyboard`, { method: "POST", body: JSON.stringify(choice) });
 export interface ShortPreview {
   url: string; seconds: number; note: string;
   source_ranges: { audio_start: number; footage_start: number | null; seconds: number }[];
