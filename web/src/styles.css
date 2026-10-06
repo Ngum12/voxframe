@@ -2737,3 +2737,11 @@ input[type="checkbox"], input[type="radio"] { flex: none; }
 .pacing-context del { color: var(--accent-text); text-decoration-thickness: 2px; }
 .pacing-preview { margin-top: 16px; }
 .pacing-preview video { display: block; width: 100%; max-height: 440px; background: #000; border-radius: 12px; }
+.music-direction { margin-block: 24px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; }
+.music-arc-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-block: 16px; }
+.music-arc-option { text-align: left; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 16px; cursor: pointer; }
+.music-arc-option strong, .music-arc-option span { display: block; }
+.music-arc-option span { font-size: 13px; line-height: 1.5; margin-top: 8px; }
+.music-arc-option[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.music-arc-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 600px) { .music-arc-options { grid-template-columns: 1fr; } .music-direction { padding: 14px; } }
