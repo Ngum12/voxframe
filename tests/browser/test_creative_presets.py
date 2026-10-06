@@ -49,7 +49,7 @@ def test_save_reuse_and_delete_signature(server, page, caps):
         route.fulfill(status=422, content_type="application/json", body='{"detail":"Captured for test"}')
     page.route("**/api/jobs", capture)
     page.get_by_role("button", name="Make the video", exact=True).click()
-    page.wait_for_function("document.body.innerText.includes('Captured for test')")
+    page.wait_for_function("() => document.body.innerText.includes('Captured for test')")
     assert captured[0]["creative"]["caption_treatment"]["animation"] == "pop"
     assert captured[0]["creative"]["audio_mix"]["music_arc"] == "rise"
     # Return to settings after the deliberately refused submission.

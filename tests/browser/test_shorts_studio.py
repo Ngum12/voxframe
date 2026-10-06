@@ -47,7 +47,7 @@ def test_candidate_trim_real_preview_save_undo_and_export(server, page, caps) ->
     panel.get_by_role("button", name="Render short preview", exact=True).click()
     preview = panel.get_by_label("Rendered short preview")
     preview.wait_for(timeout=120_000)
-    page.wait_for_function("document.querySelector('[aria-label=\"Rendered short preview\"]').readyState >= 2")
+    page.wait_for_function("() => document.querySelector('[aria-label=\"Rendered short preview\"]').readyState >= 2")
     duration = preview.evaluate("v => v.duration")
     assert 3 <= duration <= 60
     assert ScenePlan.load(path) == plan

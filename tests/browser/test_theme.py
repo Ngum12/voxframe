@@ -107,7 +107,7 @@ def test_a_chosen_look_is_kept_and_never_flashes(browser, server) -> None:  # ty
     assert _background(page) == PAPER  # at once
 
     page.wait_for_function(
-        "fetch('/api/settings', {credentials: 'same-origin'}).then(r => r.json()).then(s => s.theme === 'light')"
+        "() => fetch('/api/settings', {credentials: 'same-origin'}).then(r => r.json()).then(s => s.theme === 'light')"
     )
     # The page as served is already light: before any script has run.
     first_paint = page.context.new_page()

@@ -45,7 +45,7 @@ def test_story_arcs_preview_undo_apply_and_export(server, page, caps):
         assert json.loads(preview.value.request.post_data)["mix"]["music_arc"] == arc
         audio = panel.get_by_label("Sound preview")
         audio.wait_for()
-        page.wait_for_function("document.querySelector('[aria-label=\"Sound preview\"]').readyState >= 2")
+        page.wait_for_function("() => document.querySelector('[aria-label=\"Sound preview\"]').readyState >= 2")
         assert audio.evaluate("a => a.duration") > 0
         assert ScenePlan.load(path) == plan
     panel.get_by_role("button", name="Undo", exact=True).click()

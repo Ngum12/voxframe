@@ -43,7 +43,7 @@ def test_style_preview_save_undo_and_export(server, page, caps) -> None:  # type
     panel.get_by_role("button", name="Render exact preview").click()
     preview = panel.get_by_label("Rendered caption preview")
     preview.wait_for(timeout=60_000)
-    page.wait_for_function("document.querySelector('[aria-label=\"Rendered caption preview\"]').readyState >= 2")
+    page.wait_for_function("() => document.querySelector('[aria-label=\"Rendered caption preview\"]').readyState >= 2")
     assert preview.evaluate("v => v.duration") == pytest.approx(6, abs=.1)
     panel.get_by_role("button", name="Save for this scene", exact=True).click()
     fixtures.playwright_api.expect(panel.get_by_role("button", name="Use video look")).to_be_visible()
@@ -58,7 +58,7 @@ def test_style_preview_save_undo_and_export(server, page, caps) -> None:  # type
     assert ScenePlan.load(plan_path).scenes[0].caption_treatment.animation == "pop"
     panel.get_by_role("button", name="Cinema").click()
     panel.get_by_role("button", name="Apply look to whole video", exact=True).click()
-    page.wait_for_function("document.querySelector('.caption-studio select').value === 'typewriter'")
+    page.wait_for_function("() => document.querySelector('.caption-studio select').value === 'typewriter'")
     page.screenshot(path=str(work / "caption-studio.png"), full_page=True)
     page.get_by_role("button", name="Update video", exact=True).click()
     page.locator(".studio-status").get_by_text("Your video is ready").wait_for(timeout=120_000)

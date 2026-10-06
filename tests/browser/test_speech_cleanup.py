@@ -48,7 +48,7 @@ def test_review_speech_cuts_preview_save_undo_and_export(server, page, caps):
     panel.get_by_role("button", name="Preview selected cuts", exact=True).click()
     preview = panel.get_by_label("Pacing preview")
     preview.wait_for(timeout=120_000)
-    page.wait_for_function("document.querySelector('[aria-label=\"Pacing preview\"]').readyState >= 2")
+    page.wait_for_function("() => document.querySelector('[aria-label=\"Pacing preview\"]').readyState >= 2")
     assert 8 < preview.evaluate("v => v.duration") < 9
     assert ScenePlan.load(path) == plan
     panel.get_by_role("checkbox").first.uncheck()

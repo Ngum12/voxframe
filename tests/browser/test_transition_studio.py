@@ -39,7 +39,7 @@ def test_join_preview_save_history_and_export(server, page, caps) -> None:  # ty
     panel.get_by_role("button", name="Preview this join", exact=True).click()
     preview = panel.get_by_label("Rendered transition preview")
     preview.wait_for(timeout=60_000)
-    page.wait_for_function("document.querySelector('[aria-label=\"Rendered transition preview\"]').readyState >= 2")
+    page.wait_for_function("() => document.querySelector('[aria-label=\"Rendered transition preview\"]').readyState >= 2")
     assert 1.9 <= preview.evaluate("v => v.duration") <= 2.2
     panel.get_by_role("button", name="Save for this join", exact=True).click()
     fixtures.playwright_api.expect(panel.get_by_role("button", name="Use video default")).to_be_visible()
