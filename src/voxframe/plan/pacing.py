@@ -1,8 +1,8 @@
-"""Reviewable transcript-gap cuts, with an explicit original recording clock.
+"""Reviewable pause and speech cuts, with an original recording clock.
 
-A gap in transcription is a suggestion, never proof of silence. No timed word
-is removed; the person listens and chooses before anything changes. Full plans
-in edit history restore cuts along with captions, imagery and source positions.
+A gap is never proof of silence; lexical cues are never proof of a mistake.
+Only an explicitly selected speech cue removes words. Full plans in edit
+history restore cuts along with captions, imagery and source positions.
 """
 from __future__ import annotations
 
@@ -176,6 +176,12 @@ def apply_cuts(plan: ScenePlan, ids: tuple[str, ...]) -> ScenePlan:
                 changes.update(text=" ".join(w.text for w in words), caption_text="",
                                caption_emphasis=tuple(n for n, (old, _) in enumerate(indexed)
                                                       if old in scene.caption_emphasis))
+                beat = scene.visual_beat
+                if beat and beat.source == "director" and beat.text:
+                    def normalize(text: str) -> str:
+                        return " ".join(re.findall(r"\w+", text.casefold()))
+                    if f" {normalize(beat.text)} " not in f" {normalize(changes['text'])} ":
+                        changes["visual_beat"] = beat.model_copy(update={"text": ""})
                 # A jump cut stays a cut even with a whole-video blend selected.
                 if part < len(intervals) - 1 or last < scene.end_frame:
                     changes["transition_after"] = TransitionTreatment(kind="cut")
@@ -183,6 +189,8 @@ def apply_cuts(plan: ScenePlan, ids: tuple[str, ...]) -> ScenePlan:
             cursor += last - first
     if not result:
         raise EditError("Keep at least one part of the recording.")
+    if plan.short_export and not 3 <= cursor / plan.fps <= 60 + 1e-7:
+        raise EditError("Keep a 3-60 second story for this export preset.")
     payload = plan.model_dump()
     payload.update(scenes=result, total_frames=cursor,
                    audio_duration=max(1 / plan.fps, plan.audio_duration - removed / plan.fps))

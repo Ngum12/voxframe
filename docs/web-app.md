@@ -350,3 +350,18 @@ The arc works with an uploaded track or an already generated score. Apply a
 new score style or variation first to hear its finished story mix. Older
 projects default to Steady bed. These controls shape loudness through the
 story; they do not infer meaning or rewrite the music.
+
+### Review hesitation and repeated phrases
+
+The studio's **Pacing** tab groups long pauses, hesitation words and repeated
+phrases. Every suggestion starts unchecked. Read the words that would be
+removed, check the surrounding context, and use **Listen at** to hear the
+original. A repetition may be intentional; keep it when it serves the story.
+
+**Preview selected cuts** renders the shortened 3–60 second story without
+saving. Changing the selection clears the previous preview. Added music is
+heard after updating the video. **Save selected cuts** records the batch;
+**Undo** restores the original recording clock and captions, and **Redo**
+reapplies it. Update the video to make the finished mix and continue listening
+on the new timeline. Corrected captions and overlapping word timings are
+protected rather than guessed.

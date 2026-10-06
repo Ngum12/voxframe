@@ -6580,3 +6580,34 @@ bounded music and valid preview WAVs. API tests cover timing, read-only
 preview, validation, save and undo. Real export tests compare exact frame
 counts and identical encoded picture streams against distinct audio streams.
 Chromium exercises playback, phone layout, draft undo and final update.
+
+### D-211 · Review speech cues alongside pauses
+
+Pacing offers hesitation tokens um, uh, erm and euh, plus immediately
+repeated phrases of two to four words. These lexical cues are suggestions,
+not semantic judgements about mistakes. Ambiguous discourse markers, single
+word emphasis, sentence-separated repeats, long pauses between repeats,
+corrected captions and cards are not offered as speech cuts. Each suggestion
+quotes the removed words with adjacent context and starts unchecked.
+
+Frame-rounded cuts must cover every removed word without touching a kept
+word. Overlapping speech interpretations collapse to one review choice;
+conflicting selected intervals are refused. The existing retained-interval
+engine moves audio, footage and words together, remaps caption emphasis and
+keeps jump cuts explicit. Director-generated quotes that no longer occur in
+a retained fragment are cleared; manual text and zoom choices are preserved.
+Cuts that would invalidate a saved 3-60 second export preset are refused.
+
+The UI sends the plan revision on preview/save, preventing an old selection
+from targeting a changed timeline. Legacy callers without a revision retain
+the previous candidate-ID contract. A read-only draft preview reuses the real
+bounded renderer and shared preview route; it excludes added music as stated
+beside playback. Selecting different cuts clears the previous preview.
+Save records the entire batch in one history entry; Undo and Redo restore the
+original and shortened source clocks.
+
+Regression coverage includes fractional rates, neighboring word overlap,
+false positives, quoted graphics, stale revisions, read-only preview and
+history. Chromium reviews all three speech cues, renders and clears a draft,
+checks phone layout, then saves, undoes, redoes and exports. Real MP4 tests
+measure retained picture/audio markers with source audio/video offsets.

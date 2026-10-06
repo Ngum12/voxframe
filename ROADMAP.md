@@ -161,8 +161,16 @@ or ending without saving, compare with voice-only, undo draft settings, then
 apply a sound-only update. Works with uploaded tracks and generated scores;
 older plans retain their original steady mix.
 
-Filler/false-start review and semantic story assessment remain later editing
-improvements. Next: reviewable filler and false-start cuts.
+**Speech cleanup delivered:** Pacing now groups long pauses, standalone
+hesitation tokens (um, uh, erm, euh), and closely repeated two-to-four-word
+phrases. Review quoted removals in context; every choice starts unchecked.
+Preview a 3–60 second edited story without saving, then save the selected
+cuts in one undoable edit. Speech, footage, words and caption emphasis retain
+their original source clocks. Corrected captions and ambiguous discourse
+phrases are protected; timing overlaps are omitted rather than guessed.
+
+Broader semantic false-start detection and story assessment remain later
+improvements. Next: a finishing review for captions, framing and timing.
 
 - **Suggested Shorts:** 3 to 60 seconds, aiming near 30, with sentence-based
   candidates ranked by questions, numbers and explanation/contrast cues.

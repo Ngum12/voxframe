@@ -67,3 +67,32 @@ def test_long_pause_and_scene_boundary_are_not_inferred_as_a_restart():
     assert not suggest_speech_cuts(base.model_copy(update={"scenes": (
         base.scenes[0].model_copy(update={"words": words}),)}))
     assert all(c["kind"] in {"pause", "filler", "repeat"} for c in review_cuts(base))
+
+
+@pytest.mark.parametrize("text", ["Um, I think I think we can euh win.", "um drum win"])
+def test_auto_text_does_not_repeat_a_removed_quote_and_manual_text_is_kept(text):
+    from voxframe.config.visuals import VisualBeat
+
+    base = speech(text)
+    for source in ("director", "user"):
+        plan = base.model_copy(update={"scenes": (base.scenes[0].model_copy(update={
+            "visual_beat": VisualBeat(text="UM", source=source, zoom=1.1)}),)})
+        cut = suggest_speech_cuts(plan)[0]
+        changed = apply_cuts(plan, (cut["id"],))
+        assert all(s.visual_beat.zoom == 1.1 for s in changed.scenes)
+        assert all(s.visual_beat.text == ("" if source == "director" else "UM")
+                   for s in changed.scenes)
+
+
+def test_cuts_cannot_break_the_saved_short_export_duration():
+    from voxframe.config.settings import AspectRatio
+    from voxframe.config.short_export import ShortExport
+    from voxframe.plan.editing import EditError
+
+    base = speech("um win.")
+    plan = base.model_copy(update={"aspect": AspectRatio.VERTICAL, "short_export": ShortExport(),
+        "audio_duration": 3.1, "total_frames": 93,
+        "scenes": (base.scenes[0].model_copy(update={"end_frame": 93}),)})
+    cut = suggest_speech_cuts(plan)[0]
+    with pytest.raises(EditError, match="3-60 second"):
+        apply_cuts(plan, (cut["id"],))

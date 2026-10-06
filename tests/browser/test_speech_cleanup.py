@@ -6,7 +6,7 @@ import pytest
 from tests.browser import test_use_my_video as fixtures
 from tests.unit.test_speech_cleanup import speech
 from voxframe.config.style import get_template
-from voxframe.plan.scene_plan import Footage, ScenePlan
+from voxframe.plan.scene_plan import Footage, ScenePlan, Shot
 from voxframe.render.compose import render_from_plan
 from voxframe.render.ffpath import run_ffmpeg
 
@@ -29,7 +29,7 @@ def test_review_speech_cuts_preview_save_undo_and_export(server, page, caps):
         "-preset", "ultrafast", "-y", str(speaker)])
     plan = speech().model_copy(update={"audio_path": str(audio),
         "footage": Footage(path=str(speaker), width=160, height=90, fps=25, duration=12),
-        "scenes": (speech().scenes[0].model_copy(update={"shot": "speaker"}),)})
+        "scenes": (speech().scenes[0].model_copy(update={"shot": Shot.SPEAKER}),)})
     path = plan.save(folder / "source.plan.json")
     video = render_from_plan(plan, Path(plan.audio_path), get_template(), caps,
                              folder / "video.mp4", height=120).video_path

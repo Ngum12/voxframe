@@ -2554,7 +2554,7 @@ main:has(.welcome) {
 
 .pacing-cut { display: grid; gap: 8px; background: var(--sunken); padding: 12px;
   border-radius: 8px; margin: 8px 0; font-size: .85rem; }
-.pacing-cut label { display: flex; align-items: baseline; gap: 7px; }
+.pacing-cut label { display: flex; align-items: flex-start; gap: 7px; }
 .pacing-cut .link-button { justify-self: start; }
 
 .shorts-studio { display: grid; gap: 18px; padding-bottom: 28px; }
@@ -2745,3 +2745,5 @@ input[type="checkbox"], input[type="radio"] { flex: none; }
 .music-arc-option[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 .music-arc-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 600px) { .music-arc-options { grid-template-columns: 1fr; } .music-direction { padding: 14px; } }
+
+.pacing-copy { min-width: 0; line-height: 1.6; }

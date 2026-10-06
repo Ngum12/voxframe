@@ -61,10 +61,10 @@ export function PacingStudio({ jobId, plan, canListen, onEdited, onSeek }: {
               request.current++; setPreview(null);
               setSelected(s => e.target.checked ? [...s, c.id] : s.filter(id => id !== c.id));
             }} />
-              {c.kind === "pause" ? <> “{c.before}” → “{c.after}”</> : <> Remove “{c.removed_text}”</>}
+              <span className="pacing-copy">{c.kind === "pause" ? <> “{c.before}” → “{c.after}”</> : <> Remove “{c.removed_text}”</>}
               {" · "}{c.seconds.toFixed(2)} s
               {c.kind !== "pause" && <span className="pacing-context">{c.before} <del>{c.removed_text}</del> {c.after}</span>}
-              <span className="hint pacing-context">{c.reason}</span>
+              <span className="hint pacing-context">{c.reason}</span></span>
             </label>
             <button className="link-button" type="button" disabled={!canListen} onClick={() => onSeek(Math.max(0, c.start - 1))}>Listen at {c.start.toFixed(1)} s</button>
           </div>)}
