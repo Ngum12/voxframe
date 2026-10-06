@@ -392,3 +392,15 @@ Choose **Use version A** or **Use version B** to save that exact passage,
 direction and caption choice. Undo restores your previous edit. Update video
 for the finished music mix and export. Different word ranges or shapes need
 their own auditions; closing the comparison stops both players.
+
+### Reuse your signature look
+
+In **Export**, expand **Keep this as your signature preset**, name it and
+choose the spoken scene whose caption look you want. **Save creative preset**
+keeps that treatment and the project’s saved sound mix on this computer.
+
+After uploading a new recording, choose it under **Your signature look**.
+Caption sizing follows the chosen style. Choose a track or generated score
+separately; words, emphasis, cuts, footage and export size are not reused.
+**Manage this preset** lets you delete a choice. Existing projects keep their
+snapshotted settings, including when resumed.

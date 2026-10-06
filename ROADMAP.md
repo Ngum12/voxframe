@@ -187,7 +187,15 @@ and save its passage, direction and captions as one undoable decision. Changing
 the passage hides incompatible comparisons; closing it stops detached players.
 
 Broader semantic false-start detection and story assessment remain later
-improvements. Next: reusable creative presets across new projects.
+improvements.
+
+**Creative presets delivered:** Save a named caption treatment from an explicit
+spoken scene and the project’s saved mix. Select it after a new upload; the
+first render and saved plan receive a snapshot, independent of later preset
+deletion. Words, cuts, footage, music files and export size stay project-specific.
+Presets are local, bounded and atomically saved.
+
+Next: camera movement you can direct, with a visible preview of each choice.
 
 - **Suggested Shorts:** 3 to 60 seconds, aiming near 30, with sentence-based
   candidates ranked by questions, numbers and explanation/contrast cues.

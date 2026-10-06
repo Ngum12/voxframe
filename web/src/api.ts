@@ -194,7 +194,15 @@ export interface Job {
   summary: JobSummary;
 }
 
+export interface CreativeSettings { caption_treatment: CaptionTreatment | null; audio_mix: AudioMix }
+export interface CreativePreset extends CreativeSettings { id: string; name: string }
+export const listCreativePresets = () => request<{ presets: CreativePreset[] }>("/api/creative-presets");
+export const deleteCreativePreset = (id: string) => request<void>(`/api/creative-presets/${id}`, {method: "DELETE"});
+export const saveCreativePreset = (jobId: string, name: string, revision: string, scene: number) =>
+  request<CreativePreset>(`/api/jobs/${jobId}/creative-presets`, {method: "POST", body: JSON.stringify({name, revision, scene})});
+
 export interface RenderOptions {
+  creative?: CreativeSettings | null;
   upload_id: string;
   aspect: string;
   quality: string;

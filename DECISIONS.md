@@ -6673,3 +6673,22 @@ Chromium renders three real auditions, measures playhead agreement, verifies
 one audible player through sound switching, scrubs and changes variants,
 checks phone layout, tests detached-player cleanup and incompatible ranges,
 then chooses a different look, undoes, redoes and exports the winning edit.
+
+## D-214 — Reusable creative presets
+
+A named local preset stores a chosen spoken scene’s caption treatment and
+the saved AudioMix. The person explicitly chooses the caption source. An
+unset treatment keeps the chosen style’s defaults; caption sizing is relative
+to that style. No recordings, track paths, words, emphasis, timing, visual
+direction or export size are copied. Selecting a preset snapshots its typed
+settings into the render request and job options, then into the first rendered
+plan. Resume uses that snapshot even if the saved preset is deleted.
+
+The separate creative-presets.json file lives beside user preferences, outside
+the repository. Atomic writes, a process lock, thirty-preset limit and unique
+case-insensitive names guard updates. Damaged files are reported and kept.
+Session authentication protects listing, saving and deletion; saving checks
+project revision and rejects title cards. Delete removes future choices only.
+API tests cover persistence, stale saves and file preservation. Chromium
+checks save/reuse/delete, request contents and phone width. A real first
+render checks saved settings, encoded caption treatment and speaker sync.

@@ -56,6 +56,7 @@ from voxframe.api.security import (
     resolve_within,
 )
 from voxframe.config.captions import CaptionTreatment
+from voxframe.config.creative_presets import CreativeSettings
 from voxframe.config.settings import AspectRatio, QualityPreset, Settings, get_settings
 from voxframe.config.short_export import ShortExport
 from voxframe.config.transitions import TransitionTreatment
@@ -192,6 +193,7 @@ class RenderRequest(BaseModel):
     stack trace from deep in the renderer.
     """
 
+    creative: CreativeSettings | None = None
     upload_id: str = Field(description="Id returned by the upload route.")
     aspect: str = "16:9"
     quality: str = "standard"
@@ -217,6 +219,12 @@ class RenderRequest(BaseModel):
     #: Music generated for the video instead, in this style (D-176). A new
     #: video gets its own variation; a track and a score are never both used.
     score_style: str | None = Field(default=None, max_length=40)
+
+
+class PresetSave(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    revision: str
+    scene: int = Field(ge=0)
 
 
 class MusicEdit(BaseModel):
@@ -1247,6 +1255,55 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         context.store.submit(job, _renderer(context, options))
 
         return job.snapshot()
+
+    @app.get("/api/creative-presets")
+    def creative_presets(context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.config.creative_presets import load
+
+        try:
+            return {"presets": [p.model_dump(mode="json") for p in load()]}
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(
+                422, "Your saved presets could not be read. The file was kept."
+            ) from exc
+
+    @app.delete("/api/creative-presets/{preset_id}", status_code=204)
+    def delete_creative_preset(preset_id: str, context: ApiContext = Depends(ctx)) -> Response:
+        from voxframe.config.creative_presets import delete
+
+        try:
+            delete(preset_id)
+        except KeyError as exc:
+            raise HTTPException(404, "That preset was already removed.") from exc
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(422, "The preset file could not be updated. It was kept.") from exc
+        return Response(status_code=204)
+
+    @app.post("/api/jobs/{job_id}/creative-presets", status_code=201)
+    def save_creative_preset(
+        job_id: str, edit: PresetSave, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.config.creative_presets import save
+        from voxframe.plan.shorts import revision
+
+        _, _, plan = _editable_plan(context, job_id)
+        if edit.revision != revision(plan):
+            raise HTTPException(
+                409, "This project changed. Reopen Export before saving the preset."
+            )
+        scene = next((s for s in plan.scenes if s.index == edit.scene and not s.card_kind), None)
+        if scene is None:
+            raise HTTPException(422, "Choose a spoken scene for your caption look.")
+        settings = CreativeSettings(
+            caption_treatment=scene.caption_treatment or plan.caption_treatment,
+            audio_mix=plan.audio_mix,
+        )
+        try:
+            return save(edit.name, settings).model_dump(mode="json")
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(
+                422, str(exc) if isinstance(exc, ValueError) else "The preset could not be saved."
+            ) from exc
 
     @app.get("/api/jobs")
     def list_jobs(context: ApiContext = Depends(ctx)) -> dict[str, Any]:
@@ -3348,6 +3405,7 @@ def _job_options(
         footage=request.use_video,
         music=music,
         score=score,
+        creative=request.creative,
     )
 
 

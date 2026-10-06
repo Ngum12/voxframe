@@ -18,6 +18,8 @@ import {
   formatEstimate,
 } from "../components";
 import { UploadedFile } from "./Upload";
+import { PresetPicker } from "./CreativePresets";
+import type { CreativeSettings } from "../api";
 
 const ASPECTS = [
   { value: "16:9", label: "Landscape", note: "YouTube, presentations", w: 44, h: 25 },
@@ -214,6 +216,7 @@ export function Settings({
   onBack: () => void;
   onStart: (options: Omit<RenderOptions, "upload_id">) => void;
 }) {
+  const [creative, setCreative] = useState<CreativeSettings | null>(null);
   const [aspect, setAspect] = useState("16:9");
   const [style, setStyle] = useState("documentary");
   const [quality, setQuality] = useState("standard");
@@ -246,6 +249,7 @@ export function Settings({
       </header>
 
       <UploadedFile result={upload} />
+      <PresetPicker onChange={setCreative} />
 
       {upload.has_video && (
         <div className="card">
@@ -513,6 +517,7 @@ export function Settings({
           }
           onClick={() =>
             onStart({
+              creative,
               aspect,
               quality,
               height,
