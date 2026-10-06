@@ -1871,6 +1871,13 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             raise HTTPException(status_code=404, detail="No such short preview.")
         return _file_or_range(request, path)
 
+    @app.get("/api/jobs/{job_id}/finish-review")
+    def finish_review(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.finish_review import review
+
+        job, _, plan = _editable_plan(context, job_id)
+        return review(plan, height=int(job.options.get("height") or 1080))
+
     @app.get("/api/jobs/{job_id}/short-export")
     def short_export_controls(job_id: str,
                               context: ApiContext = Depends(ctx)) -> dict[str, Any]:

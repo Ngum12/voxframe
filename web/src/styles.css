@@ -2747,3 +2747,15 @@ input[type="checkbox"], input[type="radio"] { flex: none; }
 @media (max-width: 600px) { .music-arc-options { grid-template-columns: 1fr; } .music-direction { padding: 14px; } }
 
 .pacing-copy { min-width: 0; line-height: 1.6; }
+
+.finish-review { border: 1px solid var(--line); border-radius: 14px; padding: 18px; min-width: 0; }
+.finish-heading h3 { margin: 6px 0; }
+.finish-receipt { color: var(--ink-muted); font-size: .85rem; }
+.finish-issues { list-style: none; padding: 0; display: grid; gap: 12px; margin: 16px 0; }
+.finish-issues li { border-left: 3px solid var(--accent-line); background: var(--sunken); padding: 14px; border-radius: 8px; overflow-wrap: anywhere; }
+.finish-issues li[data-checked="true"] { border-left-color: var(--ok); }
+.finish-meta { color: var(--ink-muted); font-size: .78rem; }
+.finish-issues h4 { margin: 8px 0; }
+.finish-issues p { line-height: 1.6; font-size: .87rem; }
+.finish-clear { line-height: 1.6; }
+.finish-review .filters { flex-wrap: wrap; }

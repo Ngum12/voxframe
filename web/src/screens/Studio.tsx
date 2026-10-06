@@ -733,7 +733,13 @@ export function Studio({
             {tab === "director" && <DirectorStudio key={`${jobId}-${planVersion}-${scene.index}`}
               jobId={jobId} plan={plan} sceneIndex={scene.index} onEdited={afterEdit} />}
 
-            {tab === "export" && <ExportStudio jobId={jobId} plan={plan} onEdited={afterEdit} />}
+            {tab === "export" && <ExportStudio jobId={jobId} plan={plan} onEdited={afterEdit} pending={pending}
+              onReview={(index, action) => {
+                const target = plan.scenes.find(s => s.index === index);
+                if (target) seek(target.start_frame / plan.fps + .001);
+                setLayout(current => ({ ...current, panelOpen: true }));
+                setTab(action);
+              }} />}
 
             {tab === "sound" && hasVideo && (
               <SoundPanel

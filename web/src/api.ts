@@ -1019,3 +1019,14 @@ export const searchMusic = (query: string, page: number, mood: string, min_secon
     method: "POST", body: JSON.stringify({query, page, mood, min_seconds, max_seconds, instrumental}),
   });
 export const saveOnlineMusic = (token: string) => request<{track: MusicTrack; already_there: boolean}>(`/api/music-search/${token}/save`, {method: "POST"});
+
+export type FinishAction = "captions" | "director" | "sound" | "scenes" | "export" | "shorts";
+export interface FinishIssue {
+  id: string; category: "captions" | "framing" | "timing" | "sound";
+  title: string; detail: string; action: FinishAction; scene: number | null; at: number;
+}
+export interface FinishReport {
+  revision: string; width: number; height: number; seconds: number;
+  issues: FinishIssue[]; counts: Record<FinishIssue["category"], number>; note: string;
+}
+export const getFinishReview = (jobId: string) => request<FinishReport>(`/api/jobs/${jobId}/finish-review`);

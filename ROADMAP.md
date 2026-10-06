@@ -169,8 +169,18 @@ cuts in one undoable edit. Speech, footage, words and caption emphasis retain
 their original source clocks. Corrected captions and ambiguous discourse
 phrases are protected; timing overlaps are omitted rather than guessed.
 
+**Finishing review delivered:** Export shows review cues from the saved edit:
+caption alignment/pace/long words, brief spoken shots, text-layer placement,
+source enlargement and recording-tail holds, printed-text imagery, and close
+voice/music settings. Each cue quotes its evidence and opens the relevant
+scene and controls. Filter the categories, mark intentional choices checked,
+and refresh automatically after an edit. Output sizing follows saved export
+settings; pending changes are clearly distinguished from the rendered video.
+The review does not claim pixel inspection, semantic judgement or a quality
+score. A clean report still asks for a watch and listen.
+
 Broader semantic false-start detection and story assessment remain later
-improvements. Next: a finishing review for captions, framing and timing.
+improvements. Next: compare different edits of the same story side by side.
 
 - **Suggested Shorts:** 3 to 60 seconds, aiming near 30, with sentence-based
   candidates ranked by questions, numbers and explanation/contrast cues.

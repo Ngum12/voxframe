@@ -6611,3 +6611,36 @@ false positives, quoted graphics, stale revisions, read-only preview and
 history. Chromium reviews all three speech cues, renders and clears a draft,
 checks phone layout, then saves, undoes, redoes and exports. Real MP4 tests
 measure retained picture/audio markers with source audio/video offsets.
+
+### D-212 · Inspectable finishing review in Export
+
+The authenticated finishing-review endpoint reads saved plan metadata and
+word timings without editing or rendering. Output dimensions use the same
+even-grid helper as export, with a saved short preset taking priority over
+job height. It returns the plan revision, categorized counts and stable cue
+IDs with scene/time, evidence and a destination control panel.
+
+Cues include absent/estimated caption timing, corrected alignment, more than
+four words per second across at least eight words, a single word wider than
+the caption box measured with the renderer's bundled font and safe margins,
+spoken shots under a quarter-second, explicitly coinciding text placements,
+source scaling above 1.5x, recording intervals beyond known footage duration
+including its audio offset, imagery marked as printed text, and close added
+music protection. Missing fonts make width-check availability explicit.
+These are editorial review thresholds, not pass/fail quality claims. No
+pixels, source files, semantic meaning or rendered audio levels are analyzed.
+Wordless lead-in handles and cards do not become brief-shot findings.
+
+Export filters categories, presents eight cues initially, and can reveal all.
+Review opens the relevant scene and controls. Check marks persist within the
+browser session for the same job/revision and reset on saved edits. Pending
+changes are labeled so the person updates the video before judging playback;
+unsaved export preset choices are explicitly outside the review snapshot.
+A clean report still calls for watching and listening.
+
+Tests cover clean reports, immutable plans, sizing, font measurement,
+estimated corrections, pace, manual/auto placement, resolution, source-clock
+and offset limits, music presence, wordless handles, authentication and fresh
+revisions. Chromium checks the targeted second-scene navigation, retained
+check marks, a saved text-placement fix, refreshed findings, category filters,
+phone layout and a final MP4 update alongside the existing producer/export flow.

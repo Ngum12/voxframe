@@ -365,3 +365,17 @@ heard after updating the video. **Save selected cuts** records the batch;
 reapplies it. Update the video to make the finished mix and continue listening
 on the new timeline. Corrected captions and overlapping word timings are
 protected rather than guessed.
+
+### Give the finished edit one last review
+
+Open **Export** to see **Finishing review**. It checks the saved edit's caption
+timings and font width, source size and duration, text placement and added
+music settings. Every cue explains its evidence; **Review in…** opens the
+relevant scene and controls. Filter by captions, framing, timing or sound.
+Mark an intentional choice checked; those marks survive panel navigation in
+this browser session and reset when the saved edit changes.
+
+Save export settings before reviewing a different output size. When edits
+are pending, update the video before judging picture and sound playback.
+The report uses saved metadata and does not inspect pixels or understand the
+story. Even when no cues appear, watch and listen before sharing the MP4.
