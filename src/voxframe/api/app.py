@@ -364,6 +364,7 @@ class ShortEdit(BaseModel):
 
 
 class PacingEdit(BaseModel):
+    revision: str | None = Field(default=None, pattern=r"^[a-f0-9]{24}$")
     cuts: tuple[str, ...] = Field(min_length=1, max_length=100)
 
 
@@ -1978,23 +1979,39 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
 
     @app.get("/api/jobs/{job_id}/pacing")
     def pacing_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
-        from voxframe.plan.pacing import suggest_cuts
+        from voxframe.plan.pacing import review_cuts
+        from voxframe.plan.shorts import revision
 
         _, _, plan = _editable_plan(context, job_id)
-        return {"cuts": suggest_cuts(plan), "seconds": plan.total_frames / plan.fps}
+        return {"cuts": review_cuts(plan), "seconds": plan.total_frames / plan.fps,
+                "revision": revision(plan)}
+
+    def pacing_draft(plan: ScenePlan, edit: PacingEdit) -> ScenePlan:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.pacing import apply_cuts
+        from voxframe.plan.shorts import revision
+
+        if edit.revision is not None and edit.revision != revision(plan):
+            raise HTTPException(status_code=409, detail="The edit changed. Reload Pacing.")
+        try:
+            return apply_cuts(plan, edit.cuts)
+        except EditError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.post("/api/jobs/{job_id}/pacing/preview")
+    def pacing_preview(job_id: str, edit: PacingEdit,
+                       context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        _, _, plan = _editable_plan(context, job_id)
+        result = direction_preview_result(job_id, pacing_draft(plan, edit), context)
+        return {**result, "note": ("Selected cuts only, without saving. "
+                                  "Added music is heard after Update video.")}
 
     @app.put("/api/jobs/{job_id}/pacing")
     def pacing_edit(job_id: str, edit: PacingEdit,
                     context: ApiContext = Depends(ctx)) -> dict[str, Any]:
-        from voxframe.plan.editing import EditError
-        from voxframe.plan.pacing import apply_cuts
-
         job, path, plan = _editable_plan(context, job_id)
-        try:
-            updated = apply_cuts(plan, edit.cuts)
-        except EditError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        saved = _save_plan(updated, path, "pause cuts")
+        updated = pacing_draft(plan, edit)
+        saved = _save_plan(updated, path, "pacing cuts")
         context.store.set_pending(job, saved.pending)
         return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
 

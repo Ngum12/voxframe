@@ -69,3 +69,27 @@ def test_fractional_frame_audio_spans_do_not_accumulate_rounding_drift(caps, tmp
         "-map", "[narr]", "-c:a", "pcm_f32le", "-y", str(destination)])
     info = sf.info(destination)
     assert info.frames == round(frames / 29.97 * 48000)
+
+
+@pytest.mark.parametrize("audio_delay,video_delay", [(0, 0), (.6, 0), (0, .4)])
+def test_word_removal_keeps_claps_source_frames_and_captions(caps, tmp_path, audio_delay, video_delay):
+    from voxframe.plan.pacing import suggest_speech_cuts
+
+    footage = sync._footage(caps, sync._recording(caps, tmp_path / "source.mp4", rate=25,
+        audio_delay=audio_delay, video_delay=video_delay))
+    words = tuple(PlanWord(text=text, start=start, end=end) for text, start, end in (
+        ("First", 1.5, 1.8), ("I", 2, 2.15), ("think", 2.25, 2.4),
+        ("I", 2.6, 2.75), ("think", 2.8, 2.95), ("um", 3.2, 3.5), ("last", 4.5, 4.8)))
+    scene = sync._speaker(0, 0, 7, 0).model_copy(update={
+        "text": "First I think I think um last", "words": words})
+    original = sync._plan(footage, scene)
+    cuts = suggest_speech_cuts(original)
+    assert {c["kind"] for c in cuts} == {"filler", "repeat"}
+    changed = apply_cuts(original, tuple(c["id"] for c in cuts))
+    result = render_from_plan(changed, Path(changed.audio_path), get_template(), caps,
+                             tmp_path / "cut.mp4", height=240)
+    removed = sum(c["seconds"] for c in cuts)
+    sync._assert_in_sync(caps, result.video_path, [1.5, 4.5 - removed])
+    assert render_fixtures._frame_count(caps, result.video_path) == changed.total_frames
+    assert "um" not in result.srt_path.read_text()
+    assert " ".join(w.text for s in changed.scenes for w in s.words) == "First I think last"

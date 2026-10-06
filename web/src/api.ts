@@ -925,13 +925,17 @@ export const previewTransition = (jobId: string, index: number, treatment: Trans
   });
 
 export interface PacingControls {
+  revision: string;
   seconds: number;
   cuts: { id: string; scene: number; start_frame: number; end_frame: number;
-    start: number; end: number; seconds: number; before: string; after: string }[];
+    start: number; end: number; seconds: number; before: string; after: string;
+    kind: "pause" | "filler" | "repeat"; removed_text: string; reason: string }[];
 }
 export const getPacing = (jobId: string) => request<PacingControls>(`/api/jobs/${jobId}/pacing`);
-export const savePacing = (jobId: string, cuts: string[]) =>
-  request<PlanEditResult>(`/api/jobs/${jobId}/pacing`, { method: "PUT", body: JSON.stringify({ cuts }) });
+export const savePacing = (jobId: string, cuts: string[], revision?: string) =>
+  request<PlanEditResult>(`/api/jobs/${jobId}/pacing`, { method: "PUT", body: JSON.stringify({ cuts, revision }) });
+export const previewPacing = (jobId: string, cuts: string[], revision: string) =>
+  request<ShortPreview>(`/api/jobs/${jobId}/pacing/preview`, { method: "POST", body: JSON.stringify({ cuts, revision }) });
 
 export interface ShortCandidate {
   id: string; first_word: number; last_word: number; start: number; end: number;
