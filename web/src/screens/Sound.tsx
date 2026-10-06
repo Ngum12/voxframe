@@ -57,6 +57,7 @@ function sameMix(a: AudioMix, b: AudioMix): boolean {
     a.speech_margin_db === b.speech_margin_db &&
     a.destination === b.destination &&
     a.voice_polish === b.voice_polish &&
+    a.music_arc === b.music_arc &&
     SCORE_GROUPS.every((group) => a.score_levels[group] === b.score_levels[group])
   );
 }
@@ -201,15 +202,16 @@ export function SoundPanel({
   }, [styleUrl]);
 
   const listen = useCallback(
-    async (settings: AudioMix, onlyVoice: boolean, music: MusicDraft, searchToken?: string) => {
+    async (settings: AudioMix, onlyVoice: boolean, music: MusicDraft, searchToken?: string, start?: number) => {
       if (!state?.can_preview) return;
+      window.clearTimeout(timer.current);
       const request = ++previewRequest.current;
       try {
         setError(null);
         const url = await previewMix(
           jobId,
           settings,
-          Math.max(0, playhead() - 2),
+          start ?? Math.max(0, playhead() - 2),
           onlyVoice || (!searchToken && music.choice === "none"),
           searchToken ? {search_token: searchToken} : previewTrack(music, draftOf(state)),
         );
@@ -281,6 +283,7 @@ export function SoundPanel({
     setPast(past.slice(0, -1));
     setFuture([draft, ...future]);
     setDraft(previous);
+    void listen(previous.mix, voiceOnly, previous.music);
   };
 
   const redo = () => {
@@ -289,6 +292,7 @@ export function SoundPanel({
     setFuture(future.slice(1));
     setPast([...past, draft]);
     setDraft(next);
+    void listen(next.mix, voiceOnly, next.music);
   };
 
   if (error && !state) return <Notice tone="error">{error}</Notice>;
@@ -641,6 +645,42 @@ export function SoundPanel({
           {state.comfortable_margin_db} dB it starts to compete with the words. It is your call;
           nothing is changed for you.
         </Notice>
+      )}
+
+      {hasMusic && (
+        <section className="music-direction" aria-labelledby="music-direction-label">
+          <span className="eyebrow">STORY × SOUND</span>
+          <h3 id="music-direction-label">Give your story a musical arc</h3>
+          <p className="muted">Shape the music from the opening to the final spoken line.
+            Speech stays protected by your voice-to-music setting.</p>
+          <div className="music-arc-options">
+            {([
+              ["steady", "Steady bed", "Even support. Music breathes in the pauses."],
+              ["rise", "Cinematic rise", "A quiet opening, a gradual build, then space for the final line."],
+              ["punch", "Punch & breathe", "A strong opening, a quieter middle, a lift before the ending."],
+            ] as const).map(([arc, title, description]) => (
+              <button key={arc} type="button" className="music-arc-option"
+                aria-pressed={mix.music_arc === arc}
+                onClick={() => changeMix({ ...mix, music_arc: arc })}>
+                <strong>{title}</strong><span>{description}</span>
+              </button>
+            ))}
+          </div>
+          {state.story_clock && state.can_preview && (
+            <div className="actions">
+              <button type="button" className="btn btn-quiet"
+                onClick={() => void listen(mix, voiceOnly, music, undefined, Math.max(0, state.story_clock!.opening - 1))}>
+                Hear the opening
+              </button>
+              <button type="button" className="btn btn-quiet"
+                onClick={() => void listen(mix, voiceOnly, music, undefined, Math.max(0, state.story_clock!.landing - 10))}>
+                Hear the ending
+              </button>
+            </div>
+          )}
+          <p className="hint">Works with your track or the generated score. Preview uses the music
+            already rendered or your selected track; apply a new score first to hear its arc.</p>
+        </section>
       )}
 
       <div className="sound-preview">

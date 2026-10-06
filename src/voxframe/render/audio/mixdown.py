@@ -340,6 +340,17 @@ def _music_envelope(stems: Stems, mix: AudioMix) -> tuple[np.ndarray, np.ndarray
     curve = gain_curve(_depths(stems, mix), stems.video_end, stems.landing, stems.fps)
     times = np.array([t for t, _ in curve])
     levels = np.array([db for _, db in curve]) + BED_DB + mix.music_db
+    if mix.music_arc != "steady":
+        from voxframe.music.story_arc import arc_points
+
+        opening = stems.spans[0].start if stems.spans else 0.0
+        arc = arc_points(mix.music_arc, opening, stems.landing, stems.video_end, stems.fps)
+        arc_times, arc_levels = np.array(arc).T
+        # Keep both sets of knots: sampling only ducking knots would flatten
+        # the story shape during a long continuous stretch of speech.
+        combined = np.unique(np.concatenate((times, arc_times)))
+        levels = np.interp(combined, times, levels) + np.interp(combined, arc_times, arc_levels)
+        times = combined
     return times, levels
 
 

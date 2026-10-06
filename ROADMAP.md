@@ -154,8 +154,15 @@ and return to previously rendered previews. Choose the cut and direction in
 one undoable edit. Speaker protection follows the actual first and last
 spoken lines, including shorts with tiny wordless lead-in handles.
 
+**Story music delivered:** Sound offers Steady bed, Cinematic rise and
+Punch & breathe. Dynamics follow the edited speech clock: opening, build,
+space around the final words and release into the ring-out. Hear the opening
+or ending without saving, compare with voice-only, undo draft settings, then
+apply a sound-only update. Works with uploaded tracks and generated scores;
+older plans retain their original steady mix.
+
 Filler/false-start review and semantic story assessment remain later editing
-improvements. Next: music direction that responds to the chosen story.
+improvements. Next: reviewable filler and false-start cuts.
 
 - **Suggested Shorts:** 3 to 60 seconds, aiming near 30, with sentence-based
   candidates ranked by questions, numbers and explanation/contrast cues.

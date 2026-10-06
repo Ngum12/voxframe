@@ -94,6 +94,7 @@ export interface AudioMix {
   destination: string;
   /** Voice polish (D-173); off, the voice is exactly the recording. */
   voice_polish: boolean;
+  music_arc: "steady" | "rise" | "punch";
   /** A generated score's group levels, dB (D-179). */
   score_levels: ScoreLevels;
 }
@@ -164,6 +165,7 @@ export interface SoundCheck {
 
 export interface MixState {
   audio_mix: AudioMix;
+  story_clock: { opening: number; landing: number; end: number } | null;
   destinations: Destination[];
   too_close: boolean;
   comfortable_margin_db: number;

@@ -12,6 +12,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from voxframe.music.story_arc import MusicArc
+
 __all__ = [
     "LOUDNESS_TARGETS",
     "MIN_COMFORTABLE_MARGIN_DB",
@@ -104,6 +106,8 @@ class AudioMix(BaseModel):
     #: Voice polish (D-173): gentle noise reduction, tone and level. Off, the
     #: voice is exactly the recording, untouched.
     voice_polish: bool = True
+    #: Story dynamics; steady preserves the original mix of older plans.
+    music_arc: MusicArc = "steady"
     #: A generated score's group levels (D-179); ignored for other music.
     score_levels: ScoreLevels = Field(default_factory=ScoreLevels)
 

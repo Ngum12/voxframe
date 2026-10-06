@@ -6556,3 +6556,27 @@ API regressions verify read-only planning, all three look/save contracts,
 stale-revision refusal and one-step undo. Real browser regressions compare
 three rendered previews, check camera treatment of the spoken hook, reuse a
 previous audition, check phone layout, then save, undo, redo and export.
+
+### D-210 · Story dynamics beneath speech protection
+
+AudioMix stores a validated music_arc: steady (the compatible default), rise
+or punch. A lightweight deterministic envelope follows the retained stems'
+first speech and last-word landing in rendered video time. Shapes are smooth,
+frame-aligned attenuation only, layered beneath existing measured ducking;
+they never raise the music above the person's speech-margin setting. No
+narration is looped, copied or changed. The ring-out still uses existing track
+editing and fades. This shapes dynamics, not semantic meaning or new notes.
+
+Preview and final mixdown use the same envelope, including generated-score
+group stems. The combined knots include both story and ducking boundaries so
+continuous speech does not flatten the arc. Sound offers three descriptions,
+opening/ending audition controls, voice-only comparison and draft undo/redo;
+starting a preview cancels pending slider previews. New score choices must be
+applied before their full story mix can be auditioned, as the card explains.
+The saved setting uses existing plan history and only remixes sound.
+
+Sample-level regressions verify unchanged narration, smooth automation,
+bounded music and valid preview WAVs. API tests cover timing, read-only
+preview, validation, save and undo. Real export tests compare exact frame
+counts and identical encoded picture streams against distinct audio streams.
+Chromium exercises playback, phone layout, draft undo and final update.

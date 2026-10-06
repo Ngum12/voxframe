@@ -2926,13 +2926,20 @@ def _mix_state(job: Job, mix: AudioMix, context: ApiContext) -> dict[str, Any]:
     plan = _load_job_plan(context, job.id)
     stems_file = stems_path(video) if video is not None else None
     polish: dict[str, Any] | None = None
+    story_clock: dict[str, float] | None = None
     if stems_file is not None and stems_file.is_file():
         try:
-            polish = Stems.load(stems_file).polish
+            stems = Stems.load(stems_file)
+            polish = stems.polish
+            story_clock = {
+                "opening": stems.spans[0].start if stems.spans else 0.0,
+                "landing": stems.landing, "end": stems.video_end,
+            }
         except (OSError, ValueError, TypeError, KeyError):
             polish = None
     return {
         "audio_mix": mix.model_dump(mode="json"),
+        "story_clock": story_clock,
         "destinations": [
             {
                 "id": key.value,

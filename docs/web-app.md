@@ -335,3 +335,18 @@ plan intact. Music is heard after the final Update video.
 **Use this short** saves the selected passage and direction together. One
 **Undo** restores the original edit. Choose **Update video** for the final
 export, then download your MP4.
+
+### Shape music around the story
+
+In the studio's Sound tab, choose **Steady bed**, **Cinematic rise**, or
+**Punch & breathe**. The selected music gets a level arc across the edited
+speech, with room around the final words; the existing voice protection and
+music timing still apply. Choose **Hear the opening** or **Hear the ending**
+to compare, and use **Voice only** to check the recording. These previews do
+not save changes. **Undo** and **Redo** restore draft choices; **Apply to the
+video** saves the arc and updates the sound while keeping the pictures.
+
+The arc works with an uploaded track or an already generated score. Apply a
+new score style or variation first to hear its finished story mix. Older
+projects default to Steady bed. These controls shape loudness through the
+story; they do not infer meaning or rewrite the music.
