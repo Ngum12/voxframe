@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 
+from voxframe.config.creative_presets import CreativeSettings
 from voxframe.config.settings import AspectRatio, QualityPreset, Settings
 from voxframe.config.style import StyleTemplate
 from voxframe.plan.scene_plan import PlanAsset, PlannedScene, ScenePlan
@@ -116,6 +117,7 @@ class JobOptions:
     #: Show the recording's own picture, when it has one, with the matched
     #: pictures as cutaways (D-192). Off: pictures only, as before.
     footage: bool = False
+    creative: CreativeSettings | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -341,7 +343,7 @@ def run_pipeline(
         plan = _flag_printed_text(
             plan, library, embedder, settings.resolved_embed_model
         )
-    elif options.want_plan or options.footage:
+    elif options.want_plan or options.footage or options.creative:
         # A plan without imagery still carries caption text and word timings,
         # which is what caption correction needs.
         plan = build_plan(
@@ -390,6 +392,10 @@ def run_pipeline(
             )
         elif options.score is not None:
             plan = plan.model_copy(update={"score": options.score})
+
+    if plan is not None and options.creative is not None:
+        plan = plan.model_copy(update={"caption_treatment": options.creative.caption_treatment,
+                                       "audio_mix": options.creative.audio_mix})
 
     scene_total = len(plan.scenes) if plan is not None else len(scenes)
     warnings.extend(_prepare_music(options.music, progress, score=options.score is not None))

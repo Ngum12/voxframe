@@ -32,7 +32,6 @@ import {
   removeImage,
   searchImages,
   searchPreviewUrl,
-  setMotion,
   setShot,
   thumbnailUrl,
   uploadOwnImage,
@@ -44,6 +43,7 @@ import {
   type SearchResult,
 } from "../api";
 import { Choice, Notice } from "../components";
+import { CameraStudio } from "./CameraStudio";
 
 /** Frames to "1:04.5" — the form an editor expects. */
 function timecode(frames: number, fps: number): string {
@@ -789,21 +789,7 @@ export function SceneDetail({
             </p>
           )}
           {scene.asset && scene.asset.kind !== "video" && !showsSpeaker(scene) && (
-            // Per-scene on/off only; direction is a future idea (D-152, D-154).
-            <label className="toggle" style={{ marginTop: 12 }}>
-              <input
-                type="checkbox"
-                checked={scene.motion !== "none"}
-                disabled={busy}
-                onChange={(event) =>
-                  void run(() => setMotion(jobId, scene.index, event.target.checked))
-                }
-              />
-              <span className="text">
-                <strong>Camera movement</strong>
-                <span>A slow pan and zoom across the photo. Off holds it still.</span>
-              </span>
-            </label>
+            <CameraStudio key={scene.index} jobId={jobId} scene={scene} onEdited={onEdited} />
           )}
 
           {/* With no image yet, the close matches are the headline and are

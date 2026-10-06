@@ -39,7 +39,7 @@ def test_comparison_shared_transport_audio_switch_cleanup_and_choose(server, pag
         panel.get_by_label("Match captions to the direction").check()
         panel.get_by_role("button", name="Render short preview", exact=True).click()
         panel.get_by_label("Rendered short preview").wait_for(timeout=120_000)
-        page.wait_for_function("document.querySelector('[aria-label=\"Rendered short preview\"]').readyState >= 2")
+        page.wait_for_function("() => document.querySelector('[aria-label=\"Rendered short preview\"]').readyState >= 2")
     assert ScenePlan.load(path) == plan
     panel.get_by_role("button", name="Compare rendered edits", exact=True).click()
     comparison = panel.get_by_role("region", name="Compare story edits")
@@ -76,7 +76,7 @@ def test_comparison_shared_transport_audio_switch_cleanup_and_choose(server, pag
     page.screenshot(path=str(work / "story-comparison-phone.png"), full_page=True)
     page.set_viewport_size({"width": 1440, "height": 900})
     play.click()
-    page.wait_for_function("document.querySelector('.comparison-pair video').paused === false")
+    page.wait_for_function("() => document.querySelector('.comparison-pair video').paused === false")
     page.evaluate("window.detachedComparison = [...document.querySelectorAll('.comparison-pair video')]")
     panel.get_by_role("button", name="Close comparison", exact=True).click()
     assert page.evaluate("window.detachedComparison.every(v => v.paused)")

@@ -64,7 +64,7 @@ def test_three_story_auditions_compare_save_undo_and_export(server, page, caps):
         panel.get_by_role("button", name="Render short preview", exact=True).click()
         preview = panel.get_by_label("Rendered short preview")
         preview.wait_for(timeout=120_000)
-        page.wait_for_function("document.querySelector('[aria-label=\"Rendered short preview\"]').readyState >= 2")
+        page.wait_for_function("() => document.querySelector('[aria-label=\"Rendered short preview\"]').readyState >= 2")
         assert 3 <= preview.evaluate("v => v.duration") <= 60
         urls[label] = preview.get_attribute("src")
         assert ScenePlan.load(path) == plan

@@ -119,6 +119,7 @@ def plan_move(
     *,
     intensity: float = 0.5,
     subject_center: tuple[float, float] | None = None,
+    direction: MotionDirection | None = None,
 ) -> KenBurnsMove:
     """Choose a camera move for one scene.
 
@@ -139,7 +140,8 @@ def plan_move(
     # Rotate through directions by position, perturbed by the asset so that
     # repeated images do not move identically.
     offset = _stable_index(scene_index, asset_id) % 3
-    direction = _ROTATION[(scene_index + offset) % len(_ROTATION)]
+    chosen = direction is not None
+    direction = direction or _ROTATION[(scene_index + offset) % len(_ROTATION)]
 
     # Keep zoom modest: beyond about 15% the crop starts to soften on
     # ordinary-resolution images, which reads as low quality.
@@ -182,6 +184,29 @@ def plan_move(
         half = pan_span / 2
         start = (focus_x - horizontal * half, focus_y - vertical * half)
         end = (focus_x + horizontal * half, focus_y + vertical * half)
+
+    if chosen:
+        # Explicit moves use the visible crop bounds: no pan at zoom=1,
+        # no stalled edge and no empty pixels. Legacy automatic moves stay identical.
+        zoom = 1 + .15 * intensity
+        if direction in (MotionDirection.IN, MotionDirection.OUT):
+            margin = .5 / zoom
+            focus = (max(margin, min(1 - margin, focus_x)),
+                     max(margin, min(1 - margin, focus_y)))
+            if direction is MotionDirection.IN:
+                start_zoom, end_zoom = 1, zoom
+                start, end = (.5, .5), focus
+            else:
+                start_zoom, end_zoom = zoom, 1
+                start, end = focus, (.5, .5)
+        else:
+            start_zoom = end_zoom = zoom
+            half = (1 - 1 / zoom) * .4
+            margin = .5 / zoom + half
+            x = max(margin, min(1 - margin, focus_x))
+            y = max(margin, min(1 - margin, focus_y))
+            start = (x - horizontal * half, y - vertical * half)
+            end = (x + horizontal * half, y + vertical * half)
 
     return KenBurnsMove(
         direction=direction,

@@ -36,7 +36,12 @@ from voxframe.render.compose.transitions import (
 )
 from voxframe.render.encode.probe import FFmpegCapabilities
 from voxframe.render.ffpath import filter_path_context, run_ffmpeg
-from voxframe.render.motion.ken_burns import OVERSAMPLE, plan_move, zoompan_filter
+from voxframe.render.motion.ken_burns import (
+    OVERSAMPLE,
+    MotionDirection,
+    plan_move,
+    zoompan_filter,
+)
 from voxframe.render.motion.saliency import find_subject_center
 
 __all__ = ["SegmentResult", "concat_segments", "render_scene_segments"]
@@ -92,7 +97,8 @@ def _scene_filter(
         scene.index,
         scene.asset.id,
         scene.duration_frames,
-        intensity=motion.intensity,
+        intensity=scene.camera_move.strength if scene.camera_move else motion.intensity,
+        direction=MotionDirection(scene.camera_move.direction) if scene.camera_move else None,
         subject_center=subject_center,
     )
 
@@ -284,6 +290,14 @@ def render_scene_segments(
                 cwd=fp.cwd,
             )
             results.append(SegmentResult(scene.index, segment, frames, True))
+        elif scene.asset is not None and not scene.asset.is_video:
+            asset_path = Path(scene.asset.path)
+            if asset_path.is_file():
+                _render_still(caps, asset_path, segment, width, height, plan.fps, frames)
+                results.append(SegmentResult(scene.index, segment, frames, True))
+            else:
+                _render_background(caps, segment, width, height, plan.fps, frames, background)
+                results.append(SegmentResult(scene.index, segment, frames, False))
         else:
             _render_background(
                 caps, segment, width, height, plan.fps, frames, background
@@ -335,6 +349,22 @@ def _footage_signature(plan: ScenePlan, scene: PlannedScene, frames: int) -> str
     )
 
 
+def _still_filter(width: int, height: int) -> str:
+    return (f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},setsar=1")
+
+
+def _render_still(caps: FFmpegCapabilities, source: Path, output: Path,
+                  width: int, height: int, fps: float, frames: int) -> None:
+    fp = filter_path_context(source)
+    run_ffmpeg(caps.ffmpeg_path, [
+        "-loglevel", "error", "-loop", "1", "-framerate", str(fps),
+        "-i", fp.name if fp.cwd else str(source.resolve()),
+        "-vf", _still_filter(width, height), "-frames:v", str(frames),
+        "-r", str(fps), *_INTERMEDIATE_ARGS, "-y", str(output.resolve()),
+    ], cwd=fp.cwd)
+
+
 def _render_fallback(
     plan: ScenePlan,
     scene: PlannedScene,
@@ -347,6 +377,10 @@ def _render_fallback(
     background: str,
 ) -> None:
     """A speaker shot whose footage is gone: its picture, else the background."""
+    if (scene.asset is not None and not scene.asset.is_video
+            and scene.motion is MotionKind.NONE and Path(scene.asset.path).is_file()):
+        _render_still(caps, Path(scene.asset.path), segment, width, height, plan.fps, frames)
+        return
     if (
         scene.asset is not None
         and not scene.asset.is_video

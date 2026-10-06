@@ -114,7 +114,7 @@ def studio(server, page):  # type: ignore[no-untyped-def]
     if page.locator(".notice-error").count():
         pytest.fail(f"render failed: {page.locator('.notice-error').first.inner_text()[:300]}")
     page.locator(".studio video").wait_for(timeout=15_000)
-    page.wait_for_function("document.querySelector('.studio video').readyState >= 1", timeout=30_000)
+    page.wait_for_function("() => document.querySelector('.studio video').readyState >= 1", timeout=30_000)
     return page
 
 
@@ -152,13 +152,13 @@ def test_the_shortcuts(studio) -> None:  # type: ignore[no-untyped-def]
     assert _current_time(studio) == pytest.approx(start, abs=0.1)
 
     studio.keyboard.press(" ")
-    studio.wait_for_function("!document.querySelector('.studio video').paused", timeout=5_000)
+    studio.wait_for_function("() => !document.querySelector('.studio video').paused", timeout=5_000)
     studio.keyboard.press(" ")
-    studio.wait_for_function("document.querySelector('.studio video').paused", timeout=5_000)
+    studio.wait_for_function("() => document.querySelector('.studio video').paused", timeout=5_000)
 
     studio.keyboard.press("3")
     studio.wait_for_function(
-        "document.getElementById('tab-sound')?.getAttribute('aria-selected') === 'true'",
+        "() => document.getElementById('tab-sound')?.getAttribute('aria-selected') === 'true'",
         timeout=5_000,
     )
     assert studio.get_by_role("tab", name="Sound").get_attribute("aria-selected") == "true"

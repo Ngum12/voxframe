@@ -6673,3 +6673,51 @@ Chromium renders three real auditions, measures playhead agreement, verifies
 one audible player through sound switching, scrubs and changes variants,
 checks phone layout, tests detached-player cleanup and incompatible ranges,
 then chooses a different look, undoes, redoes and exports the winning edit.
+
+## D-214 — Reusable creative presets
+
+A named local preset stores a chosen spoken scene’s caption treatment and
+the saved AudioMix. The person explicitly chooses the caption source. An
+unset treatment keeps the chosen style’s defaults; caption sizing is relative
+to that style. No recordings, track paths, words, emphasis, timing, visual
+direction or export size are copied. Selecting a preset snapshots its typed
+settings into the render request and job options, then into the first rendered
+plan. Resume uses that snapshot even if the saved preset is deleted.
+
+The separate creative-presets.json file lives beside user preferences, outside
+the repository. Atomic writes, a process lock, thirty-preset limit and unique
+case-insensitive names guard updates. Damaged files are reported and kept.
+Session authentication protects listing, saving and deletion; saving checks
+project revision and rejects title cards. Delete removes future choices only.
+API tests cover persistence, stale saves and file preservation. Chromium
+checks save/reuse/delete, request contents and phone width. A real first
+render checks saved settings, encoded caption treatment and speaker sync.
+
+## D-215 — Direct photo movement with an export-filter preview
+
+A still-image scene may carry an optional CameraMove: six directions and a
+0–1 strength. Missing settings preserve the historical automatic move exactly.
+Explicit moves cap zoom at 1.15 and use crop bounds to avoid edge stalls.
+Pans maintain a zoomed crop, creating room to travel. Zero strength gives
+a full-frame hold. Video clips, speaker shots, cards and plain backgrounds
+are refused by the camera studio. The existing on/off API remains compatible.
+
+Camera previews use the same scene filter and subject estimate as export at
+draft size, silently and without captions. They show at most the opening
+12 seconds with the original scene duration controlling speed. Photo stamps,
+settings and style form the cache key. Source files are read, never modified.
+Renderer version 5 also fixes the legacy off path, which incorrectly drew
+a background instead of the photo. Holds and missing-speaker still-image
+fallbacks use a shared cover/crop filter; stale segment caches are invalidated.
+Read, save and preview routes require session authentication. Save and preview
+check the plan revision; save goes through normal history and pending edits.
+Camera settings participate in segment caching and rendered-edit comparison.
+Photo swaps retain the scene choice; direction passes preserve joined scenes
+when camera choices differ.
+
+The UI clears previews when controls change and pauses detached players.
+Generation guards discard results after scene changes or navigation. Unit
+checks cover crop limits, cache invalidation, stale edits, read-only previews
+and history. Encoded-frame checks measure all six directions in preview and
+export, edge coverage, bounded preview speed and a static hold. Chromium
+checks selection, preview playback, phone width, save, history and Update video.

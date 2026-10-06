@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getShortExport, saveShortExport, previewShortExport, type ExportControls,
   type ShortExport, type ShortPreview, type ScenePlan, type PlanEditResult } from "../api";
+import { PresetSaver } from "./CreativePresets";
 import { FinishReview } from "./FinishReview";
 import { type FinishAction } from "../api";
 import { Notice } from "../components";
@@ -38,6 +39,7 @@ export function ExportStudio({ jobId, plan, onEdited, pending, onReview }: {
   return <section className="shorts-studio" aria-label="Shorts export">
     <div className="shorts-heading"><span className="shorts-eyebrow">THE FINAL FRAME</span>
       <h3>Ready for your audience.</h3><p>Keep the words clear. Make the ending count.</p></div>
+    <PresetSaver jobId={jobId} plan={plan} revision={data?.revision ?? null} />
     <FinishReview jobId={jobId} plan={plan} pending={pending} onReview={onReview} />
     {error && <Notice tone="error">{error}</Notice>}
     {!eligible && <Notice>Choose a 3–60 second passage in Shorts before choosing an export preset.</Notice>}

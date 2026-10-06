@@ -37,7 +37,7 @@ def test_direction_real_previews_edit_undo_export(server, page, caps) -> None:  
         panel.get_by_role("button", name="Preview direction", exact=True).click()
         preview = panel.get_by_label("Rendered director preview")
         preview.wait_for(timeout=120_000)
-        page.wait_for_function("document.querySelector('[aria-label=\"Rendered director preview\"]').readyState >= 2")
+        page.wait_for_function("() => document.querySelector('[aria-label=\"Rendered director preview\"]').readyState >= 2")
         assert preview.evaluate("v => v.duration") == pytest.approx(7, abs=.1)
         assert ScenePlan.load(path) == plan
     panel.get_by_role("button", name="Apply direction", exact=True).click()
