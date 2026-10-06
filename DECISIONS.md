@@ -6644,3 +6644,32 @@ and offset limits, music presence, wordless handles, authentication and fresh
 revisions. Chromium checks the targeted second-scene navigation, retained
 check marks, a saved text-placement fix, refreshed findings, category filters,
 phone layout and a final MP4 update alongside the existing producer/export flow.
+
+### D-213 · Compare rendered story auditions on one playhead
+
+Shorts exposes side-by-side comparison after at least two auditions exist for
+the same revision, word range and output shape. Different directions and
+caption matching choices remain separate selectable versions. Comparisons
+reuse the existing cached previews and do not trigger downloads, rerenders
+or saved edits. Changing passage or shape hides incompatible pairs.
+
+A shared transport starts, pauses and scrubs both videos. One selected video
+provides the clock and audible narration; the follower is muted and seeks to
+the clock when drift exceeds 100 ms. Sound can switch during playback, with
+the old voice muted first. Buffering, a playback error or either video's end
+pauses the pair. Choosing a different version resets both to zero; readiness
+also respects an unchanged player's already loaded state. Closing the view
+pauses captured media elements, including detached ones. Playback generation
+checks stop late promises from reviving an old comparison.
+
+Use version A/B saves that audition's exact passage, direction and caption
+choice through the existing revision-checked Shorts route and history. It is
+independent of whichever look is selected in the editor. Source-plan changes
+invalidate cached auditions and guard against late preview/save responses.
+The compact phone layout keeps both pictures visible and labels readable.
+Draft narration is compared; added music remains part of the final update.
+
+Chromium renders three real auditions, measures playhead agreement, verifies
+one audible player through sound switching, scrubs and changes variants,
+checks phone layout, tests detached-player cleanup and incompatible ranges,
+then chooses a different look, undoes, redoes and exports the winning edit.

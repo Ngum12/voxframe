@@ -379,3 +379,16 @@ Save export settings before reviewing a different output size. When edits
 are pending, update the video before judging picture and sound playback.
 The report uses saved metadata and does not inspect pixels or understand the
 story. Even when no cues appear, watch and listen before sharing the MP4.
+
+### Compare story edits side by side
+
+In **Shorts**, render at least two creative directions for the same passage
+and picture shape, then choose **Compare rendered edits**. Pick versions A
+and B. **Play comparison** and the shared playhead control both pictures;
+**Hear** chooses which version supplies sound. One preview is always silent.
+Changing a version resets the comparison to the opening.
+
+Choose **Use version A** or **Use version B** to save that exact passage,
+direction and caption choice. Undo restores your previous edit. Update video
+for the finished music mix and export. Different word ranges or shapes need
+their own auditions; closing the comparison stops both players.

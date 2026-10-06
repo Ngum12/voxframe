@@ -179,8 +179,15 @@ settings; pending changes are clearly distinguished from the rendered video.
 The review does not claim pixel inspection, semantic judgement or a quality
 score. A clean report still asks for a watch and listen.
 
+**Story comparison delivered:** After rendering two or more Shorts auditions
+of the same word range and shape, compare any pair side by side. One playhead
+starts, pauses and scrubs both, with drift correction and only one audible
+preview. Switch the sound between versions, choose the stronger edit directly,
+and save its passage, direction and captions as one undoable decision. Changing
+the passage hides incompatible comparisons; closing it stops detached players.
+
 Broader semantic false-start detection and story assessment remain later
-improvements. Next: compare different edits of the same story side by side.
+improvements. Next: reusable creative presets across new projects.
 
 - **Suggested Shorts:** 3 to 60 seconds, aiming near 30, with sentence-based
   candidates ranked by questions, numbers and explanation/contrast cues.
