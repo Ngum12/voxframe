@@ -404,3 +404,16 @@ Caption sizing follows the chosen style. Choose a track or generated score
 separately; words, emphasis, cuts, footage and export size are not reused.
 **Manage this preset** lets you delete a choice. Existing projects keep their
 snapshotted settings, including when resumed.
+
+### Direct the camera over a photo
+
+In **Scenes**, choose a scene showing a still photo. **Direct the camera**
+offers automatic movement, hold still, zoom in/out and pans in four directions.
+Explicit moves have a strength control; zero holds the full frame. Pans crop
+slightly so there is room to travel.
+
+**Preview camera movement** shows a silent picture draft through the export
+filter. It includes up to the first 12 seconds at the scene’s original speed.
+Captions and sound appear in the finished video. **Save camera movement**,
+then **Update video** to render it. Undo restores your previous choice.
+Video clips and speaker shots use their separate motion controls.

@@ -27,6 +27,7 @@ from typing import Self
 import structlog
 from pydantic import BaseModel, Field, model_validator
 
+from voxframe.config.camera import CameraMove
 from voxframe.config.captions import CaptionTreatment
 from voxframe.config.settings import AspectRatio
 from voxframe.config.short_export import ShortExport
@@ -334,6 +335,7 @@ class PlannedScene(BaseModel):
     #: A user's choice is theirs: nothing automatic may replace it (D-128).
     asset_source: str = Field(default="automatic")
 
+    camera_move: CameraMove | None = None
     motion: MotionKind = Field(default=MotionKind.KEN_BURNS)
     motion_reason: str = Field(default="")
 

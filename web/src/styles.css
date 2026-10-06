@@ -2775,3 +2775,9 @@ input[type="checkbox"], input[type="radio"] { flex: none; }
 .creative-presets fieldset { border: 0; padding: 0; min-width: 0; display: grid; gap: 12px; }
 .creative-presets select, .creative-presets input { max-width: 100%; min-width: 0; width: 100%; }
 .creative-presets summary { cursor: pointer; font-weight: 650; }
+
+.camera-studio { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 18px; }
+.camera-studio fieldset { border: 0; padding: 0; min-width: 0; display: grid; gap: 12px; }
+.camera-heading h3 { margin: 6px 0 16px; }
+.camera-studio select { min-width: 0; width: 100%; max-width: 100%; }
+.camera-studio video { max-height: 400px; object-fit: contain; }

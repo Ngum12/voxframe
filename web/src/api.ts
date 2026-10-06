@@ -248,7 +248,14 @@ export interface PlanWord {
 }
 
 /** One scene, exactly as the renderer will read it. */
+export interface CameraMove { direction: "in" | "out" | "left" | "right" | "up" | "down"; strength: number }
+export interface CameraControls { revision: string; on: boolean; settings: CameraMove | null }
+export const getCamera = (id: string, index: number) => request<CameraControls>(`/api/jobs/${id}/scenes/${index}/camera`);
+export const saveCamera = (id: string, index: number, edit: CameraControls) => request<EditResult>(`/api/jobs/${id}/scenes/${index}/camera`, {method: "PUT", body: JSON.stringify(edit)});
+export const previewCamera = (id: string, index: number, edit: CameraControls) => request<{url: string; seconds: number; note: string}>(`/api/jobs/${id}/scenes/${index}/camera/preview`, {method: "POST", body: JSON.stringify(edit)});
+
 export interface PlannedScene {
+  camera_move?: CameraMove | null;
   index: number;
   start_frame: number;
   end_frame: number;

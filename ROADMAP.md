@@ -195,7 +195,14 @@ first render and saved plan receive a snapshot, independent of later preset
 deletion. Words, cuts, footage, music files and export size stay project-specific.
 Presets are local, bounded and atomically saved.
 
-Next: camera movement you can direct, with a visible preview of each choice.
+**Directed photo movement delivered:** Select zoom in/out or four pan
+directions and strength for a still-image scene. Preview through the export
+filter before saving; long scenes retain their original movement speed in
+the bounded draft. Explicit pans use a slight crop so they actually travel
+without empty edges. Automatic and hold-still choices remain available;
+saves are revision checked, undoable and included in segment cache keys.
+
+Next: reusable style kits that combine captions, photo motion and sound.
 
 - **Suggested Shorts:** 3 to 60 seconds, aiming near 30, with sentence-based
   candidates ranked by questions, numbers and explanation/contrast cues.
@@ -214,8 +221,6 @@ Next: camera movement you can direct, with a visible preview of each choice.
   exists; it is waiting on a download of its instrument sounds (openly
   licensed, CC0) for the installed app. After that come more styles and
   instruments.
-- **Camera movement you can direct:** the direction and strength of the slow
-  pan and zoom on each scene, not just on or off.
 - **More languages.** Voxframe is tested in English and French. A new
   language needs evidence more than code: a reference transcript and
   measurements of how well speech and pictures work in it.

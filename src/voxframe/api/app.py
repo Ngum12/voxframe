@@ -55,6 +55,7 @@ from voxframe.api.security import (
     host_is_loopback,
     resolve_within,
 )
+from voxframe.config.camera import CameraMove
 from voxframe.config.captions import CaptionTreatment
 from voxframe.config.creative_presets import CreativeSettings
 from voxframe.config.settings import AspectRatio, QualityPreset, Settings, get_settings
@@ -326,6 +327,12 @@ class MotionEdit(BaseModel):
     """Whether a scene's camera moves."""
 
     on: bool
+
+
+class CameraEdit(BaseModel):
+    revision: str
+    on: bool = True
+    settings: CameraMove | None = None
 
 
 class ShotEdit(BaseModel):
@@ -1685,6 +1692,89 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             voice_only=request.voice_only,
         )
         return FileResponse(output, media_type="audio/wav")
+
+    @app.get("/api/jobs/{job_id}/scenes/{index}/camera")
+    def camera_controls(
+        job_id: str, index: int, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.plan.camera_studio import configure
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.scene_plan import MotionKind
+        from voxframe.plan.shorts import revision
+
+        _, _, plan = _editable_plan(context, job_id)
+        try:
+            configure(plan, index, True, None)
+        except EditError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        scene = plan.scenes[index]
+        return {
+            "revision": revision(plan),
+            "on": scene.motion is not MotionKind.NONE,
+            "settings": scene.camera_move.model_dump() if scene.camera_move else None,
+        }
+
+    def camera_draft(plan: ScenePlan, index: int, edit: CameraEdit) -> ScenePlan:
+        from voxframe.plan.camera_studio import configure
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.shorts import revision
+
+        if edit.revision != revision(plan):
+            raise HTTPException(409, "This edit changed. Reopen camera movement before saving.")
+        try:
+            return configure(plan, index, edit.on, edit.settings)
+        except EditError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.put("/api/jobs/{job_id}/scenes/{index}/camera")
+    def camera_save(
+        job_id: str, index: int, edit: CameraEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        job, path, plan = _editable_plan(context, job_id)
+        updated = camera_draft(plan, index, edit)
+        saved = _save_plan(updated, path, "the camera movement")
+        context.store.set_pending(job, saved.pending)
+        return {
+            "scene": updated.scenes[index].model_dump(mode="json"),
+            "pending_edits": saved.pending,
+        }
+
+    @app.post("/api/jobs/{job_id}/scenes/{index}/camera/preview")
+    def camera_preview_edit(
+        job_id: str, index: int, edit: CameraEdit, context: ApiContext = Depends(ctx)
+    ) -> dict[str, Any]:
+        from voxframe.render.motion.preview import camera_preview
+
+        _, _, plan = _editable_plan(context, job_id)
+        draft = camera_draft(plan, index, edit)
+        try:
+            path, seconds = camera_preview(
+                draft, index, context.store.job_directory(job_id) / "camera-previews"
+            )
+        except Exception as exc:
+            log.warning("camera.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(
+                422, "This photo preview could not be rendered. Check that the photo is available."
+            ) from exc
+        return {
+            "url": f"/api/jobs/{job_id}/camera-previews/{path.stem}",
+            "seconds": seconds,
+            "note": "Silent picture preview at draft size. Shows the first 12 seconds at most, "
+            "using the full scene's movement speed. Captions and sound appear in Update video.",
+        }
+
+    @app.get("/api/jobs/{job_id}/camera-previews/{key}")
+    def camera_preview_file(
+        job_id: str, key: str, request: Request, context: ApiContext = Depends(ctx)
+    ) -> Response:
+        import re
+
+        if context.store.get(job_id) is None or re.fullmatch(r"[a-f0-9]{24}", key) is None:
+            raise HTTPException(404, "No such camera preview.")
+        path = context.store.job_directory(job_id) / "camera-previews" / f"{key}.mp4"
+        if not path.is_file():
+            raise HTTPException(404, "No such camera preview.")
+        return _file_or_range(request, path)
 
     @app.put("/api/jobs/{job_id}/scenes/{index}/motion")
     def edit_motion(
@@ -3147,6 +3237,7 @@ def _changed_scenes(plan_path: Path) -> tuple[list[int], list[int]]:
             # What is on screen: the speaker (D-192), else the picture.
             "speaker" if now.shows_speaker(scene) else (scene.asset.id if scene.asset else None),
             scene.motion,
+            scene.camera_move,
             scene.caption_text,
             scene.caption_treatment,
             scene.caption_emphasis,

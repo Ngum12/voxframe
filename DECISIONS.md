@@ -6692,3 +6692,32 @@ project revision and rejects title cards. Delete removes future choices only.
 API tests cover persistence, stale saves and file preservation. Chromium
 checks save/reuse/delete, request contents and phone width. A real first
 render checks saved settings, encoded caption treatment and speaker sync.
+
+## D-215 — Direct photo movement with an export-filter preview
+
+A still-image scene may carry an optional CameraMove: six directions and a
+0–1 strength. Missing settings preserve the historical automatic move exactly.
+Explicit moves cap zoom at 1.15 and use crop bounds to avoid edge stalls.
+Pans maintain a zoomed crop, creating room to travel. Zero strength gives
+a full-frame hold. Video clips, speaker shots, cards and plain backgrounds
+are refused by the camera studio. The existing on/off API remains compatible.
+
+Camera previews use the same scene filter and subject estimate as export at
+draft size, silently and without captions. They show at most the opening
+12 seconds with the original scene duration controlling speed. Photo stamps,
+settings and style form the cache key. Source files are read, never modified.
+Renderer version 5 also fixes the legacy off path, which incorrectly drew
+a background instead of the photo. Holds and missing-speaker still-image
+fallbacks use a shared cover/crop filter; stale segment caches are invalidated.
+Read, save and preview routes require session authentication. Save and preview
+check the plan revision; save goes through normal history and pending edits.
+Camera settings participate in segment caching and rendered-edit comparison.
+Photo swaps retain the scene choice; direction passes preserve joined scenes
+when camera choices differ.
+
+The UI clears previews when controls change and pauses detached players.
+Generation guards discard results after scene changes or navigation. Unit
+checks cover crop limits, cache invalidation, stale edits, read-only previews
+and history. Encoded-frame checks measure all six directions in preview and
+export, edge coverage, bounded preview speed and a static hold. Chromium
+checks selection, preview playback, phone width, save, history and Update video.

@@ -19,4 +19,5 @@ __all__ = ["RENDERER_VERSION"]
 #: 2: still segments forced to square pixels (D-125).
 #: 3: card text wrapped and centred line by line (D-145).
 #: 4: every downloaded clip fills its exact frame slot before transitions.
-RENDERER_VERSION = 4
+#: 5: disabled photo movement holds the image instead of a plain background.
+RENDERER_VERSION = 5

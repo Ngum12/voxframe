@@ -30,7 +30,8 @@ def _quote(words: list[str]) -> str:
 def _restore_automatic_scenes(plan: ScenePlan) -> ScenePlan:
     """Remove only joins this director created, so a new look changes cadence."""
     restored = []
-    stable = ("asset", "motion", "motion_reason", "asset_source", "caption_treatment",
+    stable = ("asset", "motion", "camera_move", "motion_reason", "asset_source",
+              "caption_treatment",
               "queries", "query_source", "match_score", "semantic_score", "match_reason",
               "alternatives", "near_misses")
     for scene in plan.scenes:

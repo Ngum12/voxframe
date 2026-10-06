@@ -89,6 +89,8 @@ def segment_key(
         quality,
         background,
     ]
+    if scene.camera_move is not None:
+        parts.append(scene.camera_move.model_dump_json())
     if footage_signature:
         parts.append(footage_signature)
 
