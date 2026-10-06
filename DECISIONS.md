@@ -6529,3 +6529,30 @@ existing projects without asking the person to delete cache folders. Real
 render regressions cover long, nearly fitting, slow-motion, held and unknown
 clips; inaccurate metadata, variable rates and nonzero starting timestamps;
 integer and fractional output rates; and a second render from cached scenes.
+
+### D-209 · Story auditions join hook review and visual direction
+
+Short recommendations expose a quoted opening, its duration, the last
+sentence, surrounding transcript excerpts and visible context/ending risks.
+Long openings receive a bounded ranking penalty. These are transcript cues,
+not semantic story guarantees or predictions of engagement. Source words
+are never reordered or rewritten by the audition workflow.
+
+Shorts offers Keep current edit and the existing three creative directions.
+A lightweight authenticated storyboard request uses the same draft builder
+as real preview and save, reporting shot roles, quoted text, framing and
+source clocks. It reads existing project visuals without downloading new
+ones. Opening and closing spoken lines stay on the speaker even when a cut
+retains a tiny wordless lead-in or tail; manual shot choices remain pinned.
+
+Preview results are kept separately for each revision, word range, aspect,
+direction and caption choice, allowing comparison without repeated renders.
+Changing the source plan clears those results. Passage and direction are
+saved together in one history entry; Undo restores the original full edit.
+The compact storyboard shows opening and ending beats, with an explicit
+control to inspect the whole sequence.
+
+API regressions verify read-only planning, all three look/save contracts,
+stale-revision refusal and one-step undo. Real browser regressions compare
+three rendered previews, check camera treatment of the spoken hook, reuse a
+previous audition, check phone layout, then save, undo, redo and export.

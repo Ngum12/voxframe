@@ -140,10 +140,15 @@ def _cut_away(
         (p for p in spoken if plan.scenes[p].shot_source != "user"),
         key=lambda p: (-plan.scenes[p].match_score, p),
     )
-    first, last = spoken[0], spoken[-1]
+    # Short cuts can retain a tiny wordless lead-in/out across a scene boundary.
+    # Protect the actual spoken opening and payoff as well as those handles.
+    meaningful = [p for p in spoken if plan.scenes[p].display_text.strip()]
+    anchors = {spoken[0], spoken[-1]}
+    if meaningful:
+        anchors.update((meaningful[0], meaningful[-1]))
     for position in candidates:
         scene = plan.scenes[position]
-        reason = _why_not(scene, fps, position in (first, last))
+        reason = _why_not(scene, fps, position in anchors)
         if reason:
             shots[position] = (Shot.SPEAKER, f"on the speaker: {reason}")
             continue

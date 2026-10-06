@@ -359,6 +359,8 @@ class ShortEdit(BaseModel):
     first_word: int = Field(ge=0)
     last_word: int = Field(ge=0)
     vertical: bool = True
+    look: Literal["authority", "energy", "cinema"] | None = None
+    match_captions: bool = False
 
 
 class PacingEdit(BaseModel):
@@ -1808,14 +1810,24 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
 
     def short_draft(plan: ScenePlan, edit: ShortEdit) -> ScenePlan:
         from voxframe.plan.editing import EditError
-        from voxframe.plan.shorts import build_short, revision
+        from voxframe.plan.shorts import revision
+        from voxframe.plan.storyboard import audition
 
         if edit.revision != revision(plan):
             raise HTTPException(status_code=409, detail="The transcript changed. Reload Shorts.")
         try:
-            return build_short(plan, edit.first_word, edit.last_word, vertical=edit.vertical)
+            return audition(plan, edit.first_word, edit.last_word, vertical=edit.vertical,
+                            look=edit.look, match_captions=edit.match_captions)
         except EditError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.post("/api/jobs/{job_id}/shorts/storyboard")
+    def short_storyboard(job_id: str, edit: ShortEdit,
+                         context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.storyboard import storyboard
+
+        _, _, plan = _editable_plan(context, job_id)
+        return storyboard(short_draft(plan, edit))
 
     @app.put("/api/jobs/{job_id}/shorts")
     def shorts_edit(job_id: str, edit: ShortEdit,

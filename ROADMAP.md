@@ -147,7 +147,15 @@ retaining mix levels. Update video follows the saved output size; undo restores
 both export and sound choices. The full browser flow finishes from pause cuts
 through passage selection and direction to an actual downloaded MP4.
 
-Filler/false-start review remains a later editing improvement. Next: music.
+**Story auditions delivered:** Shorts now connects passage discovery to the
+three visual directions. Review quoted hooks, surrounding context and the
+actual ending; inspect a compact shot storyboard; audition different looks
+and return to previously rendered previews. Choose the cut and direction in
+one undoable edit. Speaker protection follows the actual first and last
+spoken lines, including shorts with tiny wordless lead-in handles.
+
+Filler/false-start review and semantic story assessment remain later editing
+improvements. Next: music direction that responds to the chosen story.
 
 - **Suggested Shorts:** 3 to 60 seconds, aiming near 30, with sentence-based
   candidates ranked by questions, numbers and explanation/contrast cues.

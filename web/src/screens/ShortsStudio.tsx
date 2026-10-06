@@ -1,9 +1,15 @@
 import { useEffect, useState } from "react";
-import { getShorts, previewShort, saveShort, type ShortsControls, type ShortPreview,
-  type ShortChoice, type ScenePlan, type PlanEditResult } from "../api";
+import { getShorts, getStoryboard, previewShort, saveShort, type ShortsControls, type ShortPreview,
+  type ShortChoice, type ScenePlan, type PlanEditResult, type Storyboard, type VisualBeat } from "../api";
 import { Notice } from "../components";
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
+const looks = [
+  { id: "authority", name: "Clean authority", description: "Measured cuts and selective emphasis." },
+  { id: "energy", name: "High energy", description: "Faster beats, punch-ins and bold text." },
+  { id: "cinema", name: "Cinematic story", description: "Longer shots and restrained framing." },
+] as const;
+const shotNames = { speaker: "Speaker", picture: "Supporting visual", background: "Background" };
 
 export function ShortsStudio({ jobId, plan, canListen, onEdited, onSeek }: {
   jobId: string; plan: ScenePlan; canListen: boolean;
@@ -14,10 +20,15 @@ export function ShortsStudio({ jobId, plan, canListen, onEdited, onSeek }: {
   const [vertical, setVertical] = useState(true), [search, setSearch] = useState("");
   const [busy, setBusy] = useState<"preview" | "save" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<ShortPreview | null>(null);
+  const [look, setLook] = useState<VisualBeat["look"] | null>(null);
+  const [match, setMatch] = useState(false);
+  const [previews, setPreviews] = useState<Record<string, ShortPreview>>({});
+  const [board, setBoard] = useState<Storyboard | null>(null);
+  const [expandedBoard, setExpandedBoard] = useState(false);
+  const [boardError, setBoardError] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
-    setData(null); setPreview(null); setError(null); setSearch("");
+    setData(null); setPreviews({}); setError(null); setSearch(""); setBoard(null);
     getShorts(jobId).then(d => {
       if (!live) return;
       setData(d);
@@ -26,9 +37,22 @@ export function ShortsStudio({ jobId, plan, canListen, onEdited, onSeek }: {
     }).catch(e => { if (live) setError(e.message); });
     return () => { live = false; };
   }, [jobId, plan]);
-  useEffect(() => { setPreview(null); }, [first, last, vertical]);
   const valid = !!data?.words.length && last >= first;
+  const choice: ShortChoice | null = data ? { revision: data.revision, first_word: first,
+    last_word: last, vertical, look, match_captions: !!look && match } : null;
+  const choiceKey = JSON.stringify(choice);
+  const preview = previews[choiceKey];
+  useEffect(() => {
+    let live = true;
+    setBoard(null); setBoardError(null); setExpandedBoard(false);
+    if (choice && valid) getStoryboard(jobId, choice).then(result => {
+      if (live) setBoard(result);
+    }).catch(e => { if (live) setBoardError(e.message); });
+    return () => { live = false; };
+  }, [jobId, choiceKey, valid]);
   const selected = data?.words.slice(first, last + 1) ?? [];
+  const boardBeats = board && !expandedBoard && board.beats.length > 6
+    ? [...board.beats.slice(0, 4), ...board.beats.slice(-2)] : board?.beats ?? [];
   const candidates = data?.suggestions ?? [];
   const options = data?.words.filter(w => search ? w.text.toLocaleLowerCase().includes(search.toLocaleLowerCase())
     : Math.abs(w.index - first) < 12 || Math.abs(w.index - last) < 12).slice(0, 100) ?? [];
@@ -38,11 +62,13 @@ export function ShortsStudio({ jobId, plan, canListen, onEdited, onSeek }: {
   }
   options.sort((a, b) => a.index - b.index);
   async function act(action: "preview" | "save") {
-    if (!data) return;
-    const choice: ShortChoice = { revision: data.revision, first_word: first, last_word: last, vertical };
+    if (!choice) return;
     setBusy(action); setError(null);
     try {
-      if (action === "preview") setPreview(await previewShort(jobId, choice));
+      if (action === "preview") {
+        const rendered = await previewShort(jobId, choice);
+        setPreviews(current => ({ ...current, [choiceKey]: rendered }));
+      }
       else onEdited(await saveShort(jobId, choice));
     } catch (e) { setError(e instanceof Error ? e.message : "The short could not be made."); }
     finally { setBusy(null); }
@@ -50,7 +76,7 @@ export function ShortsStudio({ jobId, plan, canListen, onEdited, onSeek }: {
   return <section className="shorts-studio" aria-label="Shorts producer">
     <div className="shorts-heading"><span className="shorts-eyebrow">SHORTS PRODUCER</span><h3>Find your opening.</h3>
       <p>Keep a passage worth watching. Give it a clear beginning and an ending that delivers.</p></div>
-    <p className="hint">Suggested openings come from sentences in your transcript. Read the whole passage and check that the ending delivers.</p>
+    <p className="hint">Audition a complete story before you commit. Quoted openings, complete passages and context help you choose.</p>
     {error && <Notice tone="error">{error}</Notice>}
     {!data && !error && <p role="status">Looking for passages…</p>}
     {data && !data.words.length && <p>Word timings are needed to make a short. Transcribe this recording first.</p>}
@@ -64,7 +90,13 @@ export function ShortsStudio({ jobId, plan, canListen, onEdited, onSeek }: {
             <strong>“{c.opening}”</strong>
           </button>
           <p className="shorts-signals">{c.reasons.join(" · ")}</p>
-          <details><summary>Read passage and ending</summary><p>{c.text}</p><p><b>Ending:</b> {c.ending}</p></details>
+          <p className="story-hook"><b>{c.hook_type}</b> · Opening {c.opening_seconds.toFixed(1)} s</p>
+          <p className="story-payoff"><b>Where it lands:</b> {c.payoff}</p>
+          {c.warnings.length > 0 && <ul className="story-warnings">{c.warnings.map(w => <li key={w}>{w}</li>)}</ul>}
+          <details><summary>Read passage and ending</summary><p>{c.text}</p><p><b>Ending:</b> {c.ending}</p>
+            {c.context_before && <p><b>Just before:</b> {c.context_before}</p>}
+            {c.context_after && <p><b>Just after:</b> {c.context_after}</p>}
+          </details>
         </article>)}
       </div>
       <fieldset disabled={!!busy} className="shorts-boundaries"><legend>Make the cut yours</legend>
@@ -82,6 +114,33 @@ export function ShortsStudio({ jobId, plan, canListen, onEdited, onSeek }: {
         <button type="button" className="link-button" disabled={!canListen || !!busy} onClick={() => onSeek(Math.max(0, selected[0].start - .12))}>Watch in current video</button>
       </div>}
       {!valid && <Notice tone="error">Choose a last word after the first word.</Notice>}
+      <fieldset disabled={!!busy} className="story-directions"><legend>Audition a creative direction</legend>
+        <p className="hint">The same passage, three ways to tell it. Preview each look and switch back to compare. Your edit stays intact until you choose.</p>
+        <button className="btn btn-quiet" type="button" aria-pressed={look === null} onClick={() => setLook(null)}>Keep current edit</button>
+        <div className="story-look-options">{looks.map(option => <button type="button" key={option.id}
+          className="story-look" aria-pressed={look === option.id} onClick={() => setLook(option.id)}>
+          <strong>{option.name}</strong><span>{option.description}</span>
+        </button>)}</div>
+        <label><input type="checkbox" disabled={!look || !!busy} checked={!!look && match}
+          onChange={e => setMatch(e.target.checked)} /> Match captions to the direction</label>
+      </fieldset>
+      {boardError && <Notice>{boardError}</Notice>}
+      {valid && !board && !boardError && <p role="status">Preparing the story…</p>}
+      {board && <section className="story-board" aria-label="Planned story">
+        <h4>The edit, beat by beat <span>{board.seconds.toFixed(1)} s</span></h4>
+        {look && !board.has_speaker && <p className="hint">This project uses visuals with your voice. Upload a recording with video to direct speaker shots.</p>}
+        <p className="hint">{board.beats.length} beats · {board.beats.filter(b => b.shot === "speaker").length} speaker shots · {board.beats.filter(b => b.shot === "picture").length} supporting visuals</p>
+        <ol>{boardBeats.map(beat => <li key={beat.index} data-shot={beat.shot}>
+          <div className="story-beat-meta"><time>{clock(beat.start)}–{clock(beat.end)}</time>
+            <strong>{shotNames[beat.shot]}</strong><span>{beat.role === "passage" ? "" : beat.role}</span>
+            {beat.zoom > 1 && <span>{beat.zoom.toFixed(2)}× framing</span>}</div>
+          <p>{beat.text || beat.quote || (beat.index === 0 ? "Lead-in" : "Uncaptioned beat")}</p>
+          <details><summary>Why this shot?</summary><p>{beat.reason}</p><p>Recording: {clock(beat.audio_start)}{beat.footage_start !== null && <> · Picture: {clock(beat.footage_start)}</>}</p></details>
+        </li>)}</ol>
+        {board.beats.length > 6 && <button type="button" className="link-button"
+          onClick={() => setExpandedBoard(!expandedBoard)}>{expandedBoard ? "Show opening and ending" : `Show all ${board.beats.length} beats`}</button>}
+        <p className="hint">{board.note}</p>
+      </section>}
       <div className="caption-save-actions"><button className="btn" type="button" disabled={!!busy || !valid} onClick={() => act("preview")}>{busy === "preview" ? "Rendering preview…" : "Render short preview"}</button>
         <button className="btn btn-primary" type="button" disabled={!!busy || !valid} onClick={() => act("save")}>{busy === "save" ? "Saving…" : "Use this short"}</button></div>
       {preview && <div className="shorts-preview">

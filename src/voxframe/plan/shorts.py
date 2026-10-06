@@ -117,6 +117,36 @@ def source_ranges(plan: ScenePlan) -> list[dict]:
              "seconds": s.duration_frames / plan.fps} for s in plan.scenes]
 
 
+def hook_details(timed: tuple[TimedToken, ...], first: int, last: int) -> dict:
+    """Quote context and flag visible risks, without inventing or rewriting speech."""
+    end = next((i for i in range(first, last + 1) if END.search(timed[i].value.text)), last)
+    opening = " ".join(t.value.text for t in timed[first:end + 1])
+    words = re.findall(r"[\wÀ-ÿ]+", opening.casefold())
+    kind = ("Question" if "?" in opening else "Number" if any(c.isdigit() for c in opening)
+            else "Contrast" if set(words) & CUES else "Statement")
+    seconds = max(0, timed[end].value.end - timed[first].value.start)
+    warnings = []
+    if words and words[0] in DEPENDENT | {"this", "that", "it", "they", "cela", "ça"}:
+        warnings.append("The opening may need earlier context. Read what comes before it.")
+    if seconds > 8:
+        warnings.append("The opening lasts more than eight seconds. "
+                        "Consider a tighter first sentence.")
+    if not END.search(timed[last].value.text):
+        warnings.append("The ending has no sentence punctuation. "
+                        "Check that the thought is complete.")
+    elif "?" in timed[last].value.text:
+        warnings.append("The passage ends on a question. Check whether it leaves the answer out.")
+    group = timed[first].group
+    before = [t.value.text for t in timed[max(0, first - 24):first] if t.group == group]
+    after = [t.value.text for t in timed[last + 1:last + 25] if t.group == timed[last].group]
+    ending_start = next((i + 1 for i in range(last - 1, first - 1, -1)
+                         if END.search(timed[i].value.text)), first)
+    return {"hook_type": kind, "opening_seconds": round(seconds, 2),
+            "payoff": " ".join(t.value.text for t in timed[ending_start:last + 1]),
+            "context_before": " ".join(before), "context_after": " ".join(after),
+            "warnings": warnings}
+
+
 def suggestions(plan: ScenePlan) -> list[dict]:
     """Choose up to three distinct, contiguous sentence runs, never reorder them."""
     timed = tokens(plan)
@@ -158,6 +188,10 @@ def suggestions(plan: ScenePlan) -> list[dict]:
             if opening_tokens & CUES:
                 score += .8
                 reasons.append("An explanation or contrast cue in the opening")
+            opening_seconds = timed[opening_end].value.end - timed[first].value.start
+            if opening_seconds > 8:
+                score -= min(2, (opening_seconds - 8) / 8)
+                reasons.append("A longer opening; review the lead-in")
             opening_words = re.findall(r"\w+", opening.casefold())
             if opening_words and opening_words[0] in DEPENDENT:
                 score -= 1.5
@@ -188,7 +222,7 @@ def suggestions(plan: ScenePlan) -> list[dict]:
                        "seconds": (b - a) / plan.fps, "opening": opening, "text": spoken,
                        "ending": " ".join(t.value.text
                                           for t in timed[max(first, last - 14):last + 1]),
-                       "reasons": reasons})
+                       "reasons": reasons, **hook_details(timed, first, last)})
     return result
 
 

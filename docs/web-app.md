@@ -312,3 +312,26 @@ with the last frame. The narration and captions keep their original timing.
 After installing this fix, choose **Update video** on a project that failed
 with a transition frame-count error. Older cached segments are rebuilt
 automatically; you do not need to delete the project or clear its cache.
+
+## Auditioning a story
+
+Open **Shorts** after your recording is made. Suggested passages quote your
+opening and ending, show the opening's length, and include nearby transcript
+context under **Read passage and ending**. Review context flags before
+choosing: a question or number is a cue, not a guarantee that a passage works.
+You can still select the first and last words yourself.
+
+Under **Audition a creative direction**, choose Clean authority, High energy
+or Cinematic story. Optionally match captions to the look. **The edit, beat by
+beat** shows the planned speaker shots, supporting visuals, text beats and
+framing. Expand all beats or inspect why a shot was chosen. A video recording
+is needed for speaker shots; an audio-only project keeps its visual scenes.
+
+Use **Render short preview** for each look you want to try. Switching back
+shows that look's already-rendered preview. Changing words, orientation or
+caption matching selects a different audition. Previewing leaves the saved
+plan intact. Music is heard after the final Update video.
+
+**Use this short** saves the selected passage and direction together. One
+**Undo** restores the original edit. Choose **Update video** for the final
+export, then download your MP4.
