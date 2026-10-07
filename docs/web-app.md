@@ -786,3 +786,27 @@ lets you choose clips, name and reorder them, then **Build collection**. Its ZIP
 contains finished videos, available SRT/VTT subtitles, credits and a manifest
 with recipe names, source project IDs and file checksums. It contains no source
 recordings or editable plans. Render pending edits before packaging.
+
+## Review a finished bookend collection
+
+After selecting and ordering finished bookend exports, use **Collection finishing
+review**. Each clip has a player and cues based on saved caption, framing and
+timing metadata plus its recorded sound measurements. These checks do not inspect
+video pixels or understand its meaning; watch and listen to every finished clip.
+
+**Review in Captions / Director / Sound / Export** opens the clip’s relevant
+controls at the indicated scene. **Back to collection** returns to the source
+project with your names, selected clips and order restored in this browser
+session. Save fixes and use **Update video** before reviewing again. Pending
+edits or a missing finished file block approval and cannot be acknowledged away.
+
+Mark each intentional cue checked and confirm **I watched and listened to this
+finished clip** for every selected clip. Choose **Approve collection review**,
+then **Build collection**. Approval is checked again during packaging and binds
+to the selected order, saved plans, video/subtitle file stamps and recorded sound
+checks. Changed clips require **Refresh collection review** and fresh confirmation.
+
+The ZIP manifest includes the review date, checked cues and watched clip IDs,
+without source paths or saved plans. Approval records your review, not a guarantee
+of visual quality. Existing ordinary Shorts collections continue to package
+finished snapshots without this bookend review gate.

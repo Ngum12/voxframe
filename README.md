@@ -118,6 +118,9 @@ chapter cards and highlights. [Walk through the controls](docs/web-app.md).
   issues, with evidence and a route to the relevant controls. Mark intentional
   choices checked. The review uses saved settings and metadata; watch and listen
   to the updated video before sharing it.
+  Review finished bookend collections clip by clip, open the controls to fix
+  cues, and confirm watching and listening before packaging. The ZIP records
+  your review; changing the clips or their saved edits requires a fresh one.
 - **An editor that keeps you in control.** The video stays visible while you
   work with scenes and timed words. Undo and redo, saved edits, reusable render
   segments and interrupted-render recovery keep work from being lost.

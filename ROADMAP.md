@@ -270,8 +270,14 @@ Reusable style kits now combine captions, photo motion, transitions and sound
   story’s own soundtrack. Review both ends per recording before exporting exact
   snapshots as separate editable projects. ZIP manifests identify recipe and
   source; repeated exports reuse jobs and stale approvals block the whole queue.
-- **Next: collection finishing review.** Inspect caption, framing, timing and
-  sound checks across finished collection clips before packaging a release.
+- **Collection finishing review — implemented.** Watch finished bookend clips,
+  inspect caption, framing, timing and recorded sound cues, fix them in the
+  relevant editor or acknowledge intentional choices. Pending edits block
+  approval; changes to selected outputs invalidate it. ZIP manifests retain
+  the review and watch/listen confirmations.
+- **Next: collection delivery notes.** Prepare a reusable handoff with clip
+  descriptions, intended destinations and publishing notes alongside the
+  reviewed videos, subtitles and credits.
 
 ## Later
 

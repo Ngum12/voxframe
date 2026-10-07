@@ -2843,3 +2843,10 @@ input[type="checkbox"], input[type="radio"] { flex: none; }
 .bookend-collections fieldset { min-width: 0; }
 .bookend-collections select { max-width: 100%; min-width: 0; }
 .bookend-collections h4 { overflow-wrap: anywhere; }
+
+/* Finished collection review shares the studio panel scroll area. */
+.collection-finish-review { margin-block: 1.5rem; min-width: 0; }
+.collection-finish-review .story-block { margin-block: 1rem; overflow-wrap: anywhere; }
+.collection-finish-review video { display: block; margin-block: .75rem; background: var(--canvas); border-radius: 10px; }
+.collection-finish-review .finish-issue { padding-block: .9rem; border-top: 1px solid var(--line); }
+.collection-finish-review .check { margin-block: .75rem; }

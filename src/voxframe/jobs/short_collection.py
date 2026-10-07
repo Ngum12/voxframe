@@ -48,7 +48,7 @@ def _stamps(clips: list[CollectionClip]) -> list:
 
 
 def package(title: str, clips: list[CollectionClip], directory: Path,
-            check_current: Callable[[], None]) -> dict:
+            check_current: Callable[[], None], *, review: dict | None = None) -> dict:
     check_current()
     before = _stamps(clips)
     material = {"version": 1, "title": title, "files": before,
@@ -58,6 +58,8 @@ def package(title: str, clips: list[CollectionClip], directory: Path,
                            "sound_destination": c.sound_destination,
                            "bookend_signature": c.bookend_signature, "source_job": c.source_job}
                           for c in clips]}
+    if review is not None:
+        material["finishing_review"] = review
     key = hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()[:24]
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / f"{key}.zip"
@@ -70,6 +72,8 @@ def package(title: str, clips: list[CollectionClip], directory: Path,
     folder_name = slug(title)
     manifest = {"version": 1, "collection": title,
                 "created_at": datetime.now(UTC).isoformat(), "clips": []}
+    if review is not None:
+        manifest["finishing_review"] = review
     credit_sections = []
     with tempfile.TemporaryDirectory(prefix="package-", dir=directory) as folder:
         partial = Path(folder) / "collection.zip"

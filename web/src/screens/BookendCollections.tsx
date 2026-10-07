@@ -20,8 +20,8 @@ function CollectionPreview({draft, title, busy, onReview}: {draft: Draft; title:
     <label className="check"><input type="checkbox" disabled={busy} checked={draft.closing} onChange={event => onReview("closing", event.target.checked)} />I reviewed this ending and the full soundtrack</label>
   </div>;
 }
-export function BookendCollections({jobId, plan}: {jobId: string; plan: ScenePlan}) {
-  const [open, setOpen] = useState(false), [data, setData] = useState<BookendCollectionControls | null>(null);
+export function BookendCollections({jobId, plan, initiallyOpen = false}: {jobId: string; plan: ScenePlan; initiallyOpen?: boolean}) {
+  const [open, setOpen] = useState(initiallyOpen), [data, setData] = useState<BookendCollectionControls | null>(null);
   const [signatures, setSignatures] = useState<BookendSignature[]>([]), [signature, setSignature] = useState("");
   const [selected, setSelected] = useState<string[]>([]), [words, setWords] = useState<Record<string, Words>>({});
   const [drafts, setDrafts] = useState<Record<string, Draft>>({}), [jobs, setJobs] = useState<BatchJob[]>([]);
@@ -103,7 +103,7 @@ export function BookendCollections({jobId, plan}: {jobId: string; plan: ScenePla
     try { if (resume) await resumeJob(id); else await cancelJob(id); }
     catch (e) { if (generation.current === current) setError(e instanceof Error ? e.message : "Could not update this export."); }
   }
-  return <details className="story-composer bookend-collections" onToggle={event => setOpen(event.currentTarget.open)}><summary>Bookend signature collection · one recipe, several stories</summary>
+  return <details open={open} className="story-composer bookend-collections" onToggle={event => setOpen(event.currentTarget.open)}><summary>Bookend signature collection · one recipe, several stories</summary>
     {open && <section aria-label="Bookend signature collection">
       <h3>Your signature, on every recording.</h3><p>Choose up to six finished 3–60 second videos. Audition a saved pair on each story, review both ends and export separate editable projects.</p>
       <fieldset disabled={busy}>

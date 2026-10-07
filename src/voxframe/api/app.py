@@ -473,7 +473,20 @@ class CollectionItem(BaseModel):
     title: str = Field(min_length=1, max_length=80)
 
 
+class CollectionReviewRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    clips: list[Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]] = Field(
+        min_length=1, max_length=6)
+
+
+class CollectionReviewApproval(CollectionReviewRequest):
+    fingerprint: str = Field(pattern=r"^[a-f0-9]{24}$")
+    checked: list[str] = Field(max_length=2400)
+    watched: list[Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]] = Field(max_length=6)
+
+
 class CollectionRequest(BaseModel):
+    review_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{24}$")
     title: str = Field(min_length=1, max_length=80)
     clips: list[CollectionItem] = Field(min_length=1, max_length=6)
 
@@ -2195,6 +2208,56 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 jobs.append(job.snapshot())
         return {"jobs": jobs}
 
+    def collection_report(job_id: str, ids: list[str], context: ApiContext) -> dict:
+        from voxframe.jobs.collection_review import ReviewClip, report
+
+        if context.store.get(job_id) is None:
+            raise HTTPException(404, "No such collection project.")
+        if len(set(ids)) != len(ids):
+            raise HTTPException(422, "Choose each finished clip once.")
+        clips = []
+        for child_id in ids:
+            child = context.store.get(child_id)
+            if child is None or child.options.get("batch_parent") != job_id:
+                raise HTTPException(404, "That clip does not belong to this collection project.")
+            if child.state.value != "succeeded":
+                raise HTTPException(409, "Finish every selected clip "
+                                    "before reviewing the collection.")
+            _, path, plan = _editable_plan(context, child_id)
+            files = []
+            for kind in ("video", "srt", "vtt"):
+                artifact = context.store.artifact_path(child_id, kind)
+                if artifact:
+                    _check_sandbox(context, artifact)
+                    files.append((kind, artifact))
+            height = int(child.summary.get("height") or child.options.get("height") or 1080)
+            clips.append(ReviewClip(child_id, child.audio_name, plan, path, tuple(files),
+                                    height, child.summary))
+        try:
+            return report(clips)
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(409, "A saved clip could not be reviewed. "
+                                "Open it, update the video and try again.") from exc
+
+    @app.post("/api/jobs/{job_id}/shorts/batch/collections/review")
+    def collection_finish_review(job_id: str, edit: CollectionReviewRequest,
+                                  context: ApiContext = Depends(ctx)) -> dict:
+        return collection_report(job_id, edit.clips, context)
+
+    @app.post("/api/jobs/{job_id}/shorts/batch/collections/review/approve")
+    def approve_collection_review(job_id: str, edit: CollectionReviewApproval,
+                                   context: ApiContext = Depends(ctx)) -> dict:
+        from voxframe.jobs.collection_review import approve
+
+        current = collection_report(job_id, edit.clips, context)
+        try:
+            approve(context.store.job_directory(job_id) / "collection-reviews", current,
+                    edit.fingerprint, edit.checked, edit.watched)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(409, str(exc) if isinstance(exc, ValueError)
+                                else "The review could not be saved. Try again.") from exc
+        return {"review_id": current["fingerprint"]}
+
     @app.post("/api/jobs/{job_id}/shorts/batch/collections")
     def package_short_collection(job_id: str, edit: CollectionRequest,
                                  context: ApiContext = Depends(ctx)) -> dict[str, Any]:
@@ -2208,6 +2271,20 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         title = " ".join(edit.title.split())
         if not title or any(not item.title.strip() for item in edit.clips):
             raise HTTPException(422, "Give the collection and every clip a name.")
+        review = None
+        needs_review = any(context.store.get(child_id) and
+            context.store.get(child_id).options.get("bookend_source") for child_id in ids)
+        if needs_review and edit.review_id is None:
+            raise HTTPException(409, "Review this finished bookend collection before packaging.")
+        if edit.review_id is not None:
+            from voxframe.jobs.collection_review import approved
+
+            try:
+                review = approved(context.store.job_directory(job_id) / "collection-reviews",
+                    edit.review_id, collection_report(job_id, ids, context))
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise HTTPException(409, "This collection review expired. "
+                                    "Refresh and review it again before packaging.") from exc
         clips, original = [], {}
         for item in edit.clips:
             child = context.store.get(item.job_id)
@@ -2239,6 +2316,14 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 source_job=child.options.get("bookend_source")))
 
         def check_current() -> None:
+            if review is not None:
+                from voxframe.jobs.collection_review import approved
+
+                try:
+                    approved(context.store.job_directory(job_id) / "collection-reviews",
+                        edit.review_id, collection_report(job_id, ids, context))
+                except (OSError, ValueError, KeyError, TypeError) as exc:
+                    raise ValueError("The collection review changed during packaging.") from exc
             for child_id, previous in original.items():
                 child = context.store.get(child_id)
                 if child is None or (child.state, child.artifacts, child.summary) != previous:
@@ -2249,7 +2334,7 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
 
         try:
             result = package(title, clips, context.store.job_directory(job_id) / "collections",
-                             check_current)
+                             check_current, **({"review": review} if review else {}))
         except (OSError, ValueError, TypeError) as exc:
             log.warning("collection.package_failed", reason=type(exc).__name__)
             raise HTTPException(409, "A selected export changed or could not be read. "
@@ -4535,6 +4620,7 @@ def _record_outcome(context: ApiContext, job: Job, outcome: PipelineOutcome) -> 
     edit into the video, so the pending-edit count goes back to zero.
     """
     from voxframe.plan.editing import edited_scene_count
+    from voxframe.plan.shorts import revision
 
     artifacts: dict[str, Path] = {"video": outcome.result.video_path}
     if outcome.plan_path:
@@ -4572,6 +4658,7 @@ def _record_outcome(context: ApiContext, job: Job, outcome: PipelineOutcome) -> 
                 if scene.asset_source == "atmospheric"
             ) if outcome.plan else 0,
             "pending_edits": 0,
+            "rendered_revision": revision(outcome.plan) if outcome.plan else None,
             # The sound's measurements and checks, and the settings behind
             # them, for the mix controls (D-171).
             "sound": outcome.result.sound,

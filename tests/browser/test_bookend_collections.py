@@ -132,13 +132,39 @@ def test_collection_previews_each_recording_exports_exact_plans_and_packages_pro
     with page.expect_response(lambda response: response.url.endswith("/bookend-collections") and response.request.method == "POST") as repeat:
         export.click()
     assert [item["id"] for item in repeat.value.json()["jobs"]] == ids
+    # One finished export intentionally has no recorded subtitle companions.
+    child = store.get(ids[0])
+    store.record_result(child, artifacts={key: Path(value) for key, value in child.artifacts.items() if key not in {"srt", "vtt"}}, warnings=tuple(child.warnings), summary=dict(child.summary))
     bundle = panel.get_by_role("region", name="Bookend collection", exact=True)
     fixtures.playwright_api.expect(bundle.get_by_role("button", name="Select finished clips", exact=True)).to_be_enabled(timeout=30_000)
     bundle.get_by_role("button", name="Select finished clips", exact=True).click()
     bundle.get_by_label("Collection name", exact=True).fill("My signature stories")
+    review = bundle.get_by_role("region", name="Collection finishing review", exact=True)
+    fixtures.playwright_api.expect(review.get_by_role("button", name="Approve collection review", exact=True)).to_be_visible()
+    fixtures.playwright_api.expect(bundle.get_by_role("button", name="Build collection", exact=True)).to_be_disabled()
+    page.wait_for_function("() => [...document.querySelectorAll('.collection-finish-review video')].length === 2 && [...document.querySelectorAll('.collection-finish-review video')].every(video => video.readyState >= 2)")
+    review.locator("video").first.evaluate("video => video.play()")
+    page.wait_for_function("() => document.querySelector('.collection-finish-review video').currentTime > .1")
+    review.locator("video").nth(1).evaluate("video => video.play()")
+    assert review.locator("video").first.evaluate("video => video.paused")
+    review.get_by_role("button", name="Review in Export", exact=True).click()
+    fixtures.playwright_api.expect(page.get_by_role("button", name="Back to collection", exact=True)).to_be_visible()
+    fixtures.playwright_api.expect(page.get_by_role("tab", name="Export", exact=True)).to_have_attribute("aria-selected", "true")
+    page.get_by_role("button", name="Back to collection", exact=True).click()
+    fixtures.playwright_api.expect(bundle.get_by_label("Collection name", exact=True)).to_have_value("My signature stories")
+    fixtures.playwright_api.expect(review.get_by_role("button", name="Approve collection review", exact=True)).to_be_visible()
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    for checkbox in review.get_by_role("checkbox", name=re.compile("I watched and listened")).all():
+        checkbox.check()
+    fixtures.playwright_api.expect(review.get_by_role("button", name="Approve collection review", exact=True)).to_be_disabled()
+    review.get_by_role("checkbox", name="Mark checked: No subtitle companion is recorded", exact=True).check()
+    review.get_by_role("button", name="Approve collection review", exact=True).click()
+    fixtures.playwright_api.expect(review.get_by_role("button", name="Collection review approved", exact=True)).to_be_visible()
     with page.expect_response(lambda response: response.url.endswith("/shorts/batch/collections") and response.request.method == "POST") as package:
         bundle.get_by_role("button", name="Build collection", exact=True).click()
     assert package.value.status == 200
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    page.screenshot(path=str(work / "collection-finishing-review-phone.png"), full_page=True)
     with page.expect_download() as download:
         bundle.get_by_role("link", name="Download collection ZIP", exact=True).click()
     assert download.value.suggested_filename == "my-signature-stories.zip"
@@ -146,6 +172,8 @@ def test_collection_previews_each_recording_exports_exact_plans_and_packages_pro
     download.value.save_as(str(destination))
     with zipfile.ZipFile(destination) as archive:
         manifest = json.loads(archive.read("my-signature-stories/manifest.json"))
+        assert len(manifest["finishing_review"]["watched_clips"]) == 2
+        assert manifest["finishing_review"]["acknowledged_cues"][0]["title"] == "No subtitle companion is recorded"
         assert len(manifest["clips"]) == 2
         assert all(item["bookend_signature"] == recipe.name for item in manifest["clips"])
         assert {item["source_project_id"] for item in manifest["clips"]} == {project[0].id for project in projects}

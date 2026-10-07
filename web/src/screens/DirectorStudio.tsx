@@ -15,7 +15,8 @@ const descriptions = {
   energy: "Faster beats, stronger punch-ins and bold text.",
   cinema: "Longer shots, restrained framing and warm accents.",
 };
-export function DirectorStudio({ jobId, plan, sceneIndex, onEdited }: {
+export function DirectorStudio({ jobId, plan, sceneIndex, onEdited, openCollection }: {
+  openCollection?: boolean;
   jobId: string; plan: ScenePlan; sceneIndex: number; onEdited: (result: PlanEditResult) => void;
 }) {
   const [data, setData] = useState<DirectionControls | null>(null);
@@ -56,7 +57,7 @@ export function DirectorStudio({ jobId, plan, sceneIndex, onEdited }: {
     <SignatureKits jobId={jobId} plan={plan} onEdited={onEdited} />
     <OpeningAuditions jobId={jobId} plan={plan} onEdited={onEdited} />
     <BookendAuditions jobId={jobId} plan={plan} onEdited={onEdited} />
-    <BookendCollections jobId={jobId} plan={plan} />
+    <BookendCollections jobId={jobId} plan={plan} initiallyOpen={openCollection} />
     <ClosingAuditions jobId={jobId} plan={plan} onEdited={onEdited} />
     <CompleteAuditions jobId={jobId} plan={plan} onEdited={onEdited} />
     <VisualPlacementStudio jobId={jobId} plan={plan} onEdited={onEdited} />

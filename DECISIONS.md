@@ -7095,7 +7095,7 @@ the source’s export height and destination settings. A queue lock and approval
 identity make repeat requests reuse jobs. Stop/resume and progress use existing
 job actions. Shared collection packaging adds recipe and source provenance to
 bookend manifest entries while retaining finished-file checksums, credits, subtitle
-companions and pending-edit rejection. No source files or plans enter the ZIP.
+companions and pending-edit metadata. No source files or plans enter the ZIP.
 
 The UI requires two reviews for each current choice. Phrase or recipe changes
 unmount and pause old players; new renders clear reviews. Source refresh changes
@@ -7109,3 +7109,30 @@ gates and pinned choices, pauses changed previews, measures each export’s fram
 and soundtrack, checks mobile layout and repeat queueing, then downloads and
 inspects the actual collection ZIP. Existing packaging and signature flows are
 regression-checked.
+
+
+## D-229 — Finished bookend collections require an output-bound review
+
+Reuse individual finishing cues and recorded render sound measurements, with
+unique clip-scoped cue IDs. Report missing outputs and unrendered saved edits as
+blockers. Record the rendered plan revision for new outputs; use plan history
+and conservative timestamp checks for older projects. Do not claim pixel or
+semantic inspection.
+
+Require acknowledgement of every current cue plus a watch/listen confirmation
+for every selected finished clip. Bind approvals to selection order, saved plan
+revisions, output file stamps and sound measurements. Recheck before and during
+ZIP packaging. Include the public receipt in the manifest, without local paths
+or source plans. Legacy ordinary Shorts snapshot packaging remains compatible.
+
+The collection screen shows finished players and links to the relevant clip,
+scene and controls. Return navigation restores selected clips, names and order
+from optional browser session storage. Changing selections resets approval.
+
+Validation covers missing subtitles, recorded sound failures, per-clip cue IDs,
+required confirmations, pending edits, stale files/plans/order/measurements,
+authentication and changes during packaging. Chromium renders and plays two
+finished clips, checks exclusive audible playback, follows a cue into Export
+and returns with the collection form intact, then verifies the actual ZIP
+receipt and phone layout. Existing Shorts and individual finishing review
+workflows remain covered.

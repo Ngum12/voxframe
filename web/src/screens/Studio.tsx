@@ -183,7 +183,11 @@ export function Studio({
   sourcingEnabled,
   onShowPlan,
   onAgain,
+  initialReview, openCollection, onBackCollection,
 }: {
+  initialReview?: import("../api").ClipReviewTarget | null;
+  openCollection?: boolean;
+  onBackCollection?: () => void;
   jobId: string;
   initialJob: Job;
   sourcingEnabled: boolean;
@@ -269,6 +273,15 @@ export function Studio({
     },
     [duration],
   );
+  const appliedReview = useRef(false);
+  useEffect(() => {
+    if (!plan || !initialReview || appliedReview.current) return;
+    appliedReview.current = true;
+    const target = plan.scenes.find(s => s.index === initialReview.scene);
+    const at = target ? target.start_frame / plan.fps + .001 : 0;
+    resumeAt.current = at; seek(at);
+    setLayout(current => ({...current, panelOpen: true})); setTab(initialReview.action);
+  }, [plan, initialReview, seek]);
   const togglePlay = useCallback(() => {
     const element = video.current;
     if (!element) return;
@@ -440,6 +453,7 @@ export function Studio({
   return (
     <div className="studio" data-timeline={layout.timelineOpen ? "open" : "closed"}>
       <div className="studio-bar">
+        {onBackCollection && <button className="btn" onClick={onBackCollection}>Back to collection</button>}
         <div className="studio-project">
           <strong>{plan.scenes.find((s) => s.card_kind === "title")?.card_text || job.audio_name || "Your video"}</strong>
           <span>
@@ -731,7 +745,7 @@ export function Studio({
               plan={plan} canListen={pending === 0} onEdited={afterEdit} onSeek={seek} />}
 
             {tab === "director" && <DirectorStudio key={`${jobId}-${planVersion}-${scene.index}`}
-              jobId={jobId} plan={plan} sceneIndex={scene.index} onEdited={afterEdit} />}
+              jobId={jobId} plan={plan} sceneIndex={scene.index} onEdited={afterEdit} openCollection={openCollection} />}
 
             {tab === "export" && <ExportStudio jobId={jobId} plan={plan} onEdited={afterEdit} pending={pending}
               onReview={(index, action) => {
