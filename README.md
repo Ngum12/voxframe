@@ -100,7 +100,9 @@ chapter cards and highlights. [Walk through the controls](docs/web-app.md).
 - **Opening auditions.** Give your first spoken words a clear quote, a word
   punch or a cinematic reveal. Compare complete drafts with sound, review the
   return to the story, and choose the exact preview with Undo. Keep current
-  shots or lead with speaker footage or an existing project picture.
+  shots or lead with speaker footage or an existing project picture. Save a
+  reviewed opening as a named signature, then preview it on another recording
+  with that recording’s own words, picture and soundtrack.
 - **A finishing review.** Inspect potential caption, framing, timing and sound
   issues, with evidence and a route to the relevant controls. Mark intentional
   choices checked. The review uses saved settings and metadata; watch and listen

@@ -1101,6 +1101,12 @@ export const saveComplete = (id: string, choice: CompleteWinner) => request<Plan
 export interface OpeningChoice { revision: string; last_word: number; look: VisualBeat["look"]; shot: "keep" | "speaker" | "picture"; asset_scene: number | null; match_captions: boolean; replace_pinned: boolean }
 export interface OpeningWindow { last_word: number; quote: string; start: number; end: number; pinned: boolean; has_speaker: boolean }
 export interface OpeningControls { revision: string; eligible: boolean; endings: OpeningWindow[]; default_last_word: number | null; profiles: Record<VisualBeat["look"], {label: string; note: string}>; visuals: {scene: number; quote: string; credit: string}[] }
-export interface OpeningPreview extends CompletePreview { opening: OpeningWindow }
+export interface OpeningPreview extends CompletePreview { opening: OpeningWindow; opening_id: string; settings: OpeningChoice; signature?: {id: string; name: string} }
 export const getOpeningAuditions = (id: string) => request<OpeningControls>(`/api/jobs/${id}/opening-auditions`);
 export const previewOpening = (id: string, choice: OpeningChoice) => request<OpeningPreview>(`/api/jobs/${id}/opening-auditions/preview`, {method: "POST", body: JSON.stringify(choice)});
+
+export interface OpeningSignature { id: string; name: string; look: OpeningChoice["look"]; shot: OpeningChoice["shot"]; match_captions: boolean; preferred_words: number }
+export const listOpeningSignatures = () => request<{signatures: OpeningSignature[]}>("/api/opening-signatures");
+export const saveOpeningSignature = (jobId: string, name: string, revision: string, opening_id: string) => request<OpeningSignature>(`/api/jobs/${jobId}/opening-signatures`, {method: "POST", body: JSON.stringify({name, revision, opening_id})});
+export const deleteOpeningSignature = (id: string) => request<void>(`/api/opening-signatures/${id}`, {method: "DELETE"});
+export const previewOpeningSignature = (jobId: string, choice: Pick<OpeningChoice, "revision" | "last_word" | "asset_scene" | "replace_pinned">, signature_id: string) => request<OpeningPreview>(`/api/jobs/${jobId}/opening-signatures/preview`, {method: "POST", body: JSON.stringify({...choice, signature_id})});

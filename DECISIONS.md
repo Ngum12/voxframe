@@ -6951,3 +6951,33 @@ three drafts against exported audio and original narration, verify music is
 audible, and measure delayed-footage clap sync and exact frame counts.
 Chromium exercises three drafts, review gating, comparison sound, stale form
 controls, phone layout, exact winner save, Undo/Redo and final export.
+
+
+## D-224: reusable recipes from reviewed opening snapshots
+
+Opening signatures persist only look, shot preference, caption matching and
+preferred word count in a separate local configuration file. They carry no
+quoted words, media paths, picture indexes, soundtrack, mix settings or
+pinned-text replacement permissions. The new recording supplies all content
+and sound. Picture choice and pinned-text replacement require fresh input.
+
+Each opening render records its server-resolved choice alongside the complete
+preview identity. A save request names this approval, not mutable form fields.
+Validate the source revision, sandbox, renderer/source freshness and exact
+reproduction of the approved plan before extracting the portable recipe.
+The recipe is saved without applying or changing a project. Applying on a
+new recording uses the existing complete-preview and undoable winner path.
+
+Signature names are normalized and unique ignoring case, up to 30. Thread
+locking and atomic replacement retain concurrent saves; temporary writes are
+cleaned after failures. Invalid existing stores are kept and surfaced. Removal
+changes only the saved list, leaving projects and reviewed drafts usable.
+The UI gates saving on the named draft’s review and keeps comparison drafts
+independent of later controls.
+
+Units cover persistence, privacy, naming, limits, concurrent saves, damaged
+files, forged/stale approvals, new project words and sound, replacement
+permissions, authentication and independent deletion. Chromium saves an
+opening after changing its form controls, reuses it with a different recording,
+picture and audible soundtrack, checks duplicate-name recovery and phone
+layout, then exercises exact apply, Undo/Redo, export and safe removal.

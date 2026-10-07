@@ -380,6 +380,22 @@ class VisualEdit(BaseModel):
     beat: VisualBeat | None = None
 
 
+class OpeningSignatureSave(BaseModel):
+    model_config = {"extra": "forbid"}
+    name: str = Field(min_length=1, max_length=60)
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    opening_id: str = Field(pattern=r"^[a-f0-9]{24}$")
+
+
+class OpeningSignaturePreview(BaseModel):
+    model_config = {"extra": "forbid"}
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    signature_id: str = Field(pattern=r"^[a-f0-9]{32}$")
+    last_word: int = Field(ge=0)
+    asset_scene: int | None = Field(default=None, ge=0)
+    replace_pinned: bool = False
+
+
 class CompleteWinner(BaseModel):
     revision: str = Field(pattern=r"^[a-f0-9]{24}$")
     preview_id: str = Field(pattern=r"^[a-f0-9]{24}$")
@@ -2501,7 +2517,7 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
     def opening_preview(job_id: str, choice: OpeningChoice,
                         context: ApiContext = Depends(ctx)) -> dict[str, Any]:
         from voxframe.plan.editing import EditError
-        from voxframe.plan.opening_audition import audition
+        from voxframe.plan.opening_audition import audition, record
         from voxframe.plan.shorts import revision
         from voxframe.render.compose.complete_preview import complete_preview
 
@@ -2514,8 +2530,9 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             raise HTTPException(422, str(exc)) from exc
         check_complete_sources(draft, context)
         try:
-            result = complete_preview(draft, choice.revision,
-                context.store.job_directory(job_id) / "complete-previews")
+            root = context.store.job_directory(job_id)
+            result = complete_preview(draft, choice.revision, root / "complete-previews")
+            opening_id = record(root / "opening-previews", choice, result["key"])
         except Exception as exc:
             log.warning("opening.preview_failed", reason=type(exc).__name__)
             raise HTTPException(422, "The opening audition could not be rendered. "
@@ -2524,7 +2541,72 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 if key not in {"plan", "stamps", "engine"}} | {
             "preview_id": result["key"],
             "url": f"/api/jobs/{job_id}/complete-previews/{result['key']}",
-            "source_ranges": [], "opening": opening}
+            "source_ranges": [], "opening": opening, "opening_id": opening_id,
+            "settings": choice.model_dump(mode="json")}
+
+    @app.get("/api/opening-signatures")
+    def opening_signatures(context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.config.opening_signatures import load
+
+        try:
+            return {"signatures": [signature.model_dump(mode="json") for signature in load()]}
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(422, "Your opening signatures could not be read. "
+                                "The file was kept.") from exc
+
+    @app.delete("/api/opening-signatures/{signature_id}", status_code=204)
+    def delete_opening_signature(signature_id: str,
+                                 context: ApiContext = Depends(ctx)) -> Response:
+        from voxframe.config.opening_signatures import delete
+
+        try:
+            delete(signature_id)
+        except KeyError as exc:
+            raise HTTPException(404, "That opening signature was already removed.") from exc
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(422, "The opening signature file could not be updated. "
+                                "It was kept.") from exc
+        return Response(status_code=204)
+
+    @app.post("/api/jobs/{job_id}/opening-signatures", status_code=201)
+    def save_opening_signature(job_id: str, edit: OpeningSignatureSave,
+                               context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.config.opening_signatures import save
+        from voxframe.plan.opening_audition import reviewed_style
+        from voxframe.plan.shorts import revision
+
+        _, _, plan = _editable_plan(context, job_id)
+        if edit.revision != revision(plan):
+            raise HTTPException(409, "This story changed. Render and review the opening again.")
+        try:
+            style = reviewed_style(plan, context.store.job_directory(job_id), edit.opening_id,
+                edit.revision, lambda draft: check_complete_sources(draft, context))
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(409, "This opening approval expired. "
+                                "Render and review it again.") from exc
+        try:
+            return save(edit.name, style).model_dump(mode="json")
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(422, str(exc) if isinstance(exc, ValueError)
+                else "Your opening signature could not be saved.") from exc
+
+    @app.post("/api/jobs/{job_id}/opening-signatures/preview")
+    def preview_opening_signature(job_id: str, edit: OpeningSignaturePreview,
+                                  context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.config.opening_signatures import load
+
+        try:
+            signature = next((s for s in load() if s.id == edit.signature_id), None)
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(422, "Your opening signatures could not be read. "
+                                "The file was kept.") from exc
+        if signature is None:
+            raise HTTPException(404, "That opening signature was removed. Choose another.")
+        choice = OpeningChoice(revision=edit.revision, last_word=edit.last_word,
+            look=signature.look, shot=signature.shot, asset_scene=edit.asset_scene,
+            match_captions=signature.match_captions, replace_pinned=edit.replace_pinned)
+        return opening_preview(job_id, choice, context) | {
+            "signature": {"id": signature.id, "name": signature.name}}
 
     @app.get("/api/jobs/{job_id}/complete-auditions")
     def complete_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:

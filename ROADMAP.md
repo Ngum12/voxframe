@@ -248,8 +248,12 @@ Reusable style kits now combine captions, photo motion, transitions and sound
   speaker/project-picture framing, preview the full story with music, review
   the opening and return, then save the exact snapshot with Undo. Source clocks
   and narration stay intact; pinned opening text needs explicit replacement.
-- **Next: reusable opening signatures.** Save a reviewed opening treatment and
-  audition it on new recordings with their own words and pictures.
+- **Reusable opening signatures — implemented.** Save the recipe of an exact
+  reviewed opening, then audition it with a new recording’s own words, picture
+  and soundtrack. Signatures persist locally and never copy source media or
+  permission to replace pinned text. Removal leaves projects and drafts intact.
+- **Next: closing auditions.** Give the final spoken idea a deliberate visual
+  payoff, compare complete drafts with sound, and choose a reviewed finish.
 
 ## Later
 

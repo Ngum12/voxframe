@@ -638,3 +638,34 @@ treatment without trimming speech; surrounding captions keep their own words.
 Changed plans or source files expire old approvals. The last six auditions
 stay available during this session. Compare treatments by watching; they do
 not predict engagement or rewrite what you said.
+
+
+## Reuse your opening signature
+
+In **Director → Opening auditions**, render and review a treatment, then
+choose it in **Opening to save**, enter a name and choose **Save reviewed
+opening signature**. Save before applying the opening to this project. The
+recipe comes from that rendered draft even if the current controls changed.
+Expired source edits or media require a new preview before saving.
+
+On another 3–60 second recording, choose the name in **Opening signature**.
+Its look, caption choice, shot preference and preferred word count populate
+the controls. The opening words come from the new transcript; word count is
+a starting point, so adjust the last word to complete the thought. Picture
+signatures require a fresh picture selection from this project. Speaker
+signatures need speaker footage; choose current shots to make a new recipe
+when it is unavailable. Changing the look, shot or caption matching exits
+the saved signature and makes a new opening recipe.
+
+Choose **Preview saved opening signature**, hear the new story and soundtrack,
+mark its review checkbox, then **Use this opening**. The saved recipe does not
+copy old words, media paths, picture indexes, soundtrack, mix settings or
+permission to replace pinned opening text. Each recording needs a fresh
+replacement choice when its opening text is pinned. Applying the new preview
+is one undoable edit; **Update video** creates its final export.
+
+Signatures persist in the local Voxframe configuration across restarts. Names
+are unique ignoring case, with up to 30 signatures. **Remove saved signature**
+removes the named recipe while keeping existing projects and rendered drafts.
+An already-reviewed draft remains usable after its recipe is removed. Damaged
+signature files are reported and preserved rather than overwritten.

@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+import re
+from collections.abc import Callable
+from pathlib import Path
 from typing import Literal
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from voxframe.config.captions import CAPTION_PRESETS
+from voxframe.config.opening_signatures import OpeningStyle
 from voxframe.config.visuals import LOOKS, VisualBeat
 from voxframe.plan.editing import EditError
 from voxframe.plan.scene_plan import ScenePlan
@@ -153,3 +160,37 @@ def audition(plan: ScenePlan, choice: OpeningChoice) -> tuple[ScenePlan, dict]:
             }
         )
     return draft, option
+
+
+def record(directory: Path, choice: OpeningChoice, preview_id: str) -> str:
+    """Bind reusable intent to the exact server-rendered opening audition."""
+    payload = {"choice": choice.model_dump(mode="json"), "preview_id": preview_id}
+    key = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:24]
+    directory.mkdir(parents=True, exist_ok=True)
+    temporary = directory / f"{uuid4().hex}.partial"
+    try:
+        temporary.write_text(json.dumps(payload), encoding="utf-8")
+        temporary.replace(directory / f"{key}.json")
+    finally:
+        temporary.unlink(missing_ok=True)
+    return key
+
+
+def reviewed_style(plan: ScenePlan, directory: Path, opening_id: str, origin_revision: str,
+                   check_plan: Callable[[ScenePlan], None]) -> OpeningStyle:
+    """Read the server's recorded choice, never a current browser control."""
+    from voxframe.render.compose.complete_preview import winner
+
+    payload = json.loads((directory / "opening-previews" / f"{opening_id}.json").read_text(
+        encoding="utf-8"))
+    choice = OpeningChoice.model_validate(payload["choice"])
+    preview_id = payload["preview_id"]
+    if re.fullmatch(r"[a-f0-9]{24}", str(preview_id)) is None or choice.revision != origin_revision:
+        raise ValueError("This opening belongs to an earlier edit.")
+    actual = winner(directory / "complete-previews", preview_id, origin_revision,
+                    check_plan=check_plan)
+    expected, _ = audition(plan, choice)
+    if actual != expected:
+        raise ValueError("This opening recipe no longer matches its preview.")
+    return OpeningStyle(look=choice.look, shot=choice.shot,
+                        match_captions=choice.match_captions, preferred_words=choice.last_word + 1)
