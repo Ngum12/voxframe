@@ -6817,3 +6817,18 @@ Encoded-video checks identify the soundtrack tone in a silent source interval,
 compare draft and exported waveforms, and measure voice-only frame count/sync.
 Chromium checks real project/library auditions, shared playback, sound switching,
 phone layout, a cached winner chosen after form changes, history and export.
+
+## D-219: portable signature style kits with snapshot auditions
+
+Creative settings gain optional transition treatment, camera movement and a
+text-only style template (look, placement, zoom). Older preset files load with
+null visual fields. Capture is explicit and selected-scene based; no words,
+paths, credits, shot choices or timing are copied. Applying replaces caption
+overrides and sound settings, optionally transitions, and restyles existing
+beats and moving photos. Held photos remain still and source clocks stay intact.
+
+Uploads apply the same pure helper. Current 3-60 second stories use the complete
+audition renderer and authenticated cached snapshot winner endpoint, including
+source-file freshness, revision checks, sandbox checks and one history edit.
+Deleting a kit cannot change a rendered snapshot. Chromium checks saving a kit,
+real draft playback, exact application, mobile layout, stale revision and Undo.

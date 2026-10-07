@@ -3,21 +3,34 @@ from __future__ import annotations
 
 import json
 from threading import RLock
+from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from voxframe.config.camera import CameraMove
 from voxframe.config.captions import CaptionTreatment
+from voxframe.config.transitions import TransitionTreatment
 from voxframe.config.userprefs import config_path
 from voxframe.plan.audio_mix import AudioMix
 
 LOCK = RLock()
 
 
+class BeatStyle(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    look: Literal["authority", "energy", "cinema"]
+    position: Literal["auto", "top", "center"] = "auto"
+    zoom: float = Field(default=1, ge=1, le=1.25)
+
+
 class CreativeSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     caption_treatment: CaptionTreatment | None = None
     audio_mix: AudioMix = Field(default_factory=AudioMix)
+    transition_treatment: TransitionTreatment | None = None
+    camera_move: CameraMove | None = None
+    beat_style: BeatStyle | None = None
 
 
 class CreativePreset(CreativeSettings):

@@ -82,9 +82,10 @@ chapter cards and highlights. [Walk through the controls](docs/web-app.md).
   Choose **Steady bed**, **Cinematic rise** or **Punch & breathe**, then hear the
   opening and ending. Build your own music library or discover openly licensed
   tracks when you enable online music search.
-- **Your signature preset.** Save a chosen scene's caption treatment and the
-  project's sound mix under your own name. Select it after uploading your next
-  recording. Footage, words, cuts and music files stay specific to each project.
+- **Signature style kits.** Save captions and sound, with optional transitions,
+  photo movement and text styling. Reuse a kit after uploading, or audition it
+  on a 3–60 second story in Director and apply the exact preview with Undo.
+  Your words, cuts and media stay specific to each project.
 - **A finishing review.** Inspect potential caption, framing, timing and sound
   issues, with evidence and a route to the relevant controls. Mark intentional
   choices checked. The review uses saved settings and metadata; watch and listen

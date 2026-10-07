@@ -502,3 +502,20 @@ audio stems, so timing edits can be auditioned before Update video. After
 choosing, **Update video** makes the final export at your saved export settings.
 The older Shorts passage and direction previews still defer added music until
 Update video; Complete auditions is the place to compare the full soundtrack.
+
+## Signature style kits
+
+In Export, save a creative preset and tick **Include this scene’s transition,
+photo movement and text styling** to capture a visual kit. Choose a scene whose
+settings you want to reuse. Kits contain styling, never words or media paths.
+
+For a 3–60 second story, open **Director → Signature style kits**, select a
+kit and choose **Preview signature kit**. The draft includes your current music.
+**Apply previewed kit** saves exactly that draft as one undoable edit; use
+**Update video** to export it. Changed source media expires the draft.
+
+Included transitions replace join styling. Text styling changes existing beats
+without adding text; photo movement changes moving photographs while held photos
+stay still. Caption overrides are replaced; words, emphasis, cuts, shot choices
+and project media stay intact. Older caption/sound presets keep visual choices.
+Saved kits also appear on new uploads of any length.

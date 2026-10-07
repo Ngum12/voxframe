@@ -194,12 +194,14 @@ export interface Job {
   summary: JobSummary;
 }
 
-export interface CreativeSettings { caption_treatment: CaptionTreatment | null; audio_mix: AudioMix }
+export interface CreativeSettings { caption_treatment: CaptionTreatment | null; audio_mix: AudioMix; transition_treatment?: TransitionTreatment | null; camera_move?: CameraMove | null; beat_style?: Pick<VisualBeat, "look" | "position" | "zoom"> | null }
 export interface CreativePreset extends CreativeSettings { id: string; name: string }
 export const listCreativePresets = () => request<{ presets: CreativePreset[] }>("/api/creative-presets");
 export const deleteCreativePreset = (id: string) => request<void>(`/api/creative-presets/${id}`, {method: "DELETE"});
-export const saveCreativePreset = (jobId: string, name: string, revision: string, scene: number) =>
-  request<CreativePreset>(`/api/jobs/${jobId}/creative-presets`, {method: "POST", body: JSON.stringify({name, revision, scene})});
+export const saveCreativePreset = (jobId: string, name: string, revision: string, scene: number, include_visuals = false) =>
+  request<CreativePreset>(`/api/jobs/${jobId}/creative-presets`, {method: "POST", body: JSON.stringify({name, revision, scene, include_visuals})});
+export const previewSignatureKit = (jobId: string, revision: string, preset_id: string) =>
+  request<ShortPreview & {preview_id: string}>(`/api/jobs/${jobId}/signature-kits/preview`, {method: "POST", body: JSON.stringify({revision, preset_id})});
 
 export interface RenderOptions {
   creative?: CreativeSettings | null;

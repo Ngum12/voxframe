@@ -227,9 +227,11 @@ Next: reusable style kits that combine captions, photo motion and sound.
   with project music, a saved track or no added music; adjust the arc and mix,
   compare synchronized drafts, and choose the exact previewed treatment as one
   undoable edit. Changed source files expire old winners.
-- **Next: signature style kits and batch Shorts.** Extend saved creative
-  presets into reusable treatments, and review several distinct clips from
-  one recording before exporting them.
+- **Signature style kits — implemented.** Save optional transition, photo and
+  text treatments with captions and sound. Reuse on upload or preview the
+  current short with its soundtrack, then save the exact snapshot with Undo.
+- **Next: batch Shorts.** Review several distinct clips from one recording
+  before exporting them.
 
 ## Later
 
