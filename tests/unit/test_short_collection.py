@@ -27,7 +27,7 @@ def clip(folder: Path, job_id: str = "a" * 32, title: str = "My hook") -> Collec
         files.append((kind, path))
     return CollectionClip(job_id=job_id, title=title, files=tuple(files),
                           credits=("Picture: Test author (CC0)", "Music: Original artist"),
-                          width=720, height=1280)
+                          width=720, height=1280, platform="reels", sound_destination="social")
 
 
 def test_finished_bytes_subtitles_and_credits_are_complete_and_cache_is_immutable(tmp_path):  # type: ignore[no-untyped-def]
@@ -42,6 +42,7 @@ def test_finished_bytes_subtitles_and_credits_are_complete_and_cache_is_immutabl
         manifest = json.loads(archive.read("launch-collection/manifest.json"))
         item = manifest["clips"][0]
         assert item["title"] == first.title and item["width"] == 720
+        assert item["platform"] == "reels" and item["sound_destination"] == "social"
         for entry, (kind, source) in zip(item["files"], first.files, strict=True):
             assert archive.read(f"launch-collection/{entry['name']}") == source.read_bytes()
             assert entry["sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()

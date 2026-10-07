@@ -6891,3 +6891,32 @@ cache reuse/recovery, changed exports, owner/state/path checks, safe naming,
 ordering, omitted subtitle outputs and authenticated ranged downloads.
 Chromium packages two real rendered clips, changes names/order, downloads
 and opens the ZIP, verifies its bytes/credits and checks phone layout.
+
+
+## D-222: reviewed destination variants of finished batch clips
+
+A destination variant starts from a finished child clip’s current saved plan,
+not a reconstructed word range. This preserves its deliberate cuts, source
+clocks, captions, pictures, music and score. Configure only portrait export
+settings and the sound destination. Up to six sources and four destinations
+produce at most 24 separately editable exports per request.
+
+Preview renders complete drafts with actual music and keeps immutable plan,
+source-stamp and renderer snapshots. A variant approval binds the source job,
+saved revision, destination and complete-preview identity. Export validates
+the whole request before creating jobs, rejects duplicate source/destination
+pairs, then copies the exact approved plan and selected height into ordinary
+queued jobs. The existing renderer checks approval freshness, supports Stop
+and Resume, and keeps subsequent edits independent of the original clip.
+
+The UI reviews each matching preview; changes to settings or source revisions
+select different preview identities. Guides sit over the portrait preview
+without intercepting controls. Opening a new audible player pauses the old
+one. Collections use destination metadata from the rendered summary rather
+than pending plan settings. MP4 bytes remain unchanged during packaging.
+
+Units cover preserved edits and music, exact snapshots, idempotence, stale
+media/revisions, duplicate and ownership limits, sandboxing and authentication.
+Chromium previews and exports two destinations with real music, checks review
+gates, frame counts, audible soundtrack, original-plan preservation, collection
+metadata and phone layout.

@@ -25,6 +25,8 @@ class CollectionClip:
     width: int | None = None
     height: int | None = None
     pending_edits: int = 0
+    platform: str | None = None
+    sound_destination: str | None = None
 
 
 def slug(name: str) -> str:
@@ -50,7 +52,8 @@ def package(title: str, clips: list[CollectionClip], directory: Path,
     material = {"version": 1, "title": title, "files": before,
                 "clips": [{"id": c.job_id, "title": c.title, "credits": c.credits,
                            "width": c.width, "height": c.height,
-                           "pending_edits": c.pending_edits} for c in clips]}
+                           "pending_edits": c.pending_edits, "platform": c.platform,
+                           "sound_destination": c.sound_destination} for c in clips]}
     key = hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()[:24]
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / f"{key}.zip"
@@ -71,7 +74,8 @@ def package(title: str, clips: list[CollectionClip], directory: Path,
                 stem = f"{number:02d}-{slug(clip.title)}"
                 item = {"number": number, "title": clip.title, "project_id": clip.job_id,
                         "width": clip.width, "height": clip.height,
-                        "pending_edits": clip.pending_edits, "files": [],
+                        "pending_edits": clip.pending_edits, "platform": clip.platform,
+                        "sound_destination": clip.sound_destination, "files": [],
                         "credits": list(clip.credits)}
                 for kind, source in clip.files:
                     name = f"{stem}.{kind}"

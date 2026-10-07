@@ -983,12 +983,23 @@ export interface BatchPreview extends ShortPreview {
   clip_id: string; preview_id: string; text: string; context_before: string; context_after: string;
   payoff: string; warnings: string[]; music_note: string; has_music: boolean;
 }
-export interface BatchJob { clip_id: string; height: number; job: Job }
+export interface BatchJob { clip_id: string; height: number; job: Job; platform?: string | null; variant_source?: string | null }
 export const getBatchShorts = (id: string) => request<{jobs: BatchJob[]}>(`/api/jobs/${id}/shorts/batch`);
 export const previewBatchShort = (id: string, choice: ShortChoice) =>
   request<BatchPreview>(`/api/jobs/${id}/shorts/batch/preview`, {method: "POST", body: JSON.stringify(choice)});
 export const exportBatchShorts = (id: string, revision: string, clips: string[], height: 1280 | 1920) =>
   request<{jobs: Job[]}>(`/api/jobs/${id}/shorts/batch`, {method: "POST", body: JSON.stringify({revision, clips, height})});
+export interface VariantControls {
+  sources: {job: Job; revision: string; seconds: number}[];
+  profiles: Record<ShortExport["platform"], {label: string; settings: ShortExport; target_lufs: number; true_peak: number}>;
+}
+export interface VariantChoice { source_job: string; revision: string; settings: ShortExport }
+export interface VariantPreview extends CompletePreview {variant_id: string; settings: ShortExport; destination: string}
+export const getDestinationVariants = (id: string) => request<VariantControls>(`/api/jobs/${id}/shorts/batch/variants`);
+export const previewDestinationVariant = (id: string, choice: VariantChoice) =>
+  request<VariantPreview>(`/api/jobs/${id}/shorts/batch/variants/preview`, {method: "POST", body: JSON.stringify(choice)});
+export const exportDestinationVariants = (id: string, variants: string[]) =>
+  request<{jobs: Job[]}>(`/api/jobs/${id}/shorts/batch/variants`, {method: "POST", body: JSON.stringify({variants})});
 export interface ShortCollection { key: string; name: string; bytes: number; clips: number; url: string }
 export const packageShortCollection = (id: string, title: string, clips: {job_id: string; title: string}[]) =>
   request<ShortCollection>(`/api/jobs/${id}/shorts/batch/collections`, {method: "POST", body: JSON.stringify({title, clips})});

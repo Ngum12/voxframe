@@ -575,3 +575,30 @@ collections remain snapshots if you later update a clip. Selected jobs and
 files must stay unchanged while assembling; missing or changing exports ask
 you to build again. Repeated builds of an unchanged selection reuse its ZIP.
 Collection downloads support byte ranges. Your original projects stay intact.
+
+
+## Destination versions of finished Shorts
+
+Open **Shorts → Batch Shorts → Destination versions** once a batch clip has
+finished. Choose up to six source clips and any of YouTube Shorts, Instagram
+Reels, TikTok and WhatsApp Status. Each destination has portrait text guides,
+a 1280/1920 pixel height, an optional progress line and a sound target.
+
+Choose **Preview destination versions**. These are complete drafts with the
+clip’s saved edits and music, including pending edits. Watch and hear every
+version, then mark its review checkbox. Placement guides are preview overlays;
+caption and text positions use those saved insets in the export. The overlays
+are guides rather than a promise about every platform’s changing interface.
+
+**Export reviewed destination versions** queues separate editable jobs in
+**Your clip exports**. It exports the exact previewed plan and chosen height;
+repeated clicks reuse the same jobs. Source clips remain intact. Changes to
+source edits or media expire an approval: refresh sources and preview again.
+Changed destination settings require their matching preview and review.
+
+Sound targets are -14 LUFS / -1 dBTP for Shorts, Reels and TikTok, and
+-15 LUFS / -1.5 dBTP for WhatsApp. Read the measured draft sound and listen
+to the finished export before sharing. No platform account or upload is needed.
+Choose finished variants in **One collection** to package their original
+MP4s and subtitles; the manifest records the actual rendered platform and
+sound destination even when a project has newer pending edits.
