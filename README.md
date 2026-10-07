@@ -88,6 +88,11 @@ chapter cards and highlights. [Walk through the controls](docs/web-app.md).
   exports, and keep working with the original recording. Package up to six
   finished clips as a named, ordered ZIP with matching subtitles, per-clip
   credits and a collection manifest; the videos are copied without re-encoding.
+- **Destination versions with sound.** Choose finished batch clips and create
+  Shorts, Reels, TikTok and WhatsApp variants. Adjust portrait text guides and
+  picture size, preview each with its soundtrack and destination loudness target,
+  then export the reviewed versions as separate editable projects. Collection
+  manifests identify each rendered destination.
 - **Signature style kits.** Save captions and sound, with optional transitions,
   photo movement and text styling. Reuse a kit after uploading, or audition it
   on a 3–60 second story in Director and apply the exact preview with Undo.

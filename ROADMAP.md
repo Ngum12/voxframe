@@ -239,8 +239,12 @@ Reusable style kits now combine captions, photo motion, transitions and sound
   finished exports, then download one ZIP containing their original MP4s,
   available subtitles, rendered credits and a manifest with file checksums.
   Missing, unfinished or changing outputs are refused; snapshots are cached.
-- **Next: batch destination variants.** Apply destination composition guides
-  and sound targets across a reviewed set, then preview and export the variants.
+- **Batch destination variants — implemented.** Select up to six finished clips
+  and four destinations; preview each current saved edit with sound, portrait
+  text guides and its loudness target. Review each immutable snapshot before
+  queueing separate editable exports; collections retain rendered destinations.
+- **Next: opening auditions.** Compare alternate opening treatments using the
+  same spoken words, then choose a reviewed version without inventing claims.
 
 ## Later
 

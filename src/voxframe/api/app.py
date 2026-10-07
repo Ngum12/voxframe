@@ -411,6 +411,17 @@ class BatchExport(BaseModel):
     height: Literal[1280, 1920] = 1280
 
 
+class VariantPreview(BaseModel):
+    source_job: str = Field(pattern=r"^[a-f0-9]{32}$")
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    settings: ShortExport
+
+
+class VariantExport(BaseModel):
+    variants: list[Annotated[str, Field(pattern=r"^[a-f0-9]{24}$")]] = Field(
+        min_length=1, max_length=24)
+
+
 class CollectionItem(BaseModel):
     job_id: str = Field(pattern=r"^[a-f0-9]{32}$")
     title: str = Field(min_length=1, max_length=80)
@@ -2010,9 +2021,131 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         if context.store.get(job_id) is None:
             raise HTTPException(404, "No such source project.")
         return {"jobs": [{"clip_id": job.options["batch_clip"],
-                          "height": job.options.get("height"), "job": job.snapshot()}
+                          "height": job.options.get("height"),
+                          "platform": job.options.get("batch_platform"),
+                          "variant_source": job.options.get("batch_variant_source"),
+                          "job": job.snapshot()}
                          for job in context.store.all_jobs()
                          if job.options.get("batch_parent") == job_id]}
+
+    def variant_source(context: ApiContext, parent_id: str, source_id: str) -> tuple:
+        if context.store.get(parent_id) is None:
+            raise HTTPException(404, "No such source project.")
+        job, _, plan = _editable_plan(context, source_id)
+        if job.options.get("batch_parent") != parent_id:
+            raise HTTPException(404, "That clip does not belong to this source project.")
+        if job.state.value != "succeeded" or "video" not in job.artifacts:
+            raise HTTPException(409, "Finish this clip before auditioning destination versions.")
+        return job, plan
+
+    @app.get("/api/jobs/{job_id}/shorts/batch/variants")
+    def destination_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.destination_variants import profiles
+        from voxframe.plan.shorts import revision
+
+        if context.store.get(job_id) is None:
+            raise HTTPException(404, "No such source project.")
+        sources = []
+        for job in context.store.all_jobs():
+            if (job.options.get("batch_parent") != job_id
+                    or job.options.get("batch_variant_source")
+                    or job.state.value != "succeeded" or "video" not in job.artifacts):
+                continue
+            plan = _load_job_plan(context, job.id)
+            if not 3 <= plan.total_frames / plan.fps <= 60.001:
+                continue
+            sources.append({"job": job.snapshot(), "revision": revision(plan),
+                            "seconds": plan.total_frames / plan.fps})
+        return {"sources": sources, "profiles": profiles()}
+
+    @app.post("/api/jobs/{job_id}/shorts/batch/variants/preview")
+    def destination_preview(job_id: str, edit: VariantPreview,
+                             context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.destination_variants import record
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.short_export import configure
+        from voxframe.plan.shorts import revision
+        from voxframe.render.compose.complete_preview import complete_preview
+
+        _, plan = variant_source(context, job_id, edit.source_job)
+        if edit.revision != revision(plan):
+            raise HTTPException(409, "This clip changed. Refresh source clips and preview again.")
+        try:
+            draft = configure(plan, edit.settings)
+        except EditError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        check_complete_sources(draft, context)
+        root = context.store.job_directory(job_id)
+        try:
+            result = complete_preview(draft, edit.revision, root / "complete-previews")
+            key = record(root / "variant-previews", result, edit.source_job)
+        except Exception as exc:
+            log.warning("variant.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(422, "The destination preview could not be rendered. "
+                                "Check its media and music, then try again.") from exc
+        return {key: value for key, value in result.items()
+                if key not in {"plan", "stamps", "engine"}} | {
+            "variant_id": key, "preview_id": result["key"],
+            "url": f"/api/jobs/{job_id}/complete-previews/{result['key']}", "source_ranges": [],
+            "settings": draft.short_export.model_dump(mode="json"),
+            "destination": draft.audio_mix.destination.value}
+
+    @app.post("/api/jobs/{job_id}/shorts/batch/variants", status_code=202)
+    def export_destination_variants(job_id: str, edit: VariantExport,
+                                    context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.destination_variants import metadata, profiles
+        from voxframe.plan.shorts import revision
+        from voxframe.render.compose.complete_preview import winner
+
+        if len(set(edit.variants)) != len(edit.variants):
+            raise HTTPException(422, "Choose each destination preview only once.")
+        if context.store.get(job_id) is None:
+            raise HTTPException(404, "No such source project.")
+        root = context.store.job_directory(job_id)
+        choices, pairs = [], set()
+        for key in edit.variants:
+            try:
+                info = metadata(root / "variant-previews", key)
+                source, source_plan = variant_source(context, job_id, info["source_job"])
+                if revision(source_plan) != info["revision"]:
+                    raise ValueError("The saved clip changed.")
+                draft = winner(root / "complete-previews", info["preview_id"], info["revision"],
+                    check_plan=lambda p: check_complete_sources(p, context))
+                if not draft.short_export or draft.short_export.platform != info["platform"]:
+                    raise ValueError("The destination snapshot changed.")
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise HTTPException(409, "A clip, preview or source file changed. "
+                                    "Refresh source clips and preview again.") from exc
+            pair = (source.id, info["platform"])
+            if pair in pairs:
+                raise HTTPException(422, "Choose one reviewed version per clip and destination.")
+            pairs.add(pair)
+            choices.append((key, source, draft, info))
+        if len({source.id for _, source, _, _ in choices}) > 6:
+            raise HTTPException(422, "Choose up to six source clips per destination batch.")
+        jobs = []
+        with batch_queue_lock:
+            for key, source, draft, info in choices:
+                existing = next((job for job in context.store.all_jobs()
+                    if job.options.get("batch_parent") == job_id
+                    and job.options.get("batch_clip") == key), None)
+                if existing:
+                    jobs.append(existing.snapshot())
+                    continue
+                label = profiles()[info["platform"]]["label"]
+                job = context.store.create(audio_name=f"{source.audio_name} · {label}", options={
+                    "batch_parent": job_id, "batch_clip": key, "batch_platform": info["platform"],
+                    "batch_variant_source": source.id, "height": draft.short_export.height,
+                    "quality": "standard"})
+                folder = context.store.job_directory(job.id)
+                path = draft.save(folder / "short.plan.json")
+                approval = json.loads((root / "complete-previews" /
+                    f"{info['preview_id']}.json").read_text(encoding="utf-8"))
+                (folder / "approved.json").write_text(json.dumps(approval), encoding="utf-8")
+                context.store.record_result(job, artifacts={"plan": path}, warnings=(), summary={})
+                context.store.submit(job, _plan_renderer(context))
+                jobs.append(job.snapshot())
+        return {"jobs": jobs}
 
     @app.post("/api/jobs/{job_id}/shorts/batch/collections")
     def package_short_collection(job_id: str, edit: CollectionRequest,
@@ -2051,7 +2184,9 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             clips.append(CollectionClip(job_id=child.id, title=" ".join(item.title.split()),
                 files=tuple(files), credits=tuple(child.summary.get("credits", [])),
                 width=child.summary.get("width"), height=child.summary.get("height"),
-                pending_edits=int(child.summary.get("pending_edits", 0))))
+                pending_edits=int(child.summary.get("pending_edits", 0)),
+                platform=(child.summary.get("short_export") or {}).get("platform"),
+                sound_destination=(child.summary.get("audio_mix") or {}).get("destination")))
 
         def check_current() -> None:
             for child_id, previous in original.items():
@@ -4014,6 +4149,8 @@ def _record_outcome(context: ApiContext, job: Job, outcome: PipelineOutcome) -> 
             # them, for the mix controls (D-171).
             "sound": outcome.result.sound,
             "audio_mix": outcome.plan.audio_mix.model_dump(mode="json") if outcome.plan else None,
+            "short_export": outcome.plan.short_export.model_dump(mode="json")
+                if outcome.plan and outcome.plan.short_export else None,
             "saved_to": _place_in_videos(context, job, outcome.result.video_path),
         },
     )
