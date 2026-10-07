@@ -394,8 +394,9 @@ def run_pipeline(
             plan = plan.model_copy(update={"score": options.score})
 
     if plan is not None and options.creative is not None:
-        plan = plan.model_copy(update={"caption_treatment": options.creative.caption_treatment,
-                                       "audio_mix": options.creative.audio_mix})
+        from voxframe.plan.signature_kit import apply_kit
+
+        plan = apply_kit(plan, options.creative)
 
     scene_total = len(plan.scenes) if plan is not None else len(scenes)
     warnings.extend(_prepare_music(options.music, progress, score=options.score is not None))

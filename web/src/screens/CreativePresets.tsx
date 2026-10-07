@@ -31,7 +31,8 @@ export function PresetPicker({ onChange }: { onChange: (settings: CreativeSettin
       onChange={e => {
         const id = e.target.value; setSelected(id);
         const chosen = presets.find(p => p.id === id);
-        onChange(chosen ? {caption_treatment: chosen.caption_treatment, audio_mix: chosen.audio_mix} : null);
+        onChange(chosen ? {caption_treatment: chosen.caption_treatment, audio_mix: chosen.audio_mix,
+          transition_treatment: chosen.transition_treatment, camera_move: chosen.camera_move, beat_style: chosen.beat_style} : null);
       }}>
       <option value="">Use this style’s defaults</option>
       {presets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -51,6 +52,7 @@ export function PresetPicker({ onChange }: { onChange: (settings: CreativeSettin
 export function PresetSaver({ jobId, plan, revision }: { jobId: string; plan: ScenePlan; revision: string | null }) {
   const scenes = plan.scenes.filter(s => !s.card_kind);
   const [name, setName] = useState("");
+  const [visuals, setVisuals] = useState(false);
   const [scene, setScene] = useState(scenes[0]?.index ?? 0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export function PresetSaver({ jobId, plan, revision }: { jobId: string; plan: Sc
     if (!revision || busy) return;
     setBusy(true); setSaved(null); setError(null);
     try {
-      const preset = await saveCreativePreset(jobId, name, revision, scene);
+      const preset = await saveCreativePreset(jobId, name, revision, scene, visuals);
       setSaved(`“${preset.name}” saved. Choose it after uploading your next recording.`);
       setName("");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save your preset."); }
@@ -75,6 +77,8 @@ export function PresetSaver({ jobId, plan, revision }: { jobId: string; plan: Sc
         onChange={e => { setScene(Number(e.target.value)); setSaved(null); }}>
         {scenes.map(s => <option key={s.index} value={s.index}>Scene {s.index + 1} · {(s.caption_text || s.text).slice(0, 65)}</option>)}
       </select></label>
+      <label><input type="checkbox" checked={visuals} onChange={e => setVisuals(e.target.checked)} /> Include this scene’s transition, photo movement and text styling</label>
+      <p className="hint">Visual kits restyle existing text beats and moving photos. Held photos stay still. Preview kits in Director.</p>
       <button className="btn" disabled={!name.trim()} onClick={() => void save()}>{busy ? "Saving…" : "Save creative preset"}</button>
     </fieldset>
     {saved && <Notice live>{saved}</Notice>}

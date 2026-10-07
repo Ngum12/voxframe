@@ -20,7 +20,8 @@ def test_persistence_names_and_no_project_files(tmp_path, monkeypatch):
     preset = save("  My   voice  ", settings)
     assert load() == [preset]
     assert preset.name == "My voice"
-    assert set(preset.model_dump()) == {"id", "name", "caption_treatment", "audio_mix"}
+    assert set(preset.model_dump()) == {"id", "name", "caption_treatment", "audio_mix",
+                                        "transition_treatment", "camera_move", "beat_style"}
     with pytest.raises(ValueError, match="already used"):
         save("my voice", settings)
     delete(preset.id)

@@ -229,6 +229,12 @@ class PresetSave(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     revision: str
     scene: int = Field(ge=0)
+    include_visuals: bool = False
+
+
+class KitPreview(BaseModel):
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    preset_id: str = Field(pattern=r"^[a-f0-9]{32}$")
 
 
 class MusicEdit(BaseModel):
@@ -1320,9 +1326,18 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         scene = next((s for s in plan.scenes if s.index == edit.scene and not s.card_kind), None)
         if scene is None:
             raise HTTPException(422, "Choose a spoken scene for your caption look.")
+        from voxframe.config.creative_presets import BeatStyle
+
         settings = CreativeSettings(
             caption_treatment=scene.caption_treatment or plan.caption_treatment,
             audio_mix=plan.audio_mix,
+            transition_treatment=(scene.transition_after or plan.transition_treatment)
+                if edit.include_visuals else None,
+            camera_move=scene.camera_move if edit.include_visuals else None,
+            beat_style=BeatStyle(look=scene.visual_beat.look,
+                                position=scene.visual_beat.position,
+                                zoom=scene.visual_beat.zoom)
+                if edit.include_visuals and scene.visual_beat else None,
         )
         try:
             return save(edit.name, settings).model_dump(mode="json")
@@ -2114,6 +2129,40 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                       context: ApiContext = Depends(ctx)) -> dict[str, Any]:
         _, _, plan = _editable_plan(context, job_id)
         return direction_preview_result(job_id, story_draft(plan, edit), context)
+
+    @app.post("/api/jobs/{job_id}/signature-kits/preview")
+    def signature_kit_preview(job_id: str, edit: KitPreview,
+                              context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.config.creative_presets import load
+        from voxframe.plan.shorts import revision
+        from voxframe.plan.signature_kit import apply_kit
+        from voxframe.render.compose.complete_preview import complete_preview
+
+        _, _, plan = _editable_plan(context, job_id)
+        if edit.revision != revision(plan):
+            raise HTTPException(409, "This project changed. Reopen signature kits.")
+        if not 3 <= plan.total_frames / plan.fps <= 60.001:
+            raise HTTPException(422, "Choose a 3-60 second story in Shorts to audition a kit.")
+        try:
+            preset = next((p for p in load() if p.id == edit.preset_id), None)
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(422, "Your saved kits could not be read. "
+                                "The file was kept.") from exc
+        if preset is None:
+            raise HTTPException(404, "That kit was removed. Choose another.")
+        draft = apply_kit(plan, preset)
+        check_complete_sources(draft, context)
+        try:
+            result = complete_preview(draft, edit.revision,
+                context.store.job_directory(job_id) / "complete-previews")
+        except Exception as exc:
+            log.warning("kit.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(422, "The kit could not be previewed. "
+                                "Check your media and music.") from exc
+        return {key: value for key, value in result.items()
+                if key not in {"plan", "stamps", "engine"}} | {
+            "preview_id": result["key"],
+            "url": f"/api/jobs/{job_id}/complete-previews/{result['key']}", "source_ranges": []}
 
     @app.get("/api/jobs/{job_id}/complete-auditions")
     def complete_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
