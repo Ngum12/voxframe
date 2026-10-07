@@ -6920,3 +6920,92 @@ media/revisions, duplicate and ownership limits, sandboxing and authentication.
 Chromium previews and exports two destinations with real music, checks review
 gates, frame counts, audible soundtrack, original-plan preservation, collection
 metadata and phone layout.
+
+
+## D-223: opening auditions over the existing narration
+
+An opening audition selects a displayed transcript prefix, capped at twelve
+words and six seconds within one spoken passage. All alternatives keep the
+full 3–60 second story, recording clocks, total frames, music, mix, score and
+credits. Corrected captions provide the quote; no new claims are generated.
+Opening cards stay in place rather than being silently removed.
+
+Reuse validated visual placements for exact word boundaries and source-clock
+preservation. Quiet confidence and slow reveal place one quoted beat. Word
+punch uses two where the internal word boundary is safe, falling back to one
+for short or overlapping phrases. Optional shot choice uses existing speaker
+footage or credited project pictures. Caption matching affects only opening
+placements. Pinned text requires an explicit replacement choice. Applied
+beats are user-pinned so future automatic direction preserves them.
+
+Render full complete-preview snapshots, including actual soundtrack stems.
+The UI compares immutable drafts with synchronized transport and one audible
+player, then gates winner buttons on that draft’s review checkbox. Applying
+uses the existing complete-winner path, with source/renderer freshness checks
+and one history entry. Changed form controls cannot rebuild a cached winner.
+
+Units check every source frame at four frame rates, word clocks, corrections,
+cards, captions, pinned text, picture choice, invalid boundaries, sandbox and
+auth checks, stale media and exact undoable saves. Real FFmpeg tests check all
+three drafts against exported audio and original narration, verify music is
+audible, and measure delayed-footage clap sync and exact frame counts.
+Chromium exercises three drafts, review gating, comparison sound, stale form
+controls, phone layout, exact winner save, Undo/Redo and final export.
+
+
+## D-224: reusable recipes from reviewed opening snapshots
+
+Opening signatures persist only look, shot preference, caption matching and
+preferred word count in a separate local configuration file. They carry no
+quoted words, media paths, picture indexes, soundtrack, mix settings or
+pinned-text replacement permissions. The new recording supplies all content
+and sound. Picture choice and pinned-text replacement require fresh input.
+
+Each opening render records its server-resolved choice alongside the complete
+preview identity. A save request names this approval, not mutable form fields.
+Validate the source revision, sandbox, renderer/source freshness and exact
+reproduction of the approved plan before extracting the portable recipe.
+The recipe is saved without applying or changing a project. Applying on a
+new recording uses the existing complete-preview and undoable winner path.
+
+Signature names are normalized and unique ignoring case, up to 30. Thread
+locking and atomic replacement retain concurrent saves; temporary writes are
+cleaned after failures. Invalid existing stores are kept and surfaced. Removal
+changes only the saved list, leaving projects and reviewed drafts usable.
+The UI gates saving on the named draft’s review and keeps comparison drafts
+independent of later controls.
+
+Units cover persistence, privacy, naming, limits, concurrent saves, damaged
+files, forged/stale approvals, new project words and sound, replacement
+permissions, authentication and independent deletion. Chromium saves an
+opening after changing its form controls, reuses it with a different recording,
+picture and audible soundtrack, checks duplicate-name recovery and phone
+layout, then exercises exact apply, Undo/Redo, export and safe removal.
+
+
+## D-225: closing auditions preserve the story around the final phrase
+
+Closing treatments use validated suffixes of the final timed speech group,
+limited to twelve words and six seconds on 3–60 second stories. Untimed trailing
+speech blocks choices. Displayed corrections supply the quote; no words are
+invented. Cuts preserve narration and footage clocks, total frames, soundtrack,
+credits, earlier opening text and outro cards. When placement splits a scene,
+restore its earlier automatic visual beat as well as pinned text. An energy
+split requires a safe whole-frame boundary; otherwise keep one quoted beat.
+Caption matching affects only the closing. Pinned closing text requires an
+explicit replacement choice.
+
+Render complete immutable previews with actual project sound. Applying uses
+the existing complete-preview winner validation and one undoable history entry.
+Revision, source, renderer, sandbox and authentication checks remain mandatory;
+private preview fields are excluded from API responses. The UI requires review
+of the named snapshot and keeps old drafts independent of changing controls.
+An optional comparison review position synchronously seeks both videos to the
+lead-in without affecting existing comparison consumers.
+
+Units cover frame-level source clocks at four rates, preserved opening quotes,
+corrected words, cards, unsafe split boundaries, pinned replacement, stale
+approvals and exact apply/Undo. Real FFmpeg renders verify all three treatments,
+frame counts, soundtrack correlation, audible music and delayed speech sync.
+Chromium checks lead-in playback, review gates, synchronized comparison with
+one audible soundtrack, phone layout, exact apply, Undo/Redo and final export.

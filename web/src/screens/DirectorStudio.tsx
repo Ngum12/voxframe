@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { getDirection, directVideo, previewDirection, saveVisual, previewVisual,
   type DirectionControls, type VisualBeat, type ShortPreview, type ScenePlan, type PlanEditResult } from "../api";
 import { SignatureKits } from "./SignatureKits";
+import { ClosingAuditions } from "./ClosingAuditions";
+import { OpeningAuditions } from "./OpeningAuditions";
 import { CompleteAuditions } from "./CompleteAuditions";
 import { VisualPlacementStudio } from "./VisualPlacementStudio";
 import { Notice } from "../components";
@@ -50,6 +52,8 @@ export function DirectorStudio({ jobId, plan, sceneIndex, onEdited }: {
       <h3>Give every beat a purpose.</h3><p>Your opening. Your emphasis. Your final word.</p></div>
     <p className="hint">The director cuts at word boundaries, uses your existing image matches for cutaways, and quotes your transcript for text beats. Speaker shots return at the beginning and end unless you chose otherwise.</p>
     <SignatureKits jobId={jobId} plan={plan} onEdited={onEdited} />
+    <OpeningAuditions jobId={jobId} plan={plan} onEdited={onEdited} />
+    <ClosingAuditions jobId={jobId} plan={plan} onEdited={onEdited} />
     <CompleteAuditions jobId={jobId} plan={plan} onEdited={onEdited} />
     <VisualPlacementStudio jobId={jobId} plan={plan} onEdited={onEdited} />
     {error && <Notice tone="error">{error}</Notice>}

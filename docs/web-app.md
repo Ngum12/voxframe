@@ -602,3 +602,95 @@ to the finished export before sharing. No platform account or upload is needed.
 Choose finished variants in **One collection** to package their original
 MP4s and subtitles; the manifest records the actual rendered platform and
 sound destination even when a project has newer pending edits.
+
+
+## Audition the opening
+
+Open **Director → Opening auditions** on a 3–60 second story. Choose the last
+word of your opening phrase from its first six seconds of speech (up to twelve
+words). The quote is taken from displayed transcript words, including your
+caption corrections. Intro cards keep their original place. Choose a complete
+thought and check the quoted phrase before rendering.
+
+Three treatments are available: **Quiet confidence** gives one clean quote,
+**Word punch** divides it into two short text beats when the word boundary
+allows it, and **Slow reveal** uses restrained cinematic captions. Very short
+or overlapping words use one beat. Match captions inside the opening or keep
+your current caption look. Keep current shots, lead with available speaker
+footage, or choose an existing project picture with its credit.
+
+Pinned opening text is protected. Enable **Allow replacing my pinned opening
+text** only when you want these new treatments to replace it. New opening
+beats are pinned after applying; a later automatic direction pass retains them.
+
+Use **Preview selected opening** or **Render three opening auditions**. Each
+preview plays the entire saved story with its project music or generated score.
+**Compare opening auditions** shares one playhead and one audible soundtrack
+at a time. Review both the opening and its return to the story, then mark the
+matching review checkbox. **Use this opening** and comparison’s **Use version**
+buttons save the exact reviewed snapshot, including its original soundtrack.
+Changing form settings does not rebuild comparison drafts.
+
+Preview leaves the plan untouched. Applying creates one undoable edit; use
+**Update video** for the final export. The narration, total frame count, source
+clocks, credits and sound settings carry over. New cuts delimit the opening
+treatment without trimming speech; surrounding captions keep their own words.
+Changed plans or source files expire old approvals. The last six auditions
+stay available during this session. Compare treatments by watching; they do
+not predict engagement or rewrite what you said.
+
+
+## Reuse your opening signature
+
+In **Director → Opening auditions**, render and review a treatment, then
+choose it in **Opening to save**, enter a name and choose **Save reviewed
+opening signature**. Save before applying the opening to this project. The
+recipe comes from that rendered draft even if the current controls changed.
+Expired source edits or media require a new preview before saving.
+
+On another 3–60 second recording, choose the name in **Opening signature**.
+Its look, caption choice, shot preference and preferred word count populate
+the controls. The opening words come from the new transcript; word count is
+a starting point, so adjust the last word to complete the thought. Picture
+signatures require a fresh picture selection from this project. Speaker
+signatures need speaker footage; choose current shots to make a new recipe
+when it is unavailable. Changing the look, shot or caption matching exits
+the saved signature and makes a new opening recipe.
+
+Choose **Preview saved opening signature**, hear the new story and soundtrack,
+mark its review checkbox, then **Use this opening**. The saved recipe does not
+copy old words, media paths, picture indexes, soundtrack, mix settings or
+permission to replace pinned opening text. Each recording needs a fresh
+replacement choice when its opening text is pinned. Applying the new preview
+is one undoable edit; **Update video** creates its final export.
+
+Signatures persist in the local Voxframe configuration across restarts. Names
+are unique ignoring case, with up to 30 signatures. **Remove saved signature**
+removes the named recipe while keeping existing projects and rendered drafts.
+An already-reviewed draft remains usable after its recipe is removed. Damaged
+signature files are reported and preserved rather than overwritten.
+
+
+## Closing auditions
+
+In **Director → Closing auditions**, choose the final words of a 3–60 second
+story. Choices use your displayed transcript, up to the last twelve words and
+six seconds of the final timed speech group. Complete any untimed trailing
+speech first. Outro cards stay in place.
+
+Choose **Land the point**, **Last-word punch** or **Quiet resolve**. Keep the
+current shots, use speaker footage or select a project picture. Caption matching
+changes the selected closing only. Earlier text and source timings carry over;
+the tool does not invent a call to action or trim narration. Replacing pinned
+closing text requires the explicit replacement checkbox.
+
+Choose **Preview selected closing** or **Render three closing auditions**.
+Each draft includes the full story and its project music or generated score.
+**Review the lead-in** jumps to the second before the closing. In comparison,
+**Review the ending** seeks both videos together; only one soundtrack is audible.
+Watch and listen, then check **I reviewed the lead-in and final words** for the
+matching draft. **Use this closing** or **Use version** applies that exact
+snapshot as one undoable edit. Choose **Update video** for the final export.
+
+Changing controls does not rebuild old comparison drafts. Changed plans or
+source files require fresh previews. Up to six drafts remain in this session.
