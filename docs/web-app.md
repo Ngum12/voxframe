@@ -466,3 +466,39 @@ project. Expand **Review rendered shot sequence** to inspect the draft's shot
 and text choices. Added music is heard after **Update video**. **Use visual
 placements** saves one undoable edit; Update video then renders it. Review
 current shot sequence shows saved choices when you reopen the panel.
+
+## Complete auditions with sound
+
+Compose a 3–60 second story, then open **Director → Complete auditions ·
+picture, captions and sound**. **Current picture edit** keeps your visual
+sequence. Clean authority, High energy and Cinematic story suggest a visual
+look, matching captions, music arc and starting level. Pinned shots and text
+survive; review the captions checkbox and adjust the sound before rendering.
+Auditions use the entire current story, including any reordered passages.
+
+Choose the project's track or generated score, **Saved track** from your music
+library, or **No added music**. Search saved tracks by title or credit; results
+show up to 60 tracks. Adjust Steady, Rise or Punch, music level, distance under
+speech and voice polish. Other mix settings retain the project's choices.
+A new track must first be imported or saved in Library. No added music removes
+an added soundtrack; music already embedded in your recording remains.
+
+**Render complete audition** produces a draft with actual voice, visuals,
+captions and the chosen music. Its sound checks and any simple-loop fallback
+are shown. A requested soundtrack that cannot be produced is reported as an
+error, rather than presenting a silent draft as music. Generated scores need
+the installed music component and sample pack.
+
+Render at least two treatments, then **Compare complete auditions**. Both
+videos share a playhead; **Hear** selects the one audible soundtrack. The last
+six drafts stay available while this panel remains in the studio session.
+Changing controls prepares a new treatment and does not alter a cached draft.
+
+**Use this complete audition** or **Use version A/B** saves the exact previewed
+plan, track, credits and mix as one undoable edit. No fresh treatment is built
+from whatever controls now show. A changed project or source file expires old
+winners; render again. Previewing does not save or use the previous export's
+audio stems, so timing edits can be auditioned before Update video. After
+choosing, **Update video** makes the final export at your saved export settings.
+The older Shorts passage and direction previews still defer added music until
+Update video; Complete auditions is the place to compare the full soundtrack.

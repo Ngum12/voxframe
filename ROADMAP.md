@@ -223,9 +223,11 @@ Next: reusable style kits that combine captions, photo motion and sound.
   and text treatments to spoken word spans. Preview the full edit and save up
   to twelve non-overlapping placements as one undoable change. Story duration,
   narration source clocks and caption timings stay intact.
-- **Next: complete auditions with sound.** Compare picture, captions and music
-  together before selecting a complete treatment.
-- **Later: signature style kits and batch Shorts.** Extend saved creative
+- **Complete auditions with sound — implemented.** Render the current story
+  with project music, a saved track or no added music; adjust the arc and mix,
+  compare synchronized drafts, and choose the exact previewed treatment as one
+  undoable edit. Changed source files expire old winners.
+- **Next: signature style kits and batch Shorts.** Extend saved creative
   presets into reusable treatments, and review several distinct clips from
   one recording before exporting them.
 

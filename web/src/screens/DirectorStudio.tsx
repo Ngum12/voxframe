@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getDirection, directVideo, previewDirection, saveVisual, previewVisual,
   type DirectionControls, type VisualBeat, type ShortPreview, type ScenePlan, type PlanEditResult } from "../api";
+import { CompleteAuditions } from "./CompleteAuditions";
 import { VisualPlacementStudio } from "./VisualPlacementStudio";
 import { Notice } from "../components";
 
@@ -47,6 +48,7 @@ export function DirectorStudio({ jobId, plan, sceneIndex, onEdited }: {
     <div className="shorts-heading"><span className="shorts-eyebrow">VISUAL DIRECTOR</span>
       <h3>Give every beat a purpose.</h3><p>Your opening. Your emphasis. Your final word.</p></div>
     <p className="hint">The director cuts at word boundaries, uses your existing image matches for cutaways, and quotes your transcript for text beats. Speaker shots return at the beginning and end unless you chose otherwise.</p>
+    <CompleteAuditions jobId={jobId} plan={plan} onEdited={onEdited} />
     <VisualPlacementStudio jobId={jobId} plan={plan} onEdited={onEdited} />
     {error && <Notice tone="error">{error}</Notice>}
     {!eligible && <Notice>Choose a 3–60 second passage in Shorts to build a beat sequence.</Notice>}

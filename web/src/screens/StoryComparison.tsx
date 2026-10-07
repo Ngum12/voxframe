@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { type ShortChoice, type ShortPreview } from "../api";
 import { Notice } from "../components";
 
-export interface StoryVariant { key: string; label: string; choice: ShortChoice; preview: ShortPreview }
+export interface StoryVariant<Choice = ShortChoice> { key: string; label: string; choice: Choice; preview: ShortPreview; warnings?: string[] }
 
-export function StoryComparison({ variants, busy, onChoose }: {
-  variants: StoryVariant[]; busy: boolean; onChoose: (choice: ShortChoice) => void;
+export function StoryComparison<Choice = ShortChoice>({ variants, busy, onChoose, complete = false }: {
+  variants: StoryVariant<Choice>[]; busy: boolean; onChoose: (choice: Choice) => void; complete?: boolean;
 }) {
   const [aKey, setAKey] = useState(variants[0].key);
   const [bKey, setBKey] = useState(variants[1].key);
@@ -65,10 +65,10 @@ export function StoryComparison({ variants, busy, onChoose }: {
     stop(); setTime(seconds);
     players.current.forEach(player => { if (player) player.currentTime = seconds; });
   }
-  return <section className="story-comparison" aria-label="Compare story edits">
+  return <section className="story-comparison" aria-label={complete ? "Compare complete auditions" : "Compare story edits"}>
     <span className="shorts-eyebrow">THE SAME STORY, TWO WAYS</span>
-    <h3>Watch the difference.</h3>
-    <p>Compare rendered edits of this passage. One timeline, one voice at a time.</p>
+    <h3>{complete ? "Watch and hear the difference." : "Watch the difference."}</h3>
+    <p>{complete ? "Compare complete treatments of your current story. One timeline, one soundtrack at a time." : "Compare rendered edits of this passage. One timeline, one voice at a time."}</p>
     <div className="comparison-pair">{pair.map((variant, index) => <article key={index}>
       <label className="label">Version {index === 0 ? "A" : "B"}<select aria-label={`Comparison version ${index === 0 ? "A" : "B"}`}
         value={variant.key} disabled={busy || playing} onChange={event => index === 0 ? setAKey(event.target.value) : setBKey(event.target.value)}>
@@ -85,6 +85,9 @@ export function StoryComparison({ variants, busy, onChoose }: {
         }}
         onWaiting={() => { if (playing) stop(); }} onEnded={() => { setTime(duration); stop(); }}
         onError={() => { stop(); setError("A comparison preview could not load. Render that version again."); }} />
+      {complete && !!variant.warnings?.length && <details><summary>Music and sound notes · {variant.warnings.length}</summary>
+        {variant.warnings.map((warning, i) => <p className="hint" key={i}>{warning}</p>)}
+      </details>}
       <p className="hint">{variant.preview.seconds.toFixed(2)} s · {audio === index ? "Sound on" : "Silent comparison"}</p>
       <button className="btn btn-primary" type="button" disabled={busy} onClick={() => { stop(); onChoose(variant.choice); }}>Use version {index === 0 ? "A" : "B"}</button>
     </article>)}</div>
@@ -95,6 +98,6 @@ export function StoryComparison({ variants, busy, onChoose }: {
       <label className="label">Shared playhead · {time.toFixed(1)} / {duration.toFixed(1)} s<input aria-label="Comparison playhead" type="range" min={0} max={duration || 1} step={.05} value={Math.min(time, duration || 1)} disabled={!ready.every(Boolean)} onChange={event => seek(Number(event.target.value))} /></label>
     </div>
     {error && <Notice tone="error">{error}</Notice>}
-    <p className="hint">Drafts share the same word range and shape. Added music is heard after Update video. Choosing a version saves its passage, direction and caption choice together; Undo restores your previous edit.</p>
+    <p className="hint">{complete ? "These drafts include their selected soundtrack. Choosing a version saves the exact previewed direction, captions, track and mix together; Undo restores your previous edit." : "Drafts share the same word range and shape. Added music is heard after Update video. Choosing a version saves its passage, direction and caption choice together; Undo restores your previous edit."}</p>
   </section>;
 }

@@ -6782,3 +6782,38 @@ redirection and history. Encoded-video checks inspect cutaway pixels before,
 during and after the range and measure clap/flash sync with recording delay.
 Chromium checks selection, text, duplicate refusal, real playback, stale-player
 cleanup, phone layout, undo/redo and export alongside existing Director controls.
+
+
+## D-218 — Compare complete rendered treatments and choose their snapshot
+
+Complete auditions operate on the entire current 3–60 second edit, preserving
+story order. Optional direction and matching captions combine with an explicit
+project, library or no-music choice and a full AudioMix. Suggested look profiles
+set a music arc and level; controls expose and may override those suggestions.
+Library files resolve by track ID, never a client path. Project media paths
+are sandbox-checked for rendering and again before saving a winning snapshot.
+
+A separate full-draft renderer passes MusicSettings to the export renderer,
+or retains the project's generated score. Stems must contain requested music;
+score failure cannot silently become a music audition. Drafts do not depend on
+old exported stems, so they work after timing edits. Existing voice-only Shorts
+previews retain their behavior. Source stamps, plan, origin revision and engine
+versions key the complete preview. Score styles and sample stamps participate.
+Before/after source checks refuse snapshots if media changes during rendering.
+
+Each successful draft writes a manifest with its exact plan, credits, mix,
+source stamps and sound report. Winner selection takes only preview ID and
+origin revision; it never reconstructs from current form settings or current
+library metadata. Current revision, source stamps and engine identity must
+still agree. Choosing uses normal history as one undoable edit. Preview files
+support authenticated byte-range streaming; manifests are not served.
+
+The comparison shares the existing synchronized transport with a typed winner
+payload. Only one soundtrack is audible. Replaced, collapsed or detached
+players pause, and generation guards ignore stale work after navigation.
+Units cover explicit music choices, cache reuse, expired sources/engine,
+source races, frozen library credit, authenticated playback and snapshot history.
+Encoded-video checks identify the soundtrack tone in a silent source interval,
+compare draft and exported waveforms, and measure voice-only frame count/sync.
+Chromium checks real project/library auditions, shared playback, sound switching,
+phone layout, a cached winner chosen after form changes, history and export.

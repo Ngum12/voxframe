@@ -75,6 +75,7 @@ from voxframe.library.db import AssetLibrary
 from voxframe.model_downloads import Download
 from voxframe.models.asset import AssetKind
 from voxframe.plan.audio_mix import AudioMix
+from voxframe.plan.complete_audition import CompleteChoice
 from voxframe.plan.scene_plan import PlannedScene, ScenePlan
 from voxframe.plan.story_composer import StoryBlock
 from voxframe.plan.visual_placement import Placement
@@ -369,6 +370,11 @@ class DirectionEdit(BaseModel):
 class VisualEdit(BaseModel):
     revision: str = Field(pattern=r"^[a-f0-9]{24}$")
     beat: VisualBeat | None = None
+
+
+class CompleteWinner(BaseModel):
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    preview_id: str = Field(pattern=r"^[a-f0-9]{24}$")
 
 
 class PlacementEdit(BaseModel):
@@ -2108,6 +2114,90 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                       context: ApiContext = Depends(ctx)) -> dict[str, Any]:
         _, _, plan = _editable_plan(context, job_id)
         return direction_preview_result(job_id, story_draft(plan, edit), context)
+
+    @app.get("/api/jobs/{job_id}/complete-auditions")
+    def complete_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.complete_audition import PROFILES
+        from voxframe.plan.shorts import revision
+
+        _, _, plan = _editable_plan(context, job_id)
+        return {"revision": revision(plan), "mix": plan.audio_mix.model_dump(mode="json"),
+                "profiles": PROFILES, "has_music": bool(plan.music_path or plan.score),
+                "project_music": ("Project track" if plan.music_path else
+                                  f"Generated score: {plan.score.style}" if plan.score else
+                                  "No added music"), "credit": plan.music_credit}
+
+    def check_complete_sources(plan: ScenePlan, context: ApiContext) -> None:
+        from voxframe.render.compose.complete_preview import sources
+
+        for source in sources(plan):
+            _check_sandbox(context, Path(source))
+
+    @app.post("/api/jobs/{job_id}/complete-auditions/preview")
+    def complete_audition_preview(job_id: str, choice: CompleteChoice,
+                                 context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.complete_audition import audition
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.shorts import revision
+        from voxframe.render.compose.complete_preview import complete_preview
+
+        _, _, plan = _editable_plan(context, job_id)
+        if choice.revision != revision(plan):
+            raise HTTPException(409, "This story changed. Reopen complete auditions.")
+        track, credit = "", ""
+        if choice.music_source == "library" and choice.music_library_id:
+            selected, path = library_track(context, choice.music_library_id)
+            track, credit = str(path), selected.attribution
+        try:
+            draft = audition(plan, choice, track=track, credit=credit)
+        except EditError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        check_complete_sources(draft, context)
+        try:
+            result = complete_preview(draft, choice.revision,
+                context.store.job_directory(job_id) / "complete-previews")
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except Exception as exc:
+            log.warning("complete.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(422, "The complete audition could not be rendered. "
+                                "Check its source media and music, then try again.") from exc
+        return {key: value for key, value in result.items()
+                if key not in {"plan", "stamps", "engine"}} | {
+            "preview_id": result["key"],
+            "url": f"/api/jobs/{job_id}/complete-previews/{result['key']}", "source_ranges": []}
+
+    @app.put("/api/jobs/{job_id}/complete-auditions")
+    def complete_audition_save(job_id: str, choice: CompleteWinner,
+                              context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.shorts import revision
+        from voxframe.render.compose.complete_preview import winner
+
+        job, path, plan = _editable_plan(context, job_id)
+        if choice.revision != revision(plan):
+            raise HTTPException(409, "This story changed. Render new complete auditions.")
+        try:
+            chosen = winner(context.store.job_directory(job_id) / "complete-previews",
+                            choice.preview_id, choice.revision,
+                            check_plan=lambda draft: check_complete_sources(draft, context))
+        except (ValueError, OSError, KeyError) as exc:
+            raise HTTPException(409, "This audition is no longer available for this edit. "
+                                "Render it again before choosing it.") from exc
+        saved = _save_plan(chosen, path, "the complete audition")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": chosen.model_dump(mode="json"), "pending_edits": saved.pending}
+
+    @app.get("/api/jobs/{job_id}/complete-previews/{key}")
+    def complete_preview_file(job_id: str, key: str, request: Request,
+                              context: ApiContext = Depends(ctx)) -> Response:
+        import re
+
+        if context.store.get(job_id) is None or re.fullmatch(r"[a-f0-9]{24}", key) is None:
+            raise HTTPException(404, "No such complete audition.")
+        path = context.store.job_directory(job_id) / "complete-previews" / f"{key}.mp4"
+        if not path.is_file():
+            raise HTTPException(404, "No such complete audition.")
+        return _file_or_range(request, path)
 
     @app.get("/api/jobs/{job_id}/visual-placement")
     def placement_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
