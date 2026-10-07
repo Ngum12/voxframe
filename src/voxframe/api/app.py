@@ -23,7 +23,8 @@ import time
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from threading import RLock
+from typing import Annotated, Any, Literal
 
 import structlog
 from fastapi import (
@@ -70,7 +71,7 @@ from voxframe.config.userprefs import (
 )
 from voxframe.config.visuals import VisualBeat
 from voxframe.jobs.pipeline import JobOptions, PipelineOutcome, Stage
-from voxframe.jobs.store import Job, JobStore, ProgressEvent
+from voxframe.jobs.store import Job, JobStore, ProgressEvent, RenderCancelled
 from voxframe.library.db import AssetLibrary
 from voxframe.model_downloads import Download
 from voxframe.models.asset import AssetKind
@@ -401,6 +402,13 @@ class ShortEdit(BaseModel):
     vertical: bool = True
     look: Literal["authority", "energy", "cinema"] | None = None
     match_captions: bool = False
+
+
+class BatchExport(BaseModel):
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    clips: list[Annotated[str, Field(pattern=r"^[a-f0-9]{24}$")]] = Field(
+        min_length=1, max_length=6)
+    height: Literal[1280, 1920] = 1280
 
 
 class PacingEdit(BaseModel):
@@ -1985,6 +1993,95 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             raise HTTPException(status_code=404, detail="No such preview.")
         return FileResponse(path, media_type="video/mp4")
 
+    batch_queue_lock = RLock()
+
+    @app.get("/api/jobs/{job_id}/shorts/batch")
+    def batch_shorts_jobs(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        if context.store.get(job_id) is None:
+            raise HTTPException(404, "No such source project.")
+        return {"jobs": [{"clip_id": job.options["batch_clip"],
+                          "height": job.options.get("height"), "job": job.snapshot()}
+                         for job in context.store.all_jobs()
+                         if job.options.get("batch_parent") == job_id]}
+
+    @app.post("/api/jobs/{job_id}/shorts/batch/preview")
+    def batch_short_preview(job_id: str, edit: ShortEdit,
+                            context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.short_batch import clean_quotes, passage_details, record_preview
+        from voxframe.plan.shorts import source_ranges, tokens
+        from voxframe.render.compose.complete_preview import complete_preview
+
+        _, _, plan = _editable_plan(context, job_id)
+        draft = clean_quotes(short_draft(plan, edit))
+        timed = tokens(plan)
+        if timed[edit.first_word].group != timed[edit.last_word].group:
+            raise HTTPException(422, "Keep each clip within one continuous transcript passage.")
+        check_complete_sources(draft, context)
+        root = context.store.job_directory(job_id)
+        try:
+            snapshot = complete_preview(draft, edit.revision, root / "complete-previews")
+            clip_id = record_preview(root / "batch-previews", snapshot,
+                                     edit.first_word, edit.last_word)
+        except Exception as exc:
+            log.warning("batch.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(422, "This clip could not be previewed. "
+                                "Check its media and music, then try again.") from exc
+        return {"clip_id": clip_id, "preview_id": snapshot["key"],
+                "url": f"/api/jobs/{job_id}/complete-previews/{snapshot['key']}",
+                "seconds": snapshot["seconds"], "note": snapshot["note"],
+                "music_note": snapshot["music_note"], "has_music": snapshot["has_music"],
+                "source_ranges": source_ranges(draft),
+                **passage_details(plan, edit.first_word, edit.last_word)}
+
+    @app.post("/api/jobs/{job_id}/shorts/batch", status_code=202)
+    def export_batch_shorts(job_id: str, edit: BatchExport,
+                            context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.short_batch import approved
+        from voxframe.plan.shorts import revision
+
+        parent, _, plan = _editable_plan(context, job_id)
+        if edit.revision != revision(plan):
+            raise HTTPException(409, "This source project changed. Preview the clips again.")
+        root = context.store.job_directory(job_id)
+        try:
+            choices = approved(root / "batch-previews", root / "complete-previews",
+                edit.clips, edit.revision,
+                check_plan=lambda draft: check_complete_sources(draft, context))
+        except EditError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(409, "A reviewed clip expired or its media changed. "
+                                "Preview it again before exporting.") from exc
+        jobs = []
+        with batch_queue_lock:
+            for key, draft, metadata in choices:
+                existing = next((job for job in context.store.all_jobs()
+                    if job.options.get("batch_parent") == job_id
+                    and job.options.get("batch_clip") == key
+                    and job.options.get("height") == edit.height), None)
+                if existing:
+                    jobs.append(existing.snapshot())
+                    continue
+                # Preserve composition guides while choosing the export resolution.
+                if draft.short_export:
+                    draft = draft.model_copy(update={"short_export":
+                        draft.short_export.model_copy(update={"height": edit.height})})
+                job = context.store.create(audio_name=f"{parent.audio_name} · "
+                    f"words {metadata['first_word'] + 1}-{metadata['last_word'] + 1}",
+                    options={"batch_parent": job_id, "batch_clip": key,
+                             "height": edit.height, "quality": "standard"})
+                folder = context.store.job_directory(job.id)
+                path = draft.save(folder / "short.plan.json")
+                snapshot = root / "complete-previews" / f"{metadata['preview_id']}.json"
+                approval = json.loads(snapshot.read_text(encoding="utf-8"))
+                approval["plan"] = draft.model_dump(mode="json")
+                (folder / "approved.json").write_text(json.dumps(approval), encoding="utf-8")
+                context.store.record_result(job, artifacts={"plan": path}, warnings=(), summary={})
+                context.store.submit(job, _plan_renderer(context))
+                jobs.append(job.snapshot())
+        return {"jobs": jobs}
+
     @app.get("/api/jobs/{job_id}/shorts")
     def shorts_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
         from voxframe.plan.shorts import controls
@@ -3517,6 +3614,19 @@ def _plan_renderer(context: ApiContext) -> Callable[[Job], None]:
         video_path = context.store.artifact_path(job.id, "video")
         if plan_path is None:
             raise RuntimeError("This job has no plan to render.")
+        approval = None
+        if video_path is None and job.options.get("batch_parent"):
+            from voxframe.render.compose.complete_preview import engine, stamps
+
+            approval = json.loads((plan_path.parent / "approved.json").read_text(encoding="utf-8"))
+            approved_plan = ScenePlan.load(plan_path)
+            if approved_plan != ScenePlan.model_validate(approval["plan"]):
+                raise ValueError("This clip changed before its first export. Preview it again.")
+            for source in approval["stamps"]:
+                _check_sandbox(context, Path(source[0]))
+            if (stamps(approved_plan) != approval["stamps"]
+                    or engine(approved_plan) != approval["engine"]):
+                raise ValueError("A source file changed. Preview this clip again before exporting.")
         if video_path is None:
             video_path = plan_path.with_suffix("").with_suffix(".mp4")
 
@@ -3539,6 +3649,15 @@ def _plan_renderer(context: ApiContext) -> Callable[[Job], None]:
             height=int(job.options.get("height", 720)),
             progress=progress,
         )
+        if approval is not None:
+            if stamps(approved_plan) != approval["stamps"]:
+                raise ValueError("A source file changed during export. Preview this clip again.")
+            from voxframe.render.audio.mixdown import Stems
+            from voxframe.render.compose.from_plan import stems_path
+
+            if (approved_plan.music_path or approved_plan.score) and not Stems.load(
+                    stems_path(video_path)).music:
+                raise ValueError("The reviewed music could not be exported. Preview again.")
         _record_outcome(context, job, outcome)
 
     return work
@@ -3842,10 +3961,6 @@ def _place_in_videos(context: ApiContext, job: Job, video: Path) -> str | None:
         log.warning("api.videos_folder_failed", job=job.id)
         return None
     return str(target)
-
-
-class RenderCancelled(Exception):
-    """Raised inside a worker when the user asked it to stop."""
 
 
 async def _event_stream(
