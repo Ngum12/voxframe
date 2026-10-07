@@ -36,7 +36,7 @@ def test_compose_preview_save_undo_redo_and_export(server, page, caps):  # type:
     fixtures._home(page, handle)
     page.get_by_text("compose-story.wav", exact=True).first.click()
     page.get_by_role("tab", name="Shorts", exact=True).click()
-    page.locator(".story-composer > summary").click()
+    page.get_by_text("Story Composer · build your sequence", exact=True).click()
     panel = page.get_by_role("region", name="Story Composer", exact=True)
     fixtures.playwright_api.expect(panel.locator(".story-block")).to_have_count(2)
     panel.get_by_role("button", name="Move passage 2 up", exact=True).click()
@@ -69,7 +69,7 @@ def test_compose_preview_save_undo_redo_and_export(server, page, caps):  # type:
     assert saved.scenes[0].audio_start > saved.scenes[-1].audio_start
     assert saved.scenes[0].story_role == "hook"
     undo.click()
-    page.locator(".story-composer > summary").click()
+    page.get_by_text("Story Composer · build your sequence", exact=True).click()
     fixtures.playwright_api.expect(panel.locator("blockquote").first).to_contain_text("Start")
     assert ScenePlan.load(path) == original
     page.get_by_role("button", name="Redo", exact=True).click()
@@ -77,7 +77,7 @@ def test_compose_preview_save_undo_redo_and_export(server, page, caps):  # type:
     page.get_by_role("button", name="Update video", exact=True).click()
     page.locator(".studio-status").get_by_text("Your video is ready").wait_for(timeout=120_000)
     assert ScenePlan.load(path) == saved
-    page.locator(".story-composer > summary").click()
+    page.get_by_text("Story Composer · build your sequence", exact=True).click()
     fixtures.playwright_api.expect(panel.locator("blockquote").first).to_contain_text("make")
     fixtures.playwright_api.expect(panel.get_by_label("Role 1", exact=True)).to_have_value("hook")
     assert page._voxframe_errors == []
