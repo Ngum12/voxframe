@@ -979,6 +979,16 @@ export interface ShortPreview {
   url: string; seconds: number; note: string;
   source_ranges: { audio_start: number; footage_start: number | null; seconds: number }[];
 }
+export interface BatchPreview extends ShortPreview {
+  clip_id: string; preview_id: string; text: string; context_before: string; context_after: string;
+  payoff: string; warnings: string[]; music_note: string; has_music: boolean;
+}
+export interface BatchJob { clip_id: string; height: number; job: Job }
+export const getBatchShorts = (id: string) => request<{jobs: BatchJob[]}>(`/api/jobs/${id}/shorts/batch`);
+export const previewBatchShort = (id: string, choice: ShortChoice) =>
+  request<BatchPreview>(`/api/jobs/${id}/shorts/batch/preview`, {method: "POST", body: JSON.stringify(choice)});
+export const exportBatchShorts = (id: string, revision: string, clips: string[], height: 1280 | 1920) =>
+  request<{jobs: Job[]}>(`/api/jobs/${id}/shorts/batch`, {method: "POST", body: JSON.stringify({revision, clips, height})});
 export const getShorts = (jobId: string) => request<ShortsControls>(`/api/jobs/${jobId}/shorts`);
 export const saveShort = (jobId: string, choice: ShortChoice) =>
   request<PlanEditResult>(`/api/jobs/${jobId}/shorts`, { method: "PUT", body: JSON.stringify(choice) });

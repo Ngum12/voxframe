@@ -2801,3 +2801,8 @@ input[type="checkbox"], input[type="radio"] { flex: none; }
 .placement-visual { margin: .75rem 0; display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
 .placement-visual img { width: 160px; height: 100px; object-fit: cover; border-radius: 8px; }
 .visual-placement .story-preview li { padding: .4rem 0; overflow-wrap: anywhere; }
+
+.batch-clip, .batch-export { border: 1px solid var(--line); border-radius: 12px; padding: 1rem; min-width: 0; overflow-wrap: anywhere; }
+.batch-export { margin: .75rem 0; }
+.batch-shorts input[type=checkbox] { width: auto; justify-self: start; }
+.batch-shorts h4 { margin: 0 0 .75rem; }

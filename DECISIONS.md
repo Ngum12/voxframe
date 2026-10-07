@@ -6832,3 +6832,32 @@ audition renderer and authenticated cached snapshot winner endpoint, including
 source-file freshness, revision checks, sandbox checks and one history edit.
 Deleting a kit cannot change a rendered snapshot. Chromium checks saving a kit,
 real draft playback, exact application, mobile layout, stale revision and Undo.
+
+## D-220: review separate batch Shorts before queueing editable exports
+
+The shortlist reuses the word-boundary passage/director helper and complete
+audition renderer. Each immutable approval names its original word range,
+revision and rendered snapshot. Automatic quotes from outside the passage
+are cleared; explicit user text stays. The API accepts up to six approvals,
+rejects duplicate or overlapping words, checks every winner’s source stamps
+and sandbox, and queues one normal plan-render job per approved clip.
+
+A per-app lock makes repeat requests reuse clip-and-height jobs. Child plans
+and approvals persist in their own working directories; GET lists child
+status through saved job metadata. The parent edit and history are untouched.
+The worker checks approval identity and media freshness before initial export
+and again before publishing. Failure of one clip cannot stop the other jobs.
+Cancellation now uses a shared worker exception that records Cancelled, keeps
+Resume available and avoids presenting an intentional stop as a failure.
+
+The UI previews clips sequentially, retains successful previews if a later
+one fails, requires an explicit review tick per preview, and invalidates that
+approval after edits. Replaced/collapsed players pause and old responses are
+ignored after navigation. The draft shortlist is session-only; queued exports
+are durable. Source media remains shared and must be kept for further edits.
+
+Units cover idempotency, overlap/stale/path rejection, independent failures,
+source races, quote retention and cancellation/resume. Encoded-video checks
+measure each passage’s source clap synchronization and soundtrack waveform
+agreement. Chromium checks two full previews, one audible player, review
+invalidation, real portrait exports, phone layout, downloads and reload.

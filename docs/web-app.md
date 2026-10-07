@@ -519,3 +519,32 @@ without adding text; photo movement changes moving photographs while held photos
 stay still. Caption overrides are replaced; words, emphasis, cuts, shot choices
 and project media stay intact. Older caption/sound presets keep visual choices.
 Saved kits also appear on new uploads of any length.
+
+## Batch Shorts from one recording
+
+Open a finished project’s **Shorts** tab and expand **Batch Shorts**. Use
+**Add current passage** to copy the word range selected in the single-clip
+producer, or add the suggested passages. Keep up to six clips. Change each
+clip’s first/last word numbers, look, caption matching and portrait framing.
+Each clip must last 3–60 seconds, stay within a continuous transcript passage
+and use distinct spoken words. Shared-word ranges must be trimmed.
+
+Choose **Preview unrendered clips** or preview a single card. These previews
+include the project’s current soundtrack, selected visuals and captions. Read
+**Opening context and ending**, watch and listen, then tick the review box.
+Changing a clip removes its old preview and approval. Suggestions use visible
+transcript cues; they do not guarantee a complete story or predict engagement.
+
+Choose a 1280px or 1920px frame height and **Export reviewed clips**. Portrait
+exports are 720×1280 or 1080×1920; clips retaining the source aspect use the
+selected height. Existing export composition guides remain intact. Export
+creates separate projects through the ordinary render queue, preserving the
+source project. Each clip has its own progress, Stop, Resume and download link.
+Closing this tab does not stop queued jobs; reopening Batch Shorts lists them.
+The unexported shortlist belongs to the current editing session.
+
+Repeated requests for the same reviewed clip and height reuse its job. Resume
+a stopped or failed clip, or open it from Projects for further edits. Changed
+source media expires an approval; preview the range again to create a fresh
+export. Keep the source project and its media for editing and resuming clips.
+Exports retain the chosen soundtrack and creator/licence credits.

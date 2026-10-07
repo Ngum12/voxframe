@@ -41,6 +41,7 @@ __all__ = [
     "JobState",
     "JobStore",
     "ProgressEvent",
+    "RenderCancelled",
 ]
 
 log = structlog.get_logger(__name__)
@@ -49,6 +50,10 @@ log = structlog.get_logger(__name__)
 #: rather than seeing an empty stream, which is what makes a reloaded tab show
 #: history instead of appearing stuck.
 PROGRESS_HISTORY = 200
+
+
+class RenderCancelled(Exception):
+    """Raised at a stage boundary after a person asks a worker to stop."""
 
 
 class JobState(StrEnum):
@@ -379,6 +384,9 @@ class JobStore:
                 self._persist()
             try:
                 work(job)
+            except RenderCancelled:
+                with self._lock:
+                    self._finish(job, JobState.CANCELLED, "Stopped. Resume to finish.")
             except BaseException as exc:
                 # Record the failure FIRST, before anything that can itself
                 # fail. Logging came first once, and on Windows the traceback

@@ -483,3 +483,29 @@ def _fake_plan(*, scenes: int, matched: int, cards: int = 0) -> object:
             self.matched_scenes = matched
 
     return FakePlan()
+
+
+def test_stopping_a_running_worker_is_cancelled_and_resumes(store: JobStore) -> None:
+    from voxframe.jobs.store import RenderCancelled
+
+    started, release = threading.Event(), threading.Event()
+    job = store.create(audio_name="short.wav", options={})
+
+    def work(current: Job) -> None:
+        started.set()
+        release.wait(timeout=5)
+        if current.cancel_requested:
+            raise RenderCancelled
+
+    store.submit(job, work)
+    try:
+        assert started.wait(timeout=5)
+        assert store.request_cancel(job.id)
+    finally:
+        release.set()
+    job.future.result(timeout=5)
+    assert job.state is JobState.CANCELLED
+    assert job.error == "" and job.snapshot()["resumable"]
+    store.resume(job.id, lambda _: None)
+    job.future.result(timeout=5)
+    assert job.state is JobState.SUCCEEDED

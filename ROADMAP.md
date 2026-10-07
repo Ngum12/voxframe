@@ -202,7 +202,8 @@ the bounded draft. Explicit pans use a slight crop so they actually travel
 without empty edges. Automatic and hold-still choices remain available;
 saves are revision checked, undoable and included in segment cache keys.
 
-Next: reusable style kits that combine captions, photo motion and sound.
+Reusable style kits now combine captions, photo motion, transitions and sound
+(see Story production below).
 
 - **Suggested Shorts:** 3 to 60 seconds, aiming near 30, with sentence-based
   candidates ranked by questions, numbers and explanation/contrast cues.
@@ -230,8 +231,12 @@ Next: reusable style kits that combine captions, photo motion and sound.
 - **Signature style kits — implemented.** Save optional transition, photo and
   text treatments with captions and sound. Reuse on upload or preview the
   current short with its soundtrack, then save the exact snapshot with Undo.
-- **Next: batch Shorts.** Review several distinct clips from one recording
-  before exporting them.
+- **Batch Shorts — implemented.** Shortlist up to six distinct word ranges,
+  preview each with current music and a chosen look, review opening/ending
+  context, and queue separate editable exports. Each clip has progress, Stop,
+  Resume and download controls; repeat clicks reuse the same jobs.
+- **Next: batch packaging.** Add a downloadable collection with subtitles and
+  credits, plus naming and destination settings for the complete reviewed set.
 
 ## Later
 

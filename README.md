@@ -82,6 +82,10 @@ chapter cards and highlights. [Walk through the controls](docs/web-app.md).
   Choose **Steady bed**, **Cinematic rise** or **Punch & breathe**, then hear the
   opening and ending. Build your own music library or discover openly licensed
   tracks when you enable online music search.
+- **Batch Shorts from one recording.** Shortlist up to six distinct word ranges,
+  choose looks and framing, preview each with sound, and export the reviewed
+  set as separate projects. Download each clip, stop or resume individual
+  exports, and keep working with the original recording.
 - **Signature style kits.** Save captions and sound, with optional transitions,
   photo movement and text styling. Reuse a kit after uploading, or audition it
   on a 3–60 second story in Director and apply the exact preview with Undo.
