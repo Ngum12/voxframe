@@ -2806,3 +2806,8 @@ input[type="checkbox"], input[type="radio"] { flex: none; }
 .batch-export { margin: .75rem 0; }
 .batch-shorts input[type=checkbox] { width: auto; justify-self: start; }
 .batch-shorts h4 { margin: 0 0 .75rem; }
+
+.short-collections { border: 1px solid var(--line); border-radius: 14px; padding: 1rem; overflow-wrap: anywhere; }
+.short-collections input:not([type=checkbox]) { width: 100%; min-width: 0; }
+.collection-options { margin: 1rem 0; }
+.collection-ready { margin: 1rem 0 0; padding: 1rem; border-left: 3px solid var(--accent); }

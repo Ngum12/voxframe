@@ -411,6 +411,16 @@ class BatchExport(BaseModel):
     height: Literal[1280, 1920] = 1280
 
 
+class CollectionItem(BaseModel):
+    job_id: str = Field(pattern=r"^[a-f0-9]{32}$")
+    title: str = Field(min_length=1, max_length=80)
+
+
+class CollectionRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=80)
+    clips: list[CollectionItem] = Field(min_length=1, max_length=6)
+
+
 class PacingEdit(BaseModel):
     revision: str | None = Field(default=None, pattern=r"^[a-f0-9]{24}$")
     cuts: tuple[str, ...] = Field(min_length=1, max_length=100)
@@ -2003,6 +2013,89 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                           "height": job.options.get("height"), "job": job.snapshot()}
                          for job in context.store.all_jobs()
                          if job.options.get("batch_parent") == job_id]}
+
+    @app.post("/api/jobs/{job_id}/shorts/batch/collections")
+    def package_short_collection(job_id: str, edit: CollectionRequest,
+                                 context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.jobs.short_collection import CollectionClip, package
+
+        if context.store.get(job_id) is None:
+            raise HTTPException(404, "No such source project.")
+        ids = [item.job_id for item in edit.clips]
+        if len(set(ids)) != len(ids):
+            raise HTTPException(422, "Choose each finished export only once.")
+        title = " ".join(edit.title.split())
+        if not title or any(not item.title.strip() for item in edit.clips):
+            raise HTTPException(422, "Give the collection and every clip a name.")
+        clips, original = [], {}
+        for item in edit.clips:
+            child = context.store.get(item.job_id)
+            if child is None or child.options.get("batch_parent") != job_id:
+                raise HTTPException(404, "That clip does not belong to this source project.")
+            if child.state.value != "succeeded" or "video" not in child.artifacts:
+                raise HTTPException(409, "Finish every selected clip before packaging.")
+            original[child.id] = (child.state, dict(child.artifacts),
+                                  json.loads(json.dumps(child.summary)))
+            files = []
+            for artifact, extension in (("video", "mp4"), ("srt", "srt"), ("vtt", "vtt")):
+                path = context.store.artifact_path(child.id, artifact)
+                if path is None:
+                    continue
+                _check_sandbox(context, path)
+                if not path.is_file():
+                    raise HTTPException(409, "A selected export file is missing. "
+                                        "Update that clip before packaging.")
+                files.append((extension, path.resolve()))
+            if not any(extension == "mp4" for extension, _ in files):
+                raise HTTPException(409, "The selected video is missing. Update that clip first.")
+            clips.append(CollectionClip(job_id=child.id, title=" ".join(item.title.split()),
+                files=tuple(files), credits=tuple(child.summary.get("credits", [])),
+                width=child.summary.get("width"), height=child.summary.get("height"),
+                pending_edits=int(child.summary.get("pending_edits", 0))))
+
+        def check_current() -> None:
+            for child_id, previous in original.items():
+                child = context.store.get(child_id)
+                if child is None or (child.state, child.artifacts, child.summary) != previous:
+                    raise ValueError("A selected clip changed. Build the collection again.")
+            for clip in clips:
+                for _, path in clip.files:
+                    _check_sandbox(context, path)
+
+        try:
+            result = package(title, clips, context.store.job_directory(job_id) / "collections",
+                             check_current)
+        except (OSError, ValueError, TypeError) as exc:
+            log.warning("collection.package_failed", reason=type(exc).__name__)
+            raise HTTPException(409, "A selected export changed or could not be read. "
+                                "Check the clips and build the collection again.") from exc
+        return result | {"url": f"/api/jobs/{job_id}/shorts/batch/collections/{result['key']}"}
+
+    @app.get("/api/jobs/{job_id}/shorts/batch/collections/{key}")
+    def download_short_collection(job_id: str, key: str, request: Request,
+                                   context: ApiContext = Depends(ctx)) -> Response:
+        import re
+
+        from voxframe.jobs.short_collection import slug
+
+        if context.store.get(job_id) is None or re.fullmatch(r"[a-f0-9]{24}", key) is None:
+            raise HTTPException(404, "No such collection.")
+        path = context.store.job_directory(job_id) / "collections" / f"{key}.zip"
+        _check_sandbox(context, path)
+        if not path.is_file():
+            raise HTTPException(404, "No such collection.")
+        # Archive metadata records its safe human-readable filename.
+        import zipfile
+
+        try:
+            with zipfile.ZipFile(path) as archive:
+                root = archive.namelist()[0].split("/")[0]
+        except (OSError, zipfile.BadZipFile, IndexError) as exc:
+            raise HTTPException(409, "This collection could not be read. Build it again.") from exc
+        response = _file_or_range(request, path)
+        response.headers["content-type"] = "application/zip"
+        response.headers["content-disposition"] = f'attachment; filename="{slug(root)}.zip"'
+        return response
 
     @app.post("/api/jobs/{job_id}/shorts/batch/preview")
     def batch_short_preview(job_id: str, edit: ShortEdit,
