@@ -252,8 +252,13 @@ Reusable style kits now combine captions, photo motion, transitions and sound
   reviewed opening, then audition it with a new recording’s own words, picture
   and soundtrack. Signatures persist locally and never copy source media or
   permission to replace pinned text. Removal leaves projects and drafts intact.
-- **Next: closing auditions.** Give the final spoken idea a deliberate visual
-  payoff, compare complete drafts with sound, and choose a reviewed finish.
+- **Closing auditions — implemented.** Give the final spoken idea a clear
+  payoff, last-word punch or quiet resolve. Compare complete drafts with sound,
+  jump to the lead-in and choose an exact reviewed finish with Undo. Earlier
+  opening text, narration clocks and outro cards carry over; pinned closing
+  text requires explicit replacement.
+- **Next: bookend auditions.** Preview opening and closing treatments together,
+  review their relationship across the story and apply the pair as one edit.
 
 ## Later
 

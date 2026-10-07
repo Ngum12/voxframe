@@ -1110,3 +1110,10 @@ export const listOpeningSignatures = () => request<{signatures: OpeningSignature
 export const saveOpeningSignature = (jobId: string, name: string, revision: string, opening_id: string) => request<OpeningSignature>(`/api/jobs/${jobId}/opening-signatures`, {method: "POST", body: JSON.stringify({name, revision, opening_id})});
 export const deleteOpeningSignature = (id: string) => request<void>(`/api/opening-signatures/${id}`, {method: "DELETE"});
 export const previewOpeningSignature = (jobId: string, choice: Pick<OpeningChoice, "revision" | "last_word" | "asset_scene" | "replace_pinned">, signature_id: string) => request<OpeningPreview>(`/api/jobs/${jobId}/opening-signatures/preview`, {method: "POST", body: JSON.stringify({...choice, signature_id})});
+
+export interface ClosingChoice { revision: string; first_word: number; look: VisualBeat["look"]; shot: "keep" | "speaker" | "picture"; asset_scene: number | null; match_captions: boolean; replace_pinned: boolean }
+export interface ClosingWindow { first_word: number; quote: string; start: number; end: number; pinned: boolean; has_speaker: boolean }
+export interface ClosingControls { revision: string; eligible: boolean; starts: ClosingWindow[]; default_first_word: number | null; profiles: Record<VisualBeat["look"], {label: string; note: string}>; visuals: {scene: number; quote: string; credit: string}[] }
+export interface ClosingPreview extends CompletePreview { closing: ClosingWindow; settings: ClosingChoice }
+export const getClosingAuditions = (id: string) => request<ClosingControls>(`/api/jobs/${id}/closing-auditions`);
+export const previewClosing = (id: string, choice: ClosingChoice) => request<ClosingPreview>(`/api/jobs/${id}/closing-auditions/preview`, {method: "POST", body: JSON.stringify(choice)});

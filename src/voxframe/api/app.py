@@ -76,6 +76,7 @@ from voxframe.library.db import AssetLibrary
 from voxframe.model_downloads import Download
 from voxframe.models.asset import AssetKind
 from voxframe.plan.audio_mix import AudioMix
+from voxframe.plan.closing_audition import ClosingChoice
 from voxframe.plan.complete_audition import CompleteChoice
 from voxframe.plan.opening_audition import OpeningChoice
 from voxframe.plan.scene_plan import PlannedScene, ScenePlan
@@ -2505,6 +2506,42 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 if key not in {"plan", "stamps", "engine"}} | {
             "preview_id": result["key"],
             "url": f"/api/jobs/{job_id}/complete-previews/{result['key']}", "source_ranges": []}
+
+    @app.get("/api/jobs/{job_id}/closing-auditions")
+    def closing_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.closing_audition import controls
+
+        _, _, plan = _editable_plan(context, job_id)
+        return controls(plan)
+
+    @app.post("/api/jobs/{job_id}/closing-auditions/preview")
+    def closing_preview(job_id: str, choice: ClosingChoice,
+                        context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.closing_audition import audition
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.shorts import revision
+        from voxframe.render.compose.complete_preview import complete_preview
+
+        _, _, plan = _editable_plan(context, job_id)
+        if choice.revision != revision(plan):
+            raise HTTPException(409, "This story changed. Reopen closing auditions.")
+        try:
+            draft, closing = audition(plan, choice)
+        except EditError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        check_complete_sources(draft, context)
+        try:
+            result = complete_preview(draft, choice.revision,
+                context.store.job_directory(job_id) / "complete-previews")
+        except Exception as exc:
+            log.warning("closing.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(422, "The closing audition could not be rendered. "
+                                "Check its media and music, then try again.") from exc
+        return {key: value for key, value in result.items()
+                if key not in {"plan", "stamps", "engine"}} | {
+            "preview_id": result["key"],
+            "url": f"/api/jobs/{job_id}/complete-previews/{result['key']}",
+            "source_ranges": [], "closing": closing, "settings": choice.model_dump(mode="json")}
 
     @app.get("/api/jobs/{job_id}/opening-auditions")
     def opening_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:

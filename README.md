@@ -103,6 +103,10 @@ chapter cards and highlights. [Walk through the controls](docs/web-app.md).
   shots or lead with speaker footage or an existing project picture. Save a
   reviewed opening as a named signature, then preview it on another recording
   with that recording’s own words, picture and soundtrack.
+- **Closing auditions.** Land your final words with a clear payoff, a last-word
+  punch or a quiet resolve. Preview the full story with sound, compare from
+  the lead-in, then apply the reviewed finish with Undo. Earlier opening text,
+  narration timing and outro cards carry over.
 - **A finishing review.** Inspect potential caption, framing, timing and sound
   issues, with evidence and a route to the relevant controls. Mark intentional
   choices checked. The review uses saved settings and metadata; watch and listen

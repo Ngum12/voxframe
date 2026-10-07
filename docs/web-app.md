@@ -669,3 +669,28 @@ are unique ignoring case, with up to 30 signatures. **Remove saved signature**
 removes the named recipe while keeping existing projects and rendered drafts.
 An already-reviewed draft remains usable after its recipe is removed. Damaged
 signature files are reported and preserved rather than overwritten.
+
+
+## Closing auditions
+
+In **Director → Closing auditions**, choose the final words of a 3–60 second
+story. Choices use your displayed transcript, up to the last twelve words and
+six seconds of the final timed speech group. Complete any untimed trailing
+speech first. Outro cards stay in place.
+
+Choose **Land the point**, **Last-word punch** or **Quiet resolve**. Keep the
+current shots, use speaker footage or select a project picture. Caption matching
+changes the selected closing only. Earlier text and source timings carry over;
+the tool does not invent a call to action or trim narration. Replacing pinned
+closing text requires the explicit replacement checkbox.
+
+Choose **Preview selected closing** or **Render three closing auditions**.
+Each draft includes the full story and its project music or generated score.
+**Review the lead-in** jumps to the second before the closing. In comparison,
+**Review the ending** seeks both videos together; only one soundtrack is audible.
+Watch and listen, then check **I reviewed the lead-in and final words** for the
+matching draft. **Use this closing** or **Use version** applies that exact
+snapshot as one undoable edit. Choose **Update video** for the final export.
+
+Changing controls does not rebuild old comparison drafts. Changed plans or
+source files require fresh previews. Up to six drafts remain in this session.

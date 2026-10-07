@@ -6981,3 +6981,31 @@ permissions, authentication and independent deletion. Chromium saves an
 opening after changing its form controls, reuses it with a different recording,
 picture and audible soundtrack, checks duplicate-name recovery and phone
 layout, then exercises exact apply, Undo/Redo, export and safe removal.
+
+
+## D-225: closing auditions preserve the story around the final phrase
+
+Closing treatments use validated suffixes of the final timed speech group,
+limited to twelve words and six seconds on 3–60 second stories. Untimed trailing
+speech blocks choices. Displayed corrections supply the quote; no words are
+invented. Cuts preserve narration and footage clocks, total frames, soundtrack,
+credits, earlier opening text and outro cards. When placement splits a scene,
+restore its earlier automatic visual beat as well as pinned text. An energy
+split requires a safe whole-frame boundary; otherwise keep one quoted beat.
+Caption matching affects only the closing. Pinned closing text requires an
+explicit replacement choice.
+
+Render complete immutable previews with actual project sound. Applying uses
+the existing complete-preview winner validation and one undoable history entry.
+Revision, source, renderer, sandbox and authentication checks remain mandatory;
+private preview fields are excluded from API responses. The UI requires review
+of the named snapshot and keeps old drafts independent of changing controls.
+An optional comparison review position synchronously seeks both videos to the
+lead-in without affecting existing comparison consumers.
+
+Units cover frame-level source clocks at four rates, preserved opening quotes,
+corrected words, cards, unsafe split boundaries, pinned replacement, stale
+approvals and exact apply/Undo. Real FFmpeg renders verify all three treatments,
+frame counts, soundtrack correlation, audible music and delayed speech sync.
+Chromium checks lead-in playback, review gates, synchronized comparison with
+one audible soundtrack, phone layout, exact apply, Undo/Redo and final export.

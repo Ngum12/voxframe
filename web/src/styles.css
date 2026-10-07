@@ -2827,3 +2827,10 @@ input[type="checkbox"], input[type="radio"] { flex: none; }
 .opening-reviews { display: grid; gap: .6rem; margin: 1rem 0; }
 .opening-reviews .story-block { min-width: 0; }
 .opening-reviews .btn { white-space: normal; text-align: left; overflow-wrap: anywhere; max-width: 100%; }
+
+.closing-auditions fieldset { min-width: 0; }
+.closing-auditions select { max-width: 100%; min-width: 0; }
+.closing-quote { padding: 1rem; border-left: 3px solid var(--accent, #70f0d0); font-size: 1.2rem; overflow-wrap: anywhere; }
+.closing-reviews { display: grid; gap: .6rem; margin: 1rem 0; }
+.closing-reviews .story-block { min-width: 0; }
+.closing-reviews .btn { white-space: normal; text-align: left; overflow-wrap: anywhere; max-width: 100%; }
