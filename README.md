@@ -111,7 +111,9 @@ chapter cards and highlights. [Walk through the controls](docs/web-app.md).
   Mix their treatments or compare three coordinated pairs with sound. Review
   both ends, then apply the exact pair as one undoable edit; the middle stays
   yours. Save a reviewed pair as a named signature, then audition it on another
-  recording with fresh words, media and sound.
+  recording with fresh words, media and sound. Audition one signature across
+  up to six finished recordings, review each pair, then export separate editable
+  clips and package their videos, subtitles and credits in a collection ZIP.
 - **A finishing review.** Inspect potential caption, framing, timing and sound
   issues, with evidence and a route to the relevant controls. Mark intentional
   choices checked. The review uses saved settings and metadata; watch and listen

@@ -750,3 +750,39 @@ ignoring case, with up to 30 recipes. **Remove saved bookend signature** removes
 only the named recipe, leaving projects and rendered drafts intact. Damaged
 signature files are reported and kept. Existing opening signatures are stored
 separately and remain available.
+
+
+## Make a bookend signature collection
+
+In **Director → Bookend signature collection**, choose a saved pair and up to
+six finished 3–60 second recordings. These can be separate projects or finished
+short clips. Save a reviewed bookend recipe first if the list is empty. Use
+**Refresh recordings and signatures** after new exports or source edits.
+
+Each recording gets separate phrase defaults close to the saved word counts.
+Adjust its **Opening words** and **Closing words** to complete the thought.
+The phrases must be separate; missing word timings or speaker footage needs
+attention before preview. Pinned opening and closing text each require their
+own explicit replacement choice for that recording.
+
+Choose **Preview signature collection**. Each complete draft uses its own words,
+media and soundtrack. Review the opening, its return to the story, the ending
+and full sound, then check both review boxes for every recording. Changing a
+phrase hides and pauses its previous preview. Returning to the same unchanged
+choice restores its draft; a new render clears both reviews.
+
+**Export reviewed bookend collection** creates separate editable projects from
+the exact reviewed snapshots, keeping the original recordings intact. Each
+export keeps its source timings, middle text, cards, sound and existing export
+size. Repeated export clicks reuse the same jobs. Changed source plans, media,
+renderer or approvals stop the request before any jobs are created; refresh and
+render fresh previews. Removing a saved recipe leaves already-rendered snapshots
+available for export.
+
+Find progress, download, stop and resume controls in **Your bookend exports**.
+Open an export from Projects to edit it further. Keep source projects and media
+for edits and resumes. Once exports finish, the **Bookend collection** section
+lets you choose clips, name and reorder them, then **Build collection**. Its ZIP
+contains finished videos, available SRT/VTT subtitles, credits and a manifest
+with recipe names, source project IDs and file checksums. It contains no source
+recordings or editable plans. Render pending edits before packaging.

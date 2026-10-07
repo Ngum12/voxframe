@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getBookendAuditions, previewBookend, saveComplete, listBookendSignatures, saveBookendSignature, deleteBookendSignature, previewBookendSignature, type BookendSignature, type BookendChoice, type BookendControls, type BookendPreview, type CompleteWinner, type ScenePlan, type PlanEditResult } from "../api";
 import { StoryComparison, type StoryVariant } from "./StoryComparison";
+import { bookendDefaults } from "../bookendDefaults";
 import { Notice } from "../components";
 
 type Audition = StoryVariant<CompleteWinner> & {settings: BookendChoice; preview: BookendPreview; reviewedOpening: boolean; reviewedClosing: boolean};
@@ -46,13 +47,8 @@ export function BookendAuditions({jobId, plan, onEdited}: {jobId: string; plan: 
     if (!item || !data) return;
     setOpeningLook(item.opening_look); setClosingLook(item.closing_look);
     setOpeningShot(item.opening_shot); setClosingShot(item.closing_shot); setMatch(item.match_captions);
-    const count = data.word_count;
-    const pairs = data.opening.endings.flatMap(a => data.closing.starts
-      .filter(b => a.last_word < b.first_word && a.end <= b.start)
-      .map(b => ({last: a.last_word, first: b.first_word,
-        distance: Math.abs(a.last_word + 1 - item.opening_words) + Math.abs(count - b.first_word - item.closing_words)})));
-    pairs.sort((a, b) => a.distance - b.distance);
-    if (pairs[0]) { setLast(pairs[0].last); setFirst(pairs[0].first); }
+    const words = bookendDefaults(data, item);
+    if (words) { setLast(words.last_word); setFirst(words.first_word); }
   }
   async function manage(remove: boolean) {
     if (busy || (!remove && (!toSave || !canChoose(toSave.choice) || !name.trim()))) return;

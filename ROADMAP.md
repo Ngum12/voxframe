@@ -265,8 +265,13 @@ Reusable style kits now combine captions, photo motion, transitions and sound
   treatments, shot choices and preferred phrase lengths. Reuse them with fresh
   words, media and sound; new recordings require new previews and replacement
   choices. Disjoint phrase defaults adapt to shorter recordings.
-- **Next: bookend signature collections.** Audition a saved recipe across selected
-  finished stories, review each recording, then export separate editable clips.
+- **Bookend signature collections — implemented.** Select up to six finished
+  recordings, adjust each phrase and replacement choice, then preview with each
+  story’s own soundtrack. Review both ends per recording before exporting exact
+  snapshots as separate editable projects. ZIP manifests identify recipe and
+  source; repeated exports reuse jobs and stale approvals block the whole queue.
+- **Next: collection finishing review.** Inspect caption, framing, timing and
+  sound checks across finished collection clips before packaging a release.
 
 ## Later
 

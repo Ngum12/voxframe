@@ -2,17 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { packageShortCollection, type BatchJob, type ShortCollection } from "../api";
 import { Notice } from "../components";
 
-export function ShortCollections({jobId, jobs}: {jobId: string; jobs: BatchJob[]}) {
-  const [title, setTitle] = useState("Voxframe Shorts"), [selected, setSelected] = useState<string[]>([]);
+export function ShortCollections({jobId, jobs, bookends = false}: {jobId: string; jobs: BatchJob[]; bookends?: boolean}) {
+  const defaultTitle = bookends ? "Voxframe Bookends" : "Voxframe Shorts";
+  const [title, setTitle] = useState(defaultTitle), [selected, setSelected] = useState<string[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false), [result, setResult] = useState<ShortCollection | null>(null);
   const [error, setError] = useState<string | null>(null);
   const generation = useRef(0);
   useEffect(() => {
-    generation.current++; setTitle("Voxframe Shorts"); setSelected([]); setNames({});
+    generation.current++; setTitle(defaultTitle); setSelected([]); setNames({});
     setBusy(false); setResult(null); setError(null);
     return () => { generation.current++; };
-  }, [jobId]);
+  }, [jobId, defaultTitle]);
   const ordered = [...jobs].sort((a, b) => a.job.created_at.localeCompare(b.job.created_at));
   const ready = ordered.filter(item => item.job.state === "succeeded" && item.job.artifacts.includes("video"));
   const choices = selected.map(id => jobs.find(item => item.job.id === id));
@@ -39,7 +40,7 @@ export function ShortCollections({jobId, jobs}: {jobId: string; jobs: BatchJob[]
     } catch (e) { if (generation.current === version) setError(e instanceof Error ? e.message : "Could not package the collection."); }
     finally { if (generation.current === version) setBusy(false); }
   }
-  return <section className="short-collections" aria-label="Shorts collection">
+  return <section className="short-collections" aria-label={bookends ? "Bookend collection" : "Shorts collection"}>
     <h4>One collection. Ready to take with you.</h4>
     <p>Select up to six finished exports, name them and set their order. One ZIP includes videos, available SRT/VTT subtitles, per-clip credits and a collection manifest.</p>
     <fieldset disabled={busy}>

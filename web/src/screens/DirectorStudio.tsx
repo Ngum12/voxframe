@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getDirection, directVideo, previewDirection, saveVisual, previewVisual,
   type DirectionControls, type VisualBeat, type ShortPreview, type ScenePlan, type PlanEditResult } from "../api";
 import { SignatureKits } from "./SignatureKits";
+import { BookendCollections } from "./BookendCollections";
 import { BookendAuditions } from "./BookendAuditions";
 import { ClosingAuditions } from "./ClosingAuditions";
 import { OpeningAuditions } from "./OpeningAuditions";
@@ -55,6 +56,7 @@ export function DirectorStudio({ jobId, plan, sceneIndex, onEdited }: {
     <SignatureKits jobId={jobId} plan={plan} onEdited={onEdited} />
     <OpeningAuditions jobId={jobId} plan={plan} onEdited={onEdited} />
     <BookendAuditions jobId={jobId} plan={plan} onEdited={onEdited} />
+    <BookendCollections jobId={jobId} plan={plan} />
     <ClosingAuditions jobId={jobId} plan={plan} onEdited={onEdited} />
     <CompleteAuditions jobId={jobId} plan={plan} onEdited={onEdited} />
     <VisualPlacementStudio jobId={jobId} plan={plan} onEdited={onEdited} />
