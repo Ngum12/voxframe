@@ -2,11 +2,11 @@
   <img src="src/voxframe/assets/icon/voxframe-512.png" alt="" width="96" height="96">
 </p>
 
-<h1 align="center">Voxframe</h1>
+<h1 align="center">VoxFrame</h1>
 
 <p align="center">
-  <strong>Turn a recording into a captioned video with matching pictures — on your own computer.</strong><br>
-  Free and open source. No account, no subscription, no upload.
+  <strong>Turn your recordings into videos and Shorts you can direct — on your own computer.</strong><br>
+  Free and open source. No account or subscription. Your recordings stay on your computer.
 </p>
 
 <p align="center">
@@ -18,40 +18,89 @@
 
 ---
 
-Give Voxframe a lesson, a talk or a podcast episode. It hears every word,
-captions each one as it is spoken, splits the recording into scenes, and finds a
-photograph or clip for each scene that fits what is said. Then you finish it in
-the studio: the video stays in view while you change anything, with undo for
-every change.
+**Your voice. Your footage. Your direction.**
 
-![The studio: the video, its scenes and words on the timeline, and everything you can change](docs/images/studio-dark.png)
+Start with a recording: a lesson, a talk, an interview or a video of you speaking.
+VoxFrame transcribes it, times the captions and matches pictures to what you say.
+Then take control in the studio: build a Short, audition creative directions,
+compare rendered edits, refine the speech and shape the sound.
 
-## What it does
+Keep yourself on screen, bring in cutaways and text beats, and decide how each
+photo moves. Preview your choices before saving. Undo and redo edits, then update
+the finished video without starting the whole project again.
 
-- **Word-by-word captions**, in English or French, burned into the video, plus
-  SRT and VTT subtitles.
-- **You on screen**, from a video file: your picture in sync with your
-  voice, with the matching pictures cutting in when you mention what they
-  show. A vertical crop follows your face as you move, and captions keep
-  clear of it.
-- **Pictures that fit**, matched by meaning from your own library — or, if you
-  turn it on and add a free key, from Pexels, Pixabay and Openverse. Every
-  picture is credited with its photographer and licence.
-- **A finished look**: slow camera movement, crossfades, title and chapter
-  cards, and your own music, edited to the speaker: cut on the beat, quieter
-  under every sentence, rising into pauses, and ending on the last word.
-- **Sound that is ready to share**: gentle voice polish, the music kept under
-  the voice, and the right loudness for YouTube, social media, WhatsApp or a
-  podcast. Every video's sound is checked.
-- **The studio**: swap a picture, correct a caption, add a title, change the
-  music, and see each change before you make it. Undo anything. When you
-  update the video, only what you changed is made again.
-- **Dark or light**, following your computer, and usable entirely from the
-  keyboard.
-- **Long recordings**: chapters at long pauses, a short highlights version, and
-  a render that resumes if it is interrupted.
+![The VoxFrame studio: video playback, scenes, timed words and editing controls](docs/images/studio-dark.png)
+
+## From recording to finished video
+
+**Upload → choose a passage → audition → compare → refine → review → export.**
+
+1. **Bring your recording.** Start with sound or video. With **Use my video**,
+   your footage stays in sync with your voice; vertical framing can follow your
+   face while pictures appear as cutaways.
+2. **Find your Short.** Review suggested 3–60 second passages, inspect the
+   opening and ending, and adjust the first and last words yourself.
+3. **Audition a direction.** Try **Clean authority**, **High energy** or
+   **Cinematic story**, with optional matching captions. Inspect the planned
+   beats and render a preview using your actual footage and narration.
+4. **Compare the edits.** Put two auditions of the same passage side by side.
+   A shared playhead starts, pauses and scrubs both. Switch which version you
+   hear, then save the passage, direction and captions you prefer together.
+5. **Refine the delivery.** Review pauses, standalone fillers such as “um” and
+   “euh,” and immediately repeated phrases. Select the cuts you want and listen
+   to a preview before saving them.
+6. **Finish for your audience.** Shape the music, review potential issues, and
+   choose export settings for Shorts, Reels, TikTok or WhatsApp. Save your edits,
+   click **Update video**, then download the finished MP4.
+
+Keep the full recording if you prefer: the studio also handles longer videos,
+chapter cards and highlights. [Walk through the controls](docs/web-app.md).
+
+## Make it your own
+
+- **Captions with character.** English and French transcription, timed words,
+  editable text, animation, colour, placement and emphasis. Burn captions into
+  the video and keep SRT and VTT subtitle files too.
+- **Pictures with a purpose.** Match photos and clips from your own library,
+  choose alternatives or bring your own image. Optional online discovery finds
+  more material, with creator and licence credits retained.
+- **Photo movement you direct.** Choose zoom in/out or pan left, right, up or
+  down, adjust the strength, and render a silent picture preview before saving.
+  Automatic movement and **Hold still** are available too. Pans crop slightly
+  to make room for travel; previews show up to 12 seconds at the scene's original
+  movement speed.
+- **Sound shaped around speech.** Gentle voice polish, music fitted to the
+  speaker, and loudness targets for YouTube, social media, WhatsApp and podcasts.
+  Choose **Steady bed**, **Cinematic rise** or **Punch & breathe**, then hear the
+  opening and ending. Build your own music library or discover openly licensed
+  tracks when you enable online music search.
+- **Your signature preset.** Save a chosen scene's caption treatment and the
+  project's sound mix under your own name. Select it after uploading your next
+  recording. Footage, words, cuts and music files stay specific to each project.
+- **A finishing review.** Inspect potential caption, framing, timing and sound
+  issues, with evidence and a route to the relevant controls. Mark intentional
+  choices checked. The review uses saved settings and metadata; watch and listen
+  to the updated video before sharing it.
+- **An editor that keeps you in control.** The video stays visible while you
+  work with scenes and timed words. Undo and redo, saved edits, reusable render
+  segments and interrupted-render recovery keep work from being lost.
+- **Two studio looks.** Dark and light themes, responsive layouts and keyboard
+  navigation. Work locally without an account or subscription.
+
+<details>
+<summary>See the sound controls and light theme</summary>
+
+![Sound controls in the dark studio](docs/images/studio-sound-dark.png)
+
+![The VoxFrame studio in the light theme](docs/images/studio-light.png)
+
+</details>
 
 ## Download
+
+This README describes the current source build. Packaged installers follow
+tagged releases; check the [release notes](https://github.com/Ngum12/voxframe/releases)
+for the features included in your download.
 
 | | |
 |---|---|
@@ -61,25 +110,31 @@ every change.
 Neither is code-signed yet, so Windows and macOS ask you to confirm the first
 time; the guides show exactly where. The first start downloads the speech and
 picture models (about 3.1 GB, or 750 MB for the Lite version) and shows its
-progress. After that, Voxframe works without the internet.
+progress. Once the required models and any optional music tools are downloaded,
+you can edit and export with local assets without the internet. Online discovery
+needs a connection.
 
 ## Privacy
 
-Your recordings and videos never leave your computer. Voxframe goes online only
-to download its models when you ask, to search free image services if you turn
-that on, and to check for updates when you press the button.
-[The privacy note](docs/privacy.md) lists exactly what is sent, and to whom.
+Your recordings and videos stay on your computer. Speech recognition, editing
+and rendering run locally, with no account, tracking or telemetry.
+
+Online image and music discovery are optional. Image searches can send words
+from a scene; music searches send the words you type. Previewing or saving an
+online result downloads media from its original host. Model downloads, optional
+music-tool downloads and update checks also use the internet.
+[The privacy note](docs/privacy.md) explains these connections.
 
 ## For developers
 
 ```bash
 git clone https://github.com/Ngum12/voxframe
 cd voxframe
-pip install -e ".[dev,app]"
+pip install -e ".[dev,app,music]"
 python -m playwright install chromium
 voxframe doctor        # what is installed, and what is missing
 voxframe web           # the app in your browser
-pytest                 # the full suite, browser tests included
+pytest                 # full suite; some checks need downloaded models
 ```
 
 You need Python 3.11–3.13 and FFmpeg with libass. The web app's built files are

@@ -12,6 +12,8 @@ Only in these cases, and only when you ask:
 |---|---|---|
 | **First start**, when you click *Download* | a request for the speech and picture models (about 3.1 GB, or 750 MB for Lite) | Hugging Face, where the models are published |
 | **Online image search**, only if you turn it on and add a key | words from a scene, to find pictures (with your key, for Pexels and Pixabay) | Pexels, Pixabay and Openverse |
+| **Online music search**, only if you enable it separately | the search words you type, not your recording or transcript | Openverse |
+| **Preview or save an online image, clip or music result** | a request for the selected media file | the original media host linked by the provider |
 | **Check for updates**, when you press the button | one request for the latest version number | GitHub |
 | **The first time you use your own music track** (installed app only) | a request for the music tools that fit your track to the speech (about 90 MB, once) | PyPI (files.pythonhosted.org), where the Python libraries are published |
 
