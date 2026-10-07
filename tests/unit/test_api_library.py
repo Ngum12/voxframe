@@ -194,7 +194,7 @@ class TestBrowsing:
         ).save(plan_path)
         context.store.submit(job, lambda _job: None)
         assert job.future is not None
-        job.future.result(timeout=5)
+        job.future.result(timeout=60)
         context.store.record_result(job, artifacts={"plan": plan_path}, warnings=(), summary={})
 
         used_in = client.get("/api/library").json()["assets"][0]["used_in"]

@@ -132,9 +132,9 @@ function Resizer({
 const TABS: { id: Tab; label: string }[] = [
   { id: "scenes", label: "Scenes" },
   { id: "captions", label: "Captions" },
-  { id: "popups", label: "Pop-ups" },
   { id: "sound", label: "Sound" },
   { id: "style", label: "Style" },
+  { id: "popups", label: "Pop-ups" },
 ];
 
 const ARTIFACT_LABELS: Record<string, string> = {
@@ -950,7 +950,7 @@ export function Studio({
           <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Back or forward one second</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Undo the last change</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></dt><dd>Redo</dd>
-          <dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Scenes, Captions, Pop-ups, Sound, Style</dd>
+          <dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Scenes, Captions, Sound, Style, Pop-ups</dd>
           <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Zoom the timeline</dd>
           <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Hide or show the side panel, the timeline</dd>
           <dt><kbd>?</kbd></dt><dd>This list</dd>

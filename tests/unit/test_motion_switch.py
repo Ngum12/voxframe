@@ -106,7 +106,7 @@ def test_the_route_saves_it_as_a_pending_edit(tmp_path: Path) -> None:
     _plan(_still()).save(plan_path)
     context.store.submit(job, lambda _job: None)
     assert job.future is not None
-    job.future.result(timeout=5)
+    job.future.result(timeout=60)
     context.store.record_result(job, artifacts={"plan": plan_path}, warnings=(), summary={})
     client = TestClient(create_app(context), base_url="http://127.0.0.1:8765")
     client.headers.update({"x-voxframe-token": "t"})

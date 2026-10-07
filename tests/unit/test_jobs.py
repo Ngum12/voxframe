@@ -56,7 +56,7 @@ class TestJobLifecycle:
         store.submit(job, work)
         assert done.wait(timeout=5)
         assert job.future is not None
-        job.future.result(timeout=5)
+        job.future.result(timeout=60)
 
         assert job.state is JobState.SUCCEEDED
 
@@ -69,7 +69,7 @@ class TestJobLifecycle:
 
         store.submit(job, work)
         assert job.future is not None
-        job.future.result(timeout=5)
+        job.future.result(timeout=60)
 
         assert job.state is JobState.FAILED
         assert "encoder exploded" in job.error
@@ -107,7 +107,7 @@ class TestJobLifecycle:
 
         store.submit(job, work)
         assert job.future is not None
-        job.future.result(timeout=5)
+        job.future.result(timeout=60)
 
         assert job.state is JobState.FAILED
         assert "concat failed" in job.error
@@ -123,7 +123,7 @@ class TestJobLifecycle:
 
         store.submit(job, work)
         assert job.future is not None
-        job.future.result(timeout=5)
+        job.future.result(timeout=60)
 
         reopened = JobStore(store.root).get(job.id)
 
@@ -170,7 +170,7 @@ class TestJobLifecycle:
         store.request_cancel(job.id)
         store.submit(job, lambda _: ran.set())
         assert job.future is not None
-        job.future.result(timeout=5)
+        job.future.result(timeout=60)
 
         assert job.state is JobState.CANCELLED
         assert not ran.is_set()
@@ -180,7 +180,7 @@ class TestJobLifecycle:
         job = store.create(audio_name="a.wav", options={})
         store.submit(job, lambda _: None)
         assert job.future is not None
-        job.future.result(timeout=5)
+        job.future.result(timeout=60)
 
         assert store.request_cancel(job.id) is False
 

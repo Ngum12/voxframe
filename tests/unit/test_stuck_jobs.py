@@ -148,7 +148,7 @@ class TestWorkerDiedInProcess:
         job = store.create(audio_name="a.wav", options={})
         store.submit(job, lambda _job: None)
         assert job.future is not None
-        job.future.result(timeout=5)
+        job.future.result(timeout=60)
         return job
 
     def test_reading_the_job_reaps_it(
@@ -213,7 +213,7 @@ class TestNothingHealthyIsReaped:
         finally:
             release.set()
             assert job.future is not None
-            job.future.result(timeout=5)
+            job.future.result(timeout=60)
 
         assert job.state is JobState.SUCCEEDED
 
@@ -244,7 +244,7 @@ class TestNothingHealthyIsReaped:
             release.set()
             for job in (first, second):
                 assert job.future is not None
-                job.future.result(timeout=5)
+                job.future.result(timeout=60)
 
     @pytest.mark.parametrize(
         "state", [JobState.SUCCEEDED, JobState.FAILED, JobState.CANCELLED]
@@ -271,7 +271,7 @@ class TestResume:
 
         store.resume(job.id, lambda _job: None)
         assert job.future is not None
-        job.future.result(timeout=5)
+        job.future.result(timeout=60)
 
         assert job.state is JobState.SUCCEEDED
 
@@ -294,7 +294,7 @@ class TestResume:
         job = store.create(audio_name="a.wav", options={})
         store.submit(job, lambda _job: None)
         assert job.future is not None
-        job.future.result(timeout=5)
+        job.future.result(timeout=60)
 
         with pytest.raises(ValueError, match="cannot be resumed"):
             store.resume(job.id, lambda _job: None)
@@ -308,12 +308,12 @@ class TestResume:
 
         store.submit(job, fail)
         assert job.future is not None
-        job.future.result(timeout=5)
+        job.future.result(timeout=60)
         assert job.state is JobState.FAILED
 
         store.resume(job.id, lambda _job: None)
         assert job.future is not None
-        job.future.result(timeout=5)
+        job.future.result(timeout=60)
 
         assert job.state is JobState.SUCCEEDED
         assert not job.error

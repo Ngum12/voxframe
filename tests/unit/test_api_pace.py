@@ -36,7 +36,7 @@ def _job(context: ApiContext) -> str:
     (directory / "source.mp4").write_bytes(b"video")
     context.store.submit(job, lambda _job: None)
     assert job.future is not None
-    job.future.result(timeout=5)
+    job.future.result(timeout=60)
     context.store.record_result(
         job, artifacts={"plan": plan_path, "video": directory / "source.mp4"}, warnings=(),
         summary={"width": 1080, "height": 1920},

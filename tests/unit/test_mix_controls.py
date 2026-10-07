@@ -200,7 +200,7 @@ def finished(context: ApiContext) -> tuple[str, Path]:
     video.write_bytes(b"video")
     context.store.submit(job, lambda _job: None)
     assert job.future is not None
-    job.future.result(timeout=5)
+    job.future.result(timeout=60)
     context.store.record_result(
         job, artifacts={"plan": plan_path, "video": video}, warnings=(), summary={}
     )

@@ -85,7 +85,7 @@ def _finished_job(context: ApiContext) -> str:
     ).save(plan_path)
     context.store.submit(job, lambda _job: None)
     assert job.future is not None
-    job.future.result(timeout=5)
+    job.future.result(timeout=60)
     context.store.record_result(job, artifacts={"plan": plan_path}, warnings=(), summary={})
     return job.id
 

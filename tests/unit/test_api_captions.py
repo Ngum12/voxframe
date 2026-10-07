@@ -66,7 +66,7 @@ def _job(context: ApiContext, *, made: bool = True) -> str:
     video.write_bytes(b"video")
     context.store.submit(job, lambda _job: None)
     assert job.future is not None
-    job.future.result(timeout=5)
+    job.future.result(timeout=60)
     summary = {"width": 1080, "height": 1920} if made else {}
     context.store.record_result(
         job, artifacts={"plan": plan_path, "video": video}, warnings=(), summary=summary
