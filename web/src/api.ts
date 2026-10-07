@@ -1117,3 +1117,9 @@ export interface ClosingControls { revision: string; eligible: boolean; starts: 
 export interface ClosingPreview extends CompletePreview { closing: ClosingWindow; settings: ClosingChoice }
 export const getClosingAuditions = (id: string) => request<ClosingControls>(`/api/jobs/${id}/closing-auditions`);
 export const previewClosing = (id: string, choice: ClosingChoice) => request<ClosingPreview>(`/api/jobs/${id}/closing-auditions/preview`, {method: "POST", body: JSON.stringify(choice)});
+
+export interface BookendChoice { revision: string; last_word: number; first_word: number; opening_look: OpeningChoice["look"]; closing_look: ClosingChoice["look"]; opening_shot: "keep" | "speaker"; closing_shot: "keep" | "speaker"; match_captions: boolean; replace_opening: boolean; replace_closing: boolean }
+export interface BookendControls { revision: string; eligible: boolean; opening: OpeningControls; closing: ClosingControls; default_last_word: number | null; default_first_word: number | null }
+export interface BookendPreview extends CompletePreview { opening: OpeningWindow; closing: ClosingWindow; settings: BookendChoice }
+export const getBookendAuditions = (id: string) => request<BookendControls>(`/api/jobs/${id}/bookend-auditions`);
+export const previewBookend = (id: string, choice: BookendChoice) => request<BookendPreview>(`/api/jobs/${id}/bookend-auditions/preview`, {method: "POST", body: JSON.stringify(choice)});

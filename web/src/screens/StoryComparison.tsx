@@ -4,8 +4,8 @@ import { Notice } from "../components";
 
 export interface StoryVariant<Choice = ShortChoice> { key: string; label: string; choice: Choice; preview: ShortPreview; warnings?: string[] }
 
-export function StoryComparison<Choice = ShortChoice>({ variants, busy, onChoose, complete = false, canChoose, reviewAt }: {
-  variants: StoryVariant<Choice>[]; busy: boolean; onChoose: (choice: Choice) => void; complete?: boolean; canChoose?: (choice: Choice) => boolean; reviewAt?: number;
+export function StoryComparison<Choice = ShortChoice>({ variants, busy, onChoose, complete = false, canChoose, reviewAt, reviewOpening = false }: {
+  variants: StoryVariant<Choice>[]; busy: boolean; onChoose: (choice: Choice) => void; complete?: boolean; canChoose?: (choice: Choice) => boolean; reviewAt?: number; reviewOpening?: boolean;
 }) {
   const [aKey, setAKey] = useState(variants[0].key);
   const [bKey, setBKey] = useState(variants[1].key);
@@ -92,6 +92,7 @@ export function StoryComparison<Choice = ShortChoice>({ variants, busy, onChoose
       <button className="btn btn-primary" type="button" disabled={busy || (canChoose ? !canChoose(variant.choice) : false)} onClick={() => { stop(); onChoose(variant.choice); }}>Use version {index === 0 ? "A" : "B"}</button>
     </article>)}</div>
     <div className="comparison-transport">
+      {reviewOpening && <button className="btn" disabled={!ready.every(Boolean) || !duration} onClick={() => seek(0)}>Review the opening</button>}
       {reviewAt !== undefined && <button className="btn" disabled={!ready.every(Boolean) || !duration} onClick={() => seek(Math.max(0, Math.min(reviewAt, duration)))}>Review the ending</button>}
       <button className="btn" type="button" disabled={!ready.every(Boolean) || !duration} onClick={() => void play()}>{playing ? "Pause comparison" : "Play comparison"}</button>
       <label className="label">Hear<select aria-label="Comparison sound" value={audio} onChange={event => setAudio(Number(event.target.value) as 0 | 1)}>

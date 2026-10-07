@@ -7009,3 +7009,31 @@ approvals and exact apply/Undo. Real FFmpeg renders verify all three treatments,
 frame counts, soundtrack correlation, audible music and delayed speech sync.
 Chromium checks lead-in playback, review gates, synchronized comparison with
 one audible soundtrack, phone layout, exact apply, Undo/Redo and final export.
+
+
+## D-226: bookend auditions compose disjoint treatments into one reviewed edit
+
+Validate opening and closing treatments against the same original plan, with
+independent pinned-text replacement permissions. Reject shared words or overlapping
+frame windows. Prefer the individual sentence defaults when disjoint; otherwise
+choose the nearest valid pair. Missing trailing speech timings prevent selection.
+
+Apply the opening, restore original visual beats outside its window, then apply
+the closing through the existing placement path. This keeps new opening beats
+and original middle text through successive scene splits. Each end supports
+current shots or speaker footage; project pictures already placed in the story
+carry over. Caption matching is bounded to the bookends. Total frames, word times,
+source clocks, mix, score, credits and cards stay with the project.
+
+Render full immutable snapshots with actual sound and use complete-preview winner
+validation for one history entry. Changing controls cannot alter an approval.
+Two per-draft review checkboxes gate application in the UI. Individual and paired
+comparison players can seek to either end; one soundtrack is audible. Authentication,
+revision, sandbox and media freshness checks remain on the server.
+
+Units exercise all nine treatment combinations at four frame rates, every source
+frame, middle visual preservation, cards, corrected quotes, pinned permissions,
+overlap, missing timings, stale approvals and exact apply/Undo. Real renders compare
+soundtrack samples and frame counts and verify delayed speaker claps. Chromium
+checks custom and coordinated pairs, overlap blocking, both review gates, synchronized
+playback, one audible track, mobile layout, exact apply, Undo/Redo and export.
