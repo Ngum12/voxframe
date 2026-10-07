@@ -47,9 +47,13 @@ the finished video without starting the whole project again.
    beats and render a preview using your actual footage and narration.
    **Place visuals** pins a speaker shot, project cutaway or text treatment
    to chosen words without changing the story duration.
+   In **Director → Complete auditions**, hear your current soundtrack or a
+   saved track inside the video preview, then compare complete treatments.
 4. **Compare the edits.** Put two auditions of the same passage side by side.
    A shared playhead starts, pauses and scrubs both. Switch which version you
    hear, then save the passage, direction and captions you prefer together.
+   Complete auditions save the previewed visuals, captions, track and mix
+   together as one undoable choice.
 5. **Refine the delivery.** Review pauses, standalone fillers such as “um” and
    “euh,” and immediately repeated phrases. Select the cuts you want and listen
    to a preview before saving them.

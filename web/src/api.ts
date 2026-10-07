@@ -293,6 +293,7 @@ export interface PlannedScene {
 
 /** The scene plan: the renderer's only input, and what the filmstrip shows. */
 export interface ScenePlan {
+  audio_mix: AudioMix;
   version: number;
   audio_path: string;
   audio_duration: number;
@@ -1062,3 +1063,11 @@ export interface PlacementControls { revision: string; has_speaker: boolean; wor
 export const getPlacement = (id: string) => request<PlacementControls>(`/api/jobs/${id}/visual-placement`);
 export const previewPlacement = (id: string, revision: string, placements: VisualPlacement[]) => request<ShortPreview & {storyboard: Storyboard}>(`/api/jobs/${id}/visual-placement/preview`, {method: "POST", body: JSON.stringify({revision, placements})});
 export const savePlacement = (id: string, revision: string, placements: VisualPlacement[]) => request<PlanEditResult>(`/api/jobs/${id}/visual-placement`, {method: "PUT", body: JSON.stringify({revision, placements})});
+
+export interface CompleteChoice { revision: string; look: VisualBeat["look"] | null; match_captions: boolean; music_source: "project" | "library" | "none"; music_library_id: string | null; mix: AudioMix }
+export interface CompleteWinner { revision: string; preview_id: string }
+export interface CompletePreview extends ShortPreview { preview_id: string; revision: string; has_music: boolean; music_note: string; sound: {passed: boolean; problems: string[]; integrated_lufs: number; true_peak: number} | null }
+export interface CompleteControls { revision: string; mix: AudioMix; has_music: boolean; project_music: string; credit: string; profiles: Record<VisualBeat["look"], {label: string; arc: AudioMix["music_arc"]; music_db: number}> }
+export const getCompleteAuditions = (id: string) => request<CompleteControls>(`/api/jobs/${id}/complete-auditions`);
+export const previewComplete = (id: string, choice: CompleteChoice) => request<CompletePreview>(`/api/jobs/${id}/complete-auditions/preview`, {method: "POST", body: JSON.stringify(choice)});
+export const saveComplete = (id: string, choice: CompleteWinner) => request<PlanEditResult>(`/api/jobs/${id}/complete-auditions`, {method: "PUT", body: JSON.stringify(choice)});
