@@ -235,8 +235,12 @@ Reusable style kits now combine captions, photo motion, transitions and sound
   preview each with current music and a chosen look, review opening/ending
   context, and queue separate editable exports. Each clip has progress, Stop,
   Resume and download controls; repeat clicks reuse the same jobs.
-- **Next: batch packaging.** Add a downloadable collection with subtitles and
-  credits, plus naming and destination settings for the complete reviewed set.
+- **Downloadable Shorts collections — implemented.** Name and order up to six
+  finished exports, then download one ZIP containing their original MP4s,
+  available subtitles, rendered credits and a manifest with file checksums.
+  Missing, unfinished or changing outputs are refused; snapshots are cached.
+- **Next: batch destination variants.** Apply destination composition guides
+  and sound targets across a reviewed set, then preview and export the variants.
 
 ## Later
 

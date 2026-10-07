@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { previewBatchShort, exportBatchShorts, getBatchShorts, artifactUrl, cancelJob, resumeJob,
   type BatchPreview, type BatchJob, type ShortsControls, type ShortChoice, type ScenePlan } from "../api";
+import { ShortCollections } from "./ShortCollections";
 import { Notice } from "../components";
 
 type Clip = {id: number; choice: ShortChoice; preview: BatchPreview | null; reviewed: boolean};
@@ -125,6 +126,7 @@ export function BatchShorts({jobId, plan, data, current}: {
     </div></fieldset>
     <p className="hint">Suggestions use transcript cues; review the full thought. Exports keep current music and credits. The size sets frame height; non-portrait clips retain their aspect. Repeated export clicks reuse the same jobs. Keep the source project and its media to edit or resume clips.</p>
     {status && <p role="status">{status}</p>}{error && <Notice tone="error">{error}</Notice>}
+    {jobs.length > 0 && <ShortCollections jobId={jobId} jobs={jobs} />}
     {jobs.length > 0 && <section aria-label="Batch export jobs"><h4>Your clip exports</h4>{jobs.map(item => <article className="batch-export" key={item.job.id}>
       <strong>{item.job.audio_name}</strong><p>{item.job.state} · {item.job.message} · {item.height}px height</p>
       {item.job.error && <Notice tone="error">{item.job.error}</Notice>}

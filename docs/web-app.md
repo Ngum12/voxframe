@@ -548,3 +548,30 @@ a stopped or failed clip, or open it from Projects for further edits. Changed
 source media expires an approval; preview the range again to create a fresh
 export. Keep the source project and its media for editing and resuming clips.
 Exports retain the chosen soundtrack and creator/licence credits.
+
+## Download a Shorts collection
+
+After batch exports finish, open **Shorts → Batch Shorts → One collection**.
+Choose **Select finished clips**, or tick the individual exports you want.
+Collections accept up to six finished exports from this source project.
+Unfinished clips remain visible with their status and cannot be selected.
+
+Name the collection and each clip. **Earlier** and **Later** change the
+collection’s order; **Remove from collection** only changes this selection.
+Choose **Build collection**, then **Download collection ZIP**. Changing names,
+order or selection removes the previous download link until you build again.
+
+The ZIP contains the existing MP4s without re-encoding, available SRT/VTT
+subtitle files with matching names, a credit file per clip, aggregate
+**CREDITS.txt**, **README.txt** and **manifest.json**. The manifest records
+ordering, rendered dimensions, credits and checksums for the media/subtitle
+files. Names become portable file stems; numeric prefixes keep duplicate
+names distinct. No source recordings or editable project plans are included.
+
+The package reflects the finished exports at assembly time. Render pending
+edits with **Update video** before packaging those changes. Credits come
+from the finished render, not from newer unrendered plan edits. Existing
+collections remain snapshots if you later update a clip. Selected jobs and
+files must stay unchanged while assembling; missing or changing exports ask
+you to build again. Repeated builds of an unchanged selection reuse its ZIP.
+Collection downloads support byte ranges. Your original projects stay intact.

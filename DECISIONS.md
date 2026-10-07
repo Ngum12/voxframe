@@ -6861,3 +6861,33 @@ source races, quote retention and cancellation/resume. Encoded-video checks
 measure each passage’s source clap synchronization and soundtrack waveform
 agreement. Chromium checks two full previews, one audible player, review
 invalidation, real portrait exports, phone layout, downloads and reload.
+
+## D-221: immutable collections of completed batch exports
+
+Collection requests name 1–6 child job IDs and human titles, never paths. Each
+job must belong to the source project and have succeeded with a video. Video
+and declared subtitle files are checked against the sandbox and must exist.
+Credits and dimensions come from the completed job’s summary, so pending
+plan edits cannot mislabel an older render. Absent subtitle outputs are not
+fabricated. Selection, title and order are explicit in the studio.
+
+The packer streams files in 1 MB chunks into a ZIP64-capable temporary ZIP.
+Videos are stored without compression or re-encoding; small text is deflated.
+Portable stems, Windows reserved-name handling and numeric clip prefixes
+prevent unsafe or duplicate archive entries. A human-readable credits ledger
+and per-clip files accompany a path-free manifest with media checksums.
+Neither source recordings nor editable plans are packaged.
+
+The cache identity includes selection, order, names, rendered metadata and
+file stamps. Job state/metadata and file stamps are checked again before
+publication; source races leave no downloadable partial ZIP. Cached lookups
+recheck their inputs and unreadable generated caches are rebuilt. Authenticated
+downloads retain the friendly filename and support byte ranges. Old ZIPs
+remain immutable snapshots after later renders. The UI clears download links
+after form changes and ignores stale responses after navigation.
+
+Units cover byte equality, subtitles, old-render credits with pending edits,
+cache reuse/recovery, changed exports, owner/state/path checks, safe naming,
+ordering, omitted subtitle outputs and authenticated ranged downloads.
+Chromium packages two real rendered clips, changes names/order, downloads
+and opens the ZIP, verifies its bytes/credits and checks phone layout.

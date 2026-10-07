@@ -989,6 +989,9 @@ export const previewBatchShort = (id: string, choice: ShortChoice) =>
   request<BatchPreview>(`/api/jobs/${id}/shorts/batch/preview`, {method: "POST", body: JSON.stringify(choice)});
 export const exportBatchShorts = (id: string, revision: string, clips: string[], height: 1280 | 1920) =>
   request<{jobs: Job[]}>(`/api/jobs/${id}/shorts/batch`, {method: "POST", body: JSON.stringify({revision, clips, height})});
+export interface ShortCollection { key: string; name: string; bytes: number; clips: number; url: string }
+export const packageShortCollection = (id: string, title: string, clips: {job_id: string; title: string}[]) =>
+  request<ShortCollection>(`/api/jobs/${id}/shorts/batch/collections`, {method: "POST", body: JSON.stringify({title, clips})});
 export const getShorts = (jobId: string) => request<ShortsControls>(`/api/jobs/${jobId}/shorts`);
 export const saveShort = (jobId: string, choice: ShortChoice) =>
   request<PlanEditResult>(`/api/jobs/${jobId}/shorts`, { method: "PUT", body: JSON.stringify(choice) });
