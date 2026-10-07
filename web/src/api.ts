@@ -1097,3 +1097,10 @@ export interface CompleteControls { revision: string; mix: AudioMix; has_music: 
 export const getCompleteAuditions = (id: string) => request<CompleteControls>(`/api/jobs/${id}/complete-auditions`);
 export const previewComplete = (id: string, choice: CompleteChoice) => request<CompletePreview>(`/api/jobs/${id}/complete-auditions/preview`, {method: "POST", body: JSON.stringify(choice)});
 export const saveComplete = (id: string, choice: CompleteWinner) => request<PlanEditResult>(`/api/jobs/${id}/complete-auditions`, {method: "PUT", body: JSON.stringify(choice)});
+
+export interface OpeningChoice { revision: string; last_word: number; look: VisualBeat["look"]; shot: "keep" | "speaker" | "picture"; asset_scene: number | null; match_captions: boolean; replace_pinned: boolean }
+export interface OpeningWindow { last_word: number; quote: string; start: number; end: number; pinned: boolean; has_speaker: boolean }
+export interface OpeningControls { revision: string; eligible: boolean; endings: OpeningWindow[]; default_last_word: number | null; profiles: Record<VisualBeat["look"], {label: string; note: string}>; visuals: {scene: number; quote: string; credit: string}[] }
+export interface OpeningPreview extends CompletePreview { opening: OpeningWindow }
+export const getOpeningAuditions = (id: string) => request<OpeningControls>(`/api/jobs/${id}/opening-auditions`);
+export const previewOpening = (id: string, choice: OpeningChoice) => request<OpeningPreview>(`/api/jobs/${id}/opening-auditions/preview`, {method: "POST", body: JSON.stringify(choice)});

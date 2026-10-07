@@ -602,3 +602,39 @@ to the finished export before sharing. No platform account or upload is needed.
 Choose finished variants in **One collection** to package their original
 MP4s and subtitles; the manifest records the actual rendered platform and
 sound destination even when a project has newer pending edits.
+
+
+## Audition the opening
+
+Open **Director → Opening auditions** on a 3–60 second story. Choose the last
+word of your opening phrase from its first six seconds of speech (up to twelve
+words). The quote is taken from displayed transcript words, including your
+caption corrections. Intro cards keep their original place. Choose a complete
+thought and check the quoted phrase before rendering.
+
+Three treatments are available: **Quiet confidence** gives one clean quote,
+**Word punch** divides it into two short text beats when the word boundary
+allows it, and **Slow reveal** uses restrained cinematic captions. Very short
+or overlapping words use one beat. Match captions inside the opening or keep
+your current caption look. Keep current shots, lead with available speaker
+footage, or choose an existing project picture with its credit.
+
+Pinned opening text is protected. Enable **Allow replacing my pinned opening
+text** only when you want these new treatments to replace it. New opening
+beats are pinned after applying; a later automatic direction pass retains them.
+
+Use **Preview selected opening** or **Render three opening auditions**. Each
+preview plays the entire saved story with its project music or generated score.
+**Compare opening auditions** shares one playhead and one audible soundtrack
+at a time. Review both the opening and its return to the story, then mark the
+matching review checkbox. **Use this opening** and comparison’s **Use version**
+buttons save the exact reviewed snapshot, including its original soundtrack.
+Changing form settings does not rebuild comparison drafts.
+
+Preview leaves the plan untouched. Applying creates one undoable edit; use
+**Update video** for the final export. The narration, total frame count, source
+clocks, credits and sound settings carry over. New cuts delimit the opening
+treatment without trimming speech; surrounding captions keep their own words.
+Changed plans or source files expire old approvals. The last six auditions
+stay available during this session. Compare treatments by watching; they do
+not predict engagement or rewrite what you said.

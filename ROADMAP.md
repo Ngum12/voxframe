@@ -243,8 +243,13 @@ Reusable style kits now combine captions, photo motion, transitions and sound
   and four destinations; preview each current saved edit with sound, portrait
   text guides and its loudness target. Review each immutable snapshot before
   queueing separate editable exports; collections retain rendered destinations.
-- **Next: opening auditions.** Compare alternate opening treatments using the
-  same spoken words, then choose a reviewed version without inventing claims.
+- **Opening auditions — implemented.** Compare quiet confidence, word punch
+  and slow reveal on the first spoken phrase. Keep current shots or choose
+  speaker/project-picture framing, preview the full story with music, review
+  the opening and return, then save the exact snapshot with Undo. Source clocks
+  and narration stay intact; pinned opening text needs explicit replacement.
+- **Next: reusable opening signatures.** Save a reviewed opening treatment and
+  audition it on new recordings with their own words and pictures.
 
 ## Later
 

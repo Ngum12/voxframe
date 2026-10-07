@@ -4,8 +4,8 @@ import { Notice } from "../components";
 
 export interface StoryVariant<Choice = ShortChoice> { key: string; label: string; choice: Choice; preview: ShortPreview; warnings?: string[] }
 
-export function StoryComparison<Choice = ShortChoice>({ variants, busy, onChoose, complete = false }: {
-  variants: StoryVariant<Choice>[]; busy: boolean; onChoose: (choice: Choice) => void; complete?: boolean;
+export function StoryComparison<Choice = ShortChoice>({ variants, busy, onChoose, complete = false, canChoose }: {
+  variants: StoryVariant<Choice>[]; busy: boolean; onChoose: (choice: Choice) => void; complete?: boolean; canChoose?: (choice: Choice) => boolean;
 }) {
   const [aKey, setAKey] = useState(variants[0].key);
   const [bKey, setBKey] = useState(variants[1].key);
@@ -89,7 +89,7 @@ export function StoryComparison<Choice = ShortChoice>({ variants, busy, onChoose
         {variant.warnings.map((warning, i) => <p className="hint" key={i}>{warning}</p>)}
       </details>}
       <p className="hint">{variant.preview.seconds.toFixed(2)} s · {audio === index ? "Sound on" : "Silent comparison"}</p>
-      <button className="btn btn-primary" type="button" disabled={busy} onClick={() => { stop(); onChoose(variant.choice); }}>Use version {index === 0 ? "A" : "B"}</button>
+      <button className="btn btn-primary" type="button" disabled={busy || (canChoose ? !canChoose(variant.choice) : false)} onClick={() => { stop(); onChoose(variant.choice); }}>Use version {index === 0 ? "A" : "B"}</button>
     </article>)}</div>
     <div className="comparison-transport">
       <button className="btn" type="button" disabled={!ready.every(Boolean) || !duration} onClick={() => void play()}>{playing ? "Pause comparison" : "Play comparison"}</button>

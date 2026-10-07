@@ -97,6 +97,10 @@ chapter cards and highlights. [Walk through the controls](docs/web-app.md).
   photo movement and text styling. Reuse a kit after uploading, or audition it
   on a 3–60 second story in Director and apply the exact preview with Undo.
   Your words, cuts and media stay specific to each project.
+- **Opening auditions.** Give your first spoken words a clear quote, a word
+  punch or a cinematic reveal. Compare complete drafts with sound, review the
+  return to the story, and choose the exact preview with Undo. Keep current
+  shots or lead with speaker footage or an existing project picture.
 - **A finishing review.** Inspect potential caption, framing, timing and sound
   issues, with evidence and a route to the relevant controls. Mark intentional
   choices checked. The review uses saved settings and metadata; watch and listen

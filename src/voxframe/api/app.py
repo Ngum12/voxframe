@@ -77,6 +77,7 @@ from voxframe.model_downloads import Download
 from voxframe.models.asset import AssetKind
 from voxframe.plan.audio_mix import AudioMix
 from voxframe.plan.complete_audition import CompleteChoice
+from voxframe.plan.opening_audition import OpeningChoice
 from voxframe.plan.scene_plan import PlannedScene, ScenePlan
 from voxframe.plan.story_composer import StoryBlock
 from voxframe.plan.visual_placement import Placement
@@ -2488,6 +2489,42 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 if key not in {"plan", "stamps", "engine"}} | {
             "preview_id": result["key"],
             "url": f"/api/jobs/{job_id}/complete-previews/{result['key']}", "source_ranges": []}
+
+    @app.get("/api/jobs/{job_id}/opening-auditions")
+    def opening_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.opening_audition import controls
+
+        _, _, plan = _editable_plan(context, job_id)
+        return controls(plan)
+
+    @app.post("/api/jobs/{job_id}/opening-auditions/preview")
+    def opening_preview(job_id: str, choice: OpeningChoice,
+                        context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.opening_audition import audition
+        from voxframe.plan.shorts import revision
+        from voxframe.render.compose.complete_preview import complete_preview
+
+        _, _, plan = _editable_plan(context, job_id)
+        if choice.revision != revision(plan):
+            raise HTTPException(409, "This story changed. Reopen opening auditions.")
+        try:
+            draft, opening = audition(plan, choice)
+        except EditError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        check_complete_sources(draft, context)
+        try:
+            result = complete_preview(draft, choice.revision,
+                context.store.job_directory(job_id) / "complete-previews")
+        except Exception as exc:
+            log.warning("opening.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(422, "The opening audition could not be rendered. "
+                                "Check its media and music, then try again.") from exc
+        return {key: value for key, value in result.items()
+                if key not in {"plan", "stamps", "engine"}} | {
+            "preview_id": result["key"],
+            "url": f"/api/jobs/{job_id}/complete-previews/{result['key']}",
+            "source_ranges": [], "opening": opening}
 
     @app.get("/api/jobs/{job_id}/complete-auditions")
     def complete_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:

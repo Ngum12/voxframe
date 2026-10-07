@@ -6920,3 +6920,34 @@ media/revisions, duplicate and ownership limits, sandboxing and authentication.
 Chromium previews and exports two destinations with real music, checks review
 gates, frame counts, audible soundtrack, original-plan preservation, collection
 metadata and phone layout.
+
+
+## D-223: opening auditions over the existing narration
+
+An opening audition selects a displayed transcript prefix, capped at twelve
+words and six seconds within one spoken passage. All alternatives keep the
+full 3–60 second story, recording clocks, total frames, music, mix, score and
+credits. Corrected captions provide the quote; no new claims are generated.
+Opening cards stay in place rather than being silently removed.
+
+Reuse validated visual placements for exact word boundaries and source-clock
+preservation. Quiet confidence and slow reveal place one quoted beat. Word
+punch uses two where the internal word boundary is safe, falling back to one
+for short or overlapping phrases. Optional shot choice uses existing speaker
+footage or credited project pictures. Caption matching affects only opening
+placements. Pinned text requires an explicit replacement choice. Applied
+beats are user-pinned so future automatic direction preserves them.
+
+Render full complete-preview snapshots, including actual soundtrack stems.
+The UI compares immutable drafts with synchronized transport and one audible
+player, then gates winner buttons on that draft’s review checkbox. Applying
+uses the existing complete-winner path, with source/renderer freshness checks
+and one history entry. Changed form controls cannot rebuild a cached winner.
+
+Units check every source frame at four frame rates, word clocks, corrections,
+cards, captions, pinned text, picture choice, invalid boundaries, sandbox and
+auth checks, stale media and exact undoable saves. Real FFmpeg tests check all
+three drafts against exported audio and original narration, verify music is
+audible, and measure delayed-footage clap sync and exact frame counts.
+Chromium exercises three drafts, review gating, comparison sound, stale form
+controls, phone layout, exact winner save, Undo/Redo and final export.
