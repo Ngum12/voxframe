@@ -107,6 +107,11 @@ chapter cards and highlights. [Walk through the controls](docs/web-app.md).
   punch or a quiet resolve. Preview the full story with sound, compare from
   the lead-in, then apply the reviewed finish with Undo. Earlier opening text,
   narration timing and outro cards carry over.
+- **Bookend auditions.** Pair the opening and closing in one full-story draft.
+  Mix their treatments or compare three coordinated pairs with sound. Review
+  both ends, then apply the exact pair as one undoable edit; the middle stays
+  yours. Save a reviewed pair as a named signature, then audition it on another
+  recording with fresh words, media and sound.
 - **A finishing review.** Inspect potential caption, framing, timing and sound
   issues, with evidence and a route to the relevant controls. Mark intentional
   choices checked. The review uses saved settings and metadata; watch and listen

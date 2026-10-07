@@ -257,8 +257,16 @@ Reusable style kits now combine captions, photo motion, transitions and sound
   jump to the lead-in and choose an exact reviewed finish with Undo. Earlier
   opening text, narration clocks and outro cards carry over; pinned closing
   text requires explicit replacement.
-- **Next: bookend auditions.** Preview opening and closing treatments together,
-  review their relationship across the story and apply the pair as one edit.
+- **Bookend auditions — implemented.** Choose separate first and final phrases,
+  mix their treatments or render three coordinated pairs. Compare complete
+  drafts with sound, review both ends and apply the exact pair with one Undo.
+  Overlap is refused; source clocks, middle text and outro cards carry over.
+- **Reusable bookend signatures — implemented.** Save the exact reviewed pair’s
+  treatments, shot choices and preferred phrase lengths. Reuse them with fresh
+  words, media and sound; new recordings require new previews and replacement
+  choices. Disjoint phrase defaults adapt to shorter recordings.
+- **Next: bookend signature collections.** Audition a saved recipe across selected
+  finished stories, review each recording, then export separate editable clips.
 
 ## Later
 

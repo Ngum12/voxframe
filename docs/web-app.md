@@ -694,3 +694,59 @@ snapshot as one undoable edit. Choose **Update video** for the final export.
 
 Changing controls does not rebuild old comparison drafts. Changed plans or
 source files require fresh previews. Up to six drafts remain in this session.
+
+
+## Bookend auditions
+
+In **Director → Bookend auditions**, choose the opening and closing phrases of
+a 3–60 second story. Both need word timings and separate frame windows; overlapping
+choices are blocked. Defaults prefer the existing opening and closing sentences
+when they fit together. Untimed trailing speech needs transcript timings first.
+
+Choose each treatment independently, then **Preview selected pair**, or choose
+**Render three coordinated pairs** to compare quiet confidence with a clear
+payoff, word punch with a last-word punch, and slow reveal with quiet resolve.
+Each end can keep current shots or show speaker footage when available. Existing
+pictures carry over. Caption matching affects both selected ends; the middle
+keeps its text and captions. Pinned opening and closing text each require their
+own explicit replacement choice. Narration, source clocks, music and outro
+cards remain in place.
+
+Watch the full rendered story with its project soundtrack. **Review the opening**
+and **Review the ending** jump to the relevant moments; comparison seeks both
+videos together and plays one soundtrack at a time. Each named draft needs its
+opening and closing review checkboxes before **Use this pair** or **Use version**
+is enabled. Applying saves both treatments from the exact reviewed snapshot as
+one undoable edit. **Update video** exports the chosen story.
+
+Changing form controls does not rebuild older comparison drafts. Plan or source
+changes require fresh previews. The last six drafts remain available during
+this session; the review belongs to the rendered pair, not the current controls.
+
+
+## Reuse your bookend signature
+
+In **Director → Bookend auditions**, preview a pair, review both ends, then
+choose it in **Pair to save**, enter a name and choose **Save reviewed bookend
+signature**. Save before applying it to this project. The recipe comes from
+the named reviewed snapshot even after the controls change. Expired media or
+plan edits require another preview before saving.
+
+On another 3–60 second recording, choose its name in **Bookend signature**.
+Both treatments, shot choices, caption matching and preferred phrase lengths
+populate the controls. Voxframe chooses separate timed phrases close to those
+lengths; adjust the words to finish each thought. Counts are starting points,
+not copied quotes. Speaker preferences require footage. Changing a treatment,
+shot or caption matching exits the saved recipe so you can make a new pair.
+
+Choose **Preview saved bookend signature**, watch the complete story with this
+recording’s soundtrack and review both ends. **Use this pair** applies the exact
+preview as one undoable edit; **Update video** creates the export. The recipe
+never copies old words, media paths, music, mix settings or permission to replace
+pinned text. Each end needs its own fresh replacement choice when pinned.
+
+Signatures persist in local configuration across restarts. Names are unique
+ignoring case, with up to 30 recipes. **Remove saved bookend signature** removes
+only the named recipe, leaving projects and rendered drafts intact. Damaged
+signature files are reported and kept. Existing opening signatures are stored
+separately and remain available.

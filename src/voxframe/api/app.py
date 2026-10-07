@@ -76,6 +76,7 @@ from voxframe.library.db import AssetLibrary
 from voxframe.model_downloads import Download
 from voxframe.models.asset import AssetKind
 from voxframe.plan.audio_mix import AudioMix
+from voxframe.plan.bookend_audition import BookendChoice
 from voxframe.plan.closing_audition import ClosingChoice
 from voxframe.plan.complete_audition import CompleteChoice
 from voxframe.plan.opening_audition import OpeningChoice
@@ -395,6 +396,23 @@ class OpeningSignaturePreview(BaseModel):
     last_word: int = Field(ge=0)
     asset_scene: int | None = Field(default=None, ge=0)
     replace_pinned: bool = False
+
+
+class BookendSignatureSave(BaseModel):
+    model_config = {"extra": "forbid"}
+    name: str = Field(min_length=1, max_length=60)
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    bookend_id: str = Field(pattern=r"^[a-f0-9]{24}$")
+
+
+class BookendSignaturePreview(BaseModel):
+    model_config = {"extra": "forbid"}
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    signature_id: str = Field(pattern=r"^[a-f0-9]{32}$")
+    last_word: int = Field(ge=0)
+    first_word: int = Field(ge=0)
+    replace_opening: bool = False
+    replace_closing: bool = False
 
 
 class CompleteWinner(BaseModel):
@@ -2507,6 +2525,44 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             "preview_id": result["key"],
             "url": f"/api/jobs/{job_id}/complete-previews/{result['key']}", "source_ranges": []}
 
+    @app.get("/api/jobs/{job_id}/bookend-auditions")
+    def bookend_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.bookend_audition import controls
+
+        _, _, plan = _editable_plan(context, job_id)
+        return controls(plan)
+
+    @app.post("/api/jobs/{job_id}/bookend-auditions/preview")
+    def bookend_preview(job_id: str, choice: BookendChoice,
+                        context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.bookend_audition import audition, record
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.shorts import revision
+        from voxframe.render.compose.complete_preview import complete_preview
+
+        _, _, plan = _editable_plan(context, job_id)
+        if choice.revision != revision(plan):
+            raise HTTPException(409, "This story changed. Reopen bookend auditions.")
+        try:
+            draft, opening, closing = audition(plan, choice)
+        except EditError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        check_complete_sources(draft, context)
+        try:
+            root = context.store.job_directory(job_id)
+            result = complete_preview(draft, choice.revision, root / "complete-previews")
+            bookend_id = record(root / "bookend-previews", choice, result["key"])
+        except Exception as exc:
+            log.warning("bookend.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(422, "The bookend audition could not be rendered. "
+                                "Check its media and music, then try again.") from exc
+        return {key: value for key, value in result.items()
+                if key not in {"plan", "stamps", "engine"}} | {
+            "preview_id": result["key"],
+            "url": f"/api/jobs/{job_id}/complete-previews/{result['key']}",
+            "source_ranges": [], "opening": opening, "closing": closing, "bookend_id": bookend_id,
+            "settings": choice.model_dump(mode="json")}
+
     @app.get("/api/jobs/{job_id}/closing-auditions")
     def closing_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
         from voxframe.plan.closing_audition import controls
@@ -2580,6 +2636,72 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             "url": f"/api/jobs/{job_id}/complete-previews/{result['key']}",
             "source_ranges": [], "opening": opening, "opening_id": opening_id,
             "settings": choice.model_dump(mode="json")}
+
+    @app.get("/api/bookend-signatures")
+    def bookend_signatures(context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.config.bookend_signatures import load
+
+        try:
+            return {"signatures": [signature.model_dump(mode="json") for signature in load()]}
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(422, "Your bookend signatures could not be read. "
+                                "The file was kept.") from exc
+
+    @app.delete("/api/bookend-signatures/{signature_id}", status_code=204)
+    def delete_bookend_signature(signature_id: str,
+                                 context: ApiContext = Depends(ctx)) -> Response:
+        from voxframe.config.bookend_signatures import delete
+
+        try:
+            delete(signature_id)
+        except KeyError as exc:
+            raise HTTPException(404, "That bookend signature was already removed.") from exc
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(422, "The bookend signature file could not be updated. "
+                                "It was kept.") from exc
+        return Response(status_code=204)
+
+    @app.post("/api/jobs/{job_id}/bookend-signatures", status_code=201)
+    def save_bookend_signature(job_id: str, edit: BookendSignatureSave,
+                               context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.config.bookend_signatures import save
+        from voxframe.plan.bookend_audition import reviewed_style
+        from voxframe.plan.shorts import revision
+
+        _, _, plan = _editable_plan(context, job_id)
+        if edit.revision != revision(plan):
+            raise HTTPException(409, "This story changed. Render and review the bookend again.")
+        try:
+            style = reviewed_style(plan, context.store.job_directory(job_id), edit.bookend_id,
+                edit.revision, lambda draft: check_complete_sources(draft, context))
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(409, "This bookend approval expired. "
+                                "Render and review it again.") from exc
+        try:
+            return save(edit.name, style).model_dump(mode="json")
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(422, str(exc) if isinstance(exc, ValueError)
+                else "Your bookend signature could not be saved.") from exc
+
+    @app.post("/api/jobs/{job_id}/bookend-signatures/preview")
+    def preview_bookend_signature(job_id: str, edit: BookendSignaturePreview,
+                                  context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.config.bookend_signatures import load
+
+        try:
+            signature = next((s for s in load() if s.id == edit.signature_id), None)
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(422, "Your bookend signatures could not be read. "
+                                "The file was kept.") from exc
+        if signature is None:
+            raise HTTPException(404, "That bookend signature was removed. Choose another.")
+        choice = BookendChoice(revision=edit.revision, last_word=edit.last_word,
+            first_word=edit.first_word, opening_look=signature.opening_look,
+            closing_look=signature.closing_look, opening_shot=signature.opening_shot,
+            closing_shot=signature.closing_shot, match_captions=signature.match_captions,
+            replace_opening=edit.replace_opening, replace_closing=edit.replace_closing)
+        return bookend_preview(job_id, choice, context) | {
+            "signature": {"id": signature.id, "name": signature.name}}
 
     @app.get("/api/opening-signatures")
     def opening_signatures(context: ApiContext = Depends(ctx)) -> dict[str, Any]:
