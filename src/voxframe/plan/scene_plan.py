@@ -22,7 +22,7 @@ import json
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
 import structlog
 from pydantic import BaseModel, Field, model_validator
@@ -335,6 +335,8 @@ class PlannedScene(BaseModel):
     #: A user's choice is theirs: nothing automatic may replace it (D-128).
     asset_source: str = Field(default="automatic")
 
+    story_role: Literal["hook", "keypoint", "payoff", "ending"] | None = None
+    story_block: int | None = Field(default=None, ge=0, le=7)
     camera_move: CameraMove | None = None
     motion: MotionKind = Field(default=MotionKind.KEN_BURNS)
     motion_reason: str = Field(default="")

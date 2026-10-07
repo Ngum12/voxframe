@@ -31,7 +31,7 @@ def _restore_automatic_scenes(plan: ScenePlan) -> ScenePlan:
     """Remove only joins this director created, so a new look changes cadence."""
     restored = []
     stable = ("asset", "motion", "camera_move", "motion_reason", "asset_source",
-              "caption_treatment",
+              "caption_treatment", "story_role", "story_block",
               "queries", "query_source", "match_score", "semantic_score", "match_reason",
               "alternatives", "near_misses")
     for scene in plan.scenes:

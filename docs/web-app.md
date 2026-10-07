@@ -417,3 +417,52 @@ filter. It includes up to the first 12 seconds at the scene’s original speed.
 Captions and sound appear in the finished video. **Save camera movement**,
 then **Update video** to render it. Undo restores your previous choice.
 Video clips and speaker shots use their separate motion controls.
+
+## Story Composer
+
+Open **Shorts → Story Composer · build your sequence** after transcription.
+Start with the proposed transcript order, or add individual sentence passages.
+Assign Hook, Key point, Payoff or Ending, trim the first and last word numbers,
+then use Move up, Move down or Remove to shape the sequence. Roles are your
+labels, not a promise of automatic story understanding. Review surrounding
+words so moving a passage does not change what the speaker meant.
+
+A sequence contains one to eight non-overlapping passages and lasts 3–60
+seconds. Duplicate words are refused; adjacent cuts divide any shared audio
+padding so it cannot repeat. Speaker footage, narration and captions retain
+their source timing when passages move. Title and chapter cards are omitted.
+The composer uses the current edited transcript; Undo restores the previous
+sequence when you need a passage removed by a saved edit.
+
+**Preview story sequence** renders actual footage, voice and captions without
+saving. Added music is heard after **Update video**. **Use this sequence** saves
+one undoable edit, keeping the original upload. Update video, review and
+download the result. Reopening the composer restores the saved passage roles.
+
+## Placing visuals on your story
+
+After composing a 3–60 second story, open **Director → Place visuals · choose
+when they appear**. Add a placement and select its first and last words. The
+quoted passage confirms what you selected. Choose **Speaker** to return to
+your recording, **Supporting visual** to show an image or clip already selected
+in the project, or **Keep current shots** to change only the text treatment.
+Speaker requires footage; supporting visuals must first be added in Scenes.
+The selected visual's thumbnail and credit appear before you commit.
+
+Enable **Set a text treatment for this span** to write text, select its look,
+position and role. Leaving text empty explicitly clears text for the selected
+span while captions keep playing. Disabling the treatment preserves the
+existing text. Auto placement can hide text if there is no room; inspect the
+preview before saving. Speaker zoom can be refined in **Edit selected beat**.
+
+Up to twelve placements may be saved together. Placements cannot overlap or
+cross title/chapter cards. Tight word timings without a safe frame boundary
+are refused; choose a wider passage. Adjacent placements share their padding.
+The story keeps its duration, voice and caption timestamps. Your chosen shot
+and text are pinned for later direction passes.
+
+**Preview visual placements** renders the full story without changing the
+project. Expand **Review rendered shot sequence** to inspect the draft's shot
+and text choices. Added music is heard after **Update video**. **Use visual
+placements** saves one undoable edit; Update video then renders it. Review
+current shot sequence shows saved choices when you reopen the panel.

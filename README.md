@@ -39,10 +39,14 @@ the finished video without starting the whole project again.
    your footage stays in sync with your voice; vertical framing can follow your
    face while pictures appear as cutaways.
 2. **Find your Short.** Review suggested 3–60 second passages, inspect the
-   opening and ending, and adjust the first and last words yourself.
+   opening and ending, and adjust the first and last words yourself. Or open
+   **Story Composer** to trim, reorder and combine transcript passages into a
+   hook, key points and an ending, then preview the sequence before saving.
 3. **Audition a direction.** Try **Clean authority**, **High energy** or
    **Cinematic story**, with optional matching captions. Inspect the planned
    beats and render a preview using your actual footage and narration.
+   **Place visuals** pins a speaker shot, project cutaway or text treatment
+   to chosen words without changing the story duration.
 4. **Compare the edits.** Put two auditions of the same passage side by side.
    A shared playhead starts, pauses and scrubs both. Switch which version you
    hear, then save the passage, direction and captions you prefer together.

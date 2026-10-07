@@ -76,6 +76,8 @@ from voxframe.model_downloads import Download
 from voxframe.models.asset import AssetKind
 from voxframe.plan.audio_mix import AudioMix
 from voxframe.plan.scene_plan import PlannedScene, ScenePlan
+from voxframe.plan.story_composer import StoryBlock
+from voxframe.plan.visual_placement import Placement
 from voxframe.sourcing.manual import SearchResults
 
 __all__ = ["ApiContext", "create_app", "static_root"]
@@ -367,6 +369,17 @@ class DirectionEdit(BaseModel):
 class VisualEdit(BaseModel):
     revision: str = Field(pattern=r"^[a-f0-9]{24}$")
     beat: VisualBeat | None = None
+
+
+class PlacementEdit(BaseModel):
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    placements: list[Placement] = Field(min_length=1, max_length=12)
+
+
+class StoryEdit(BaseModel):
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    blocks: list[StoryBlock] = Field(min_length=1, max_length=8)
+    vertical: bool = True
 
 
 class ShortEdit(BaseModel):
@@ -1394,7 +1407,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
 
     @app.get("/api/jobs/{job_id}/scenes/{index}/thumbnail")
     def scene_thumbnail(
-        job_id: str, index: int, context: ApiContext = Depends(ctx)
+        job_id: str, index: int, asset_only: bool = False,
+        context: ApiContext = Depends(ctx)
     ) -> Response:
         """A small preview of one scene's imagery.
 
@@ -1426,6 +1440,7 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         footage = payload.get("footage")
         if (
             footage
+            and not asset_only
             and scenes[index].get("shot") == "speaker"
             and scenes[index].get("footage_start") is not None
         ):
@@ -2059,6 +2074,79 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                              context: ApiContext = Depends(ctx)) -> dict[str, Any]:
         _, _, plan = _editable_plan(context, job_id)
         return direction_preview_result(job_id, export_draft(plan, edit), context)
+
+    @app.get("/api/jobs/{job_id}/story")
+    def story_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.story_composer import controls
+
+        _, _, plan = _editable_plan(context, job_id)
+        return controls(plan)
+
+    def story_draft(plan: ScenePlan, edit: StoryEdit) -> ScenePlan:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.shorts import revision
+        from voxframe.plan.story_composer import compose
+
+        if edit.revision != revision(plan):
+            raise HTTPException(409, "This edit changed. Reopen Story Composer before saving.")
+        try:
+            return compose(plan, edit.blocks, vertical=edit.vertical)
+        except EditError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.put("/api/jobs/{job_id}/story")
+    def story_save(job_id: str, edit: StoryEdit,
+                   context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        job, path, plan = _editable_plan(context, job_id)
+        updated = story_draft(plan, edit)
+        saved = _save_plan(updated, path, "the story sequence")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
+
+    @app.post("/api/jobs/{job_id}/story/preview")
+    def story_preview(job_id: str, edit: StoryEdit,
+                      context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        _, _, plan = _editable_plan(context, job_id)
+        return direction_preview_result(job_id, story_draft(plan, edit), context)
+
+    @app.get("/api/jobs/{job_id}/visual-placement")
+    def placement_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.visual_placement import controls
+
+        _, _, plan = _editable_plan(context, job_id)
+        return controls(plan)
+
+    def placement_draft(plan: ScenePlan, edit: PlacementEdit) -> ScenePlan:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.shorts import revision
+        from voxframe.plan.visual_placement import place
+
+        if edit.revision != revision(plan):
+            raise HTTPException(409, "This edit changed. Reopen visual placement before saving.")
+        try:
+            return place(plan, edit.placements)
+        except EditError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.put("/api/jobs/{job_id}/visual-placement")
+    def placement_save(job_id: str, edit: PlacementEdit,
+                       context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        job, path, plan = _editable_plan(context, job_id)
+        updated = placement_draft(plan, edit)
+        saved = _save_plan(updated, path, "visual placements")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
+
+    @app.post("/api/jobs/{job_id}/visual-placement/preview")
+    def placement_preview(job_id: str, edit: PlacementEdit,
+                          context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.storyboard import storyboard
+
+        _, _, plan = _editable_plan(context, job_id)
+        draft = placement_draft(plan, edit)
+        result = direction_preview_result(job_id, draft, context)
+        result["storyboard"] = storyboard(draft)
+        return result
 
     @app.get("/api/jobs/{job_id}/direction")
     def direction_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:

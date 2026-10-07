@@ -6721,3 +6721,64 @@ checks cover crop limits, cache invalidation, stale edits, read-only previews
 and history. Encoded-frame checks measure all six directions in preview and
 export, edge coverage, bounded preview speed and a static hold. Chromium
 checks selection, preview playback, phone width, save, history and Update video.
+
+
+## D-216 — Compose an explicit transcript sequence
+
+Story Composer combines one to eight user-selected, non-overlapping timed
+passages into a 3–60 second sequence. The chronological starting proposal and
+editable roles make no semantic quality or view prediction claim. Each block
+retains its source audio and footage clock; destination frames and caption
+words are rebased. Cards are omitted. Adjacent source ranges divide padding
+at a frame boundary without cutting a selected word or replaying shared sound.
+Actual overlapping speech is refused. New block joins are hard cuts; internal
+scene treatments remain. Stale director-generated text is cleared when its
+quote is absent, while explicit user text survives.
+
+Role and block metadata persist per scene, participate in revisions and keep
+later director restoration from merging distinct story sections. Authenticated
+GET, PUT and preview routes enforce current revisions and the existing editable
+job guard. Saving is one history step. Preview uses the real draft renderer,
+leaves the plan untouched and defers added music until Update video. The UI
+supports keyboard-accessible move and remove controls, word-boundary trimming,
+context review and mobile layout. Generation guards reject stale responses;
+changing or collapsing a preview pauses its captured player.
+
+Validation covers reordered words and source clocks, duration and overlap
+rejection, saved roles, earlier pause cuts, emphasis, stale edits and undo/redo.
+Real encoded-video checks measure clap/flash synchronization in reverse order
+with and without recording delay. Chromium checks preview playback, duplicate
+rejection, trimming, role editing, phone width, history and final export.
+
+
+## D-217 — Pin visual treatments to a word span
+
+Visual placement applies one to twelve non-overlapping spoken ranges to an
+existing 3–60 second edit. Each range keeps current shots, shows the speaker
+or reuses a selected project asset, and optionally sets a user text treatment.
+No arbitrary media path is accepted. Cards cannot be crossed. Frame boundaries
+fit between complete adjacent words; overlapping timings without a safe frame
+are refused. Adjacent ranges divide shared padding. Scenes split at placement
+boundaries with hard cuts, including existing joins at those boundaries.
+Internal joins and all timeline frames remain.
+
+Each spoken scene receives an explicit narration source clock, including
+untouched scenes when a neighbour splits. Footage offsets advance with source
+frames; caption words, corrections and emphasis stay on the destination clock.
+Story role metadata, license credits and deliberate photo holds survive.
+Replacing an asset clears its old match score and keeps it as an alternative.
+New structural joins cannot
+be restored as automatic director joins. Selected shots and text are user
+choices, so later direction passes retain them. Automatic text spanning a
+new boundary is cleared; deliberate existing text survives. Text treatment
+is opt-in; an explicitly empty treatment clears the selected span's text.
+
+Authenticated revision-guarded routes offer controls, preview and one-step
+history save. The real draft preview includes the complete shot sequence and
+defers added music until Update video. The UI pauses replaced/collapsed players
+and discards stale responses after navigation. Units cover frame rates, source
+clocks, correction/emphasis preservation, invalid selections, cards, adjacency,
+redirection and history. Encoded-video checks inspect cutaway pixels before,
+during and after the range and measure clap/flash sync with recording delay.
+Chromium checks selection, text, duplicate refusal, real playback, stale-player
+cleanup, phone layout, undo/redo and export alongside existing Director controls.

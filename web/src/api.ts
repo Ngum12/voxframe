@@ -1045,3 +1045,20 @@ export interface FinishReport {
   issues: FinishIssue[]; counts: Record<FinishIssue["category"], number>; note: string;
 }
 export const getFinishReview = (jobId: string) => request<FinishReport>(`/api/jobs/${jobId}/finish-review`);
+
+export interface StoryBlock { role: "hook" | "keypoint" | "payoff" | "ending"; first_word: number; last_word: number }
+export interface StoryControls { revision: string; proposal: StoryBlock[]; note: string;
+  words: ShortsControls["words"];
+  passages: { first_word: number; last_word: number; text: string; seconds: number;
+    context_before: string; context_after: string; warnings: string[] }[] }
+export const getStory = (id: string) => request<StoryControls>(`/api/jobs/${id}/story`);
+export const previewStory = (id: string, revision: string, blocks: StoryBlock[], vertical: boolean) =>
+  request<ShortPreview>(`/api/jobs/${id}/story/preview`, {method: "POST", body: JSON.stringify({revision, blocks, vertical})});
+export const saveStory = (id: string, revision: string, blocks: StoryBlock[], vertical: boolean) =>
+  request<PlanEditResult>(`/api/jobs/${id}/story`, {method: "PUT", body: JSON.stringify({revision, blocks, vertical})});
+
+export interface VisualPlacement { first_word: number; last_word: number; shot: "keep" | "speaker" | "picture"; asset_scene: number | null; beat: VisualBeat | null }
+export interface PlacementControls { revision: string; has_speaker: boolean; words: ShortsControls["words"]; visuals: {scene: number; quote: string; id: string; credit: string}[]; storyboard: Storyboard }
+export const getPlacement = (id: string) => request<PlacementControls>(`/api/jobs/${id}/visual-placement`);
+export const previewPlacement = (id: string, revision: string, placements: VisualPlacement[]) => request<ShortPreview & {storyboard: Storyboard}>(`/api/jobs/${id}/visual-placement/preview`, {method: "POST", body: JSON.stringify({revision, placements})});
+export const savePlacement = (id: string, revision: string, placements: VisualPlacement[]) => request<PlanEditResult>(`/api/jobs/${id}/visual-placement`, {method: "PUT", body: JSON.stringify({revision, placements})});

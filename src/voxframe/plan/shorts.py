@@ -70,9 +70,16 @@ def bounds(plan: ScenePlan, timed: tuple[TimedToken, ...],
     return max(0, math.floor(lead * plan.fps)), min(plan.total_frames, math.ceil(tail * plan.fps))
 
 
-def build_short(plan: ScenePlan, first: int, last: int, *, vertical: bool = True) -> ScenePlan:
+def build_passage(plan: ScenePlan, first: int, last: int, *, vertical: bool = True,
+                  window: tuple[int, int] | None = None) -> ScenePlan:
     timed = tokens(plan)
     start, end = bounds(plan, timed, first, last)
+    if window is not None:
+        start, end = window
+        if not (0 <= start < end <= plan.total_frames
+                and start <= timed[first].value.start * plan.fps
+                and end >= timed[last].value.end * plan.fps):
+            raise EditError("A story boundary would trim a selected word. Adjust the passage.")
     chosen = timed[first:last + 1]
     rebuilt = []
     cursor = 0
@@ -104,12 +111,17 @@ def build_short(plan: ScenePlan, first: int, last: int, *, vertical: bool = True
         rebuilt.append(scene.model_copy(update=changes))
         cursor += high - low
     seconds = cursor / plan.fps
-    if seconds < 3 or seconds > 60 + 1e-7:
-        raise EditError("Choose a passage lasting between 3 and 60 seconds. Cards are omitted.")
     payload = plan.model_dump()
     payload.update(scenes=rebuilt, total_frames=cursor, audio_duration=seconds,
                    aspect=AspectRatio.VERTICAL if vertical else plan.aspect)
     return ScenePlan.model_validate(payload)
+
+
+def build_short(plan: ScenePlan, first: int, last: int, *, vertical: bool = True) -> ScenePlan:
+    draft = build_passage(plan, first, last, vertical=vertical)
+    if draft.total_frames / draft.fps < 3 or draft.total_frames / draft.fps > 60 + 1e-7:
+        raise EditError("Choose a passage lasting between 3 and 60 seconds. Cards are omitted.")
+    return draft
 
 
 def source_ranges(plan: ScenePlan) -> list[dict]:
