@@ -6749,3 +6749,36 @@ rejection, saved roles, earlier pause cuts, emphasis, stale edits and undo/redo.
 Real encoded-video checks measure clap/flash synchronization in reverse order
 with and without recording delay. Chromium checks preview playback, duplicate
 rejection, trimming, role editing, phone width, history and final export.
+
+
+## D-217 — Pin visual treatments to a word span
+
+Visual placement applies one to twelve non-overlapping spoken ranges to an
+existing 3–60 second edit. Each range keeps current shots, shows the speaker
+or reuses a selected project asset, and optionally sets a user text treatment.
+No arbitrary media path is accepted. Cards cannot be crossed. Frame boundaries
+fit between complete adjacent words; overlapping timings without a safe frame
+are refused. Adjacent ranges divide shared padding. Scenes split at placement
+boundaries with hard cuts, including existing joins at those boundaries.
+Internal joins and all timeline frames remain.
+
+Each spoken scene receives an explicit narration source clock, including
+untouched scenes when a neighbour splits. Footage offsets advance with source
+frames; caption words, corrections and emphasis stay on the destination clock.
+Story role metadata, license credits and deliberate photo holds survive.
+Replacing an asset clears its old match score and keeps it as an alternative.
+New structural joins cannot
+be restored as automatic director joins. Selected shots and text are user
+choices, so later direction passes retain them. Automatic text spanning a
+new boundary is cleared; deliberate existing text survives. Text treatment
+is opt-in; an explicitly empty treatment clears the selected span's text.
+
+Authenticated revision-guarded routes offer controls, preview and one-step
+history save. The real draft preview includes the complete shot sequence and
+defers added music until Update video. The UI pauses replaced/collapsed players
+and discards stale responses after navigation. Units cover frame rates, source
+clocks, correction/emphasis preservation, invalid selections, cards, adjacency,
+redirection and history. Encoded-video checks inspect cutaway pixels before,
+during and after the range and measure clap/flash sync with recording delay.
+Chromium checks selection, text, duplicate refusal, real playback, stale-player
+cleanup, phone layout, undo/redo and export alongside existing Director controls.

@@ -45,6 +45,8 @@ the finished video without starting the whole project again.
 3. **Audition a direction.** Try **Clean authority**, **High energy** or
    **Cinematic story**, with optional matching captions. Inspect the planned
    beats and render a preview using your actual footage and narration.
+   **Place visuals** pins a speaker shot, project cutaway or text treatment
+   to chosen words without changing the story duration.
 4. **Compare the edits.** Put two auditions of the same passage side by side.
    A shared playhead starts, pauses and scrubs both. Switch which version you
    hear, then save the passage, direction and captions you prefer together.

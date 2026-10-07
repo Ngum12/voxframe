@@ -2797,3 +2797,7 @@ input[type="checkbox"], input[type="radio"] { flex: none; }
 .story-composer .check { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; }
 .story-preview video { width: 100%; max-height: 480px; background: #101318; border-radius: 12px; margin-top: 1rem; }
 @media (max-width: 540px) { .story-fields { grid-template-columns: 1fr 1fr; } .story-fields label:first-child { grid-column: 1 / -1; } .story-block { padding: .75rem; } }
+
+.placement-visual { margin: .75rem 0; display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
+.placement-visual img { width: 160px; height: 100px; object-fit: cover; border-radius: 8px; }
+.visual-placement .story-preview li { padding: .4rem 0; overflow-wrap: anywhere; }
