@@ -8,9 +8,11 @@
  * from its own page.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   establishSession,
+  getJob,
+  type ClipReviewTarget,
   getCapabilities,
   getModelStatus,
   getSettings,
@@ -63,6 +65,27 @@ export function App() {
   const [upload, setUpload] = useState<UploadResult | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<Job | null>(null);
+  const reviewRequest = useRef(0);
+  const [reviewTarget, setReviewTarget] = useState<ClipReviewTarget | null>(null);
+  const [reviewParent, setReviewParent] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    const open = async (event: Event) => {
+      const target = (event as CustomEvent<ClipReviewTarget>).detail;
+      if (!target || !/^[a-f0-9]{32}$/.test(target.jobId) || !/^[a-f0-9]{32}$/.test(target.parent) ||
+        !["captions", "director", "sound", "scenes", "export", "shorts"].includes(target.action) ||
+        (target.scene !== null && (!Number.isSafeInteger(target.scene) || target.scene < 0))) return;
+      const request = ++reviewRequest.current;
+      try {
+        const next = await getJob(target.jobId);
+        if (!live || request !== reviewRequest.current) return;
+        setReviewTarget(target); setReviewParent(target.parent);
+        setJobId(next.id); setJob(next); setScreen("result");
+      } catch (e) { if (live) setError(e instanceof Error ? e.message : "Could not open the clip."); }
+    };
+    document.addEventListener("voxframe:review-clip", open);
+    return () => { live = false; document.removeEventListener("voxframe:review-clip", open); };
+  }, []);
   const [error, setError] = useState<string | null>(null);
 
   // Remounts the progress screen after a resume or re-render, so it follows
@@ -270,6 +293,7 @@ export function App() {
               setScreen("settings");
             }}
             onOpen={(opened) => {
+              reviewRequest.current++; setReviewTarget(null); setReviewParent(null);
               setJobId(opened.id);
               setJob(opened);
               setScreen("result");
@@ -304,12 +328,24 @@ export function App() {
         {screen === "result" && job && jobId && (
           // The studio (D-180): the video is edited in place, and updating it
           // stays here rather than moving to the progress screen.
-          <Studio
+          <Studio key={jobId}
+            onBackCollection={reviewParent ? () => {
+              if (!reviewParent) return;
+              const request = ++reviewRequest.current;
+              void getJob(reviewParent).then(next => {
+                if (request !== reviewRequest.current) return;
+                setReviewTarget({jobId: next.id, parent: next.id, scene: null, action: "director"});
+                setReviewParent(null); setJobId(next.id); setJob(next);
+              }).catch(e => { if (request === reviewRequest.current) setError(e instanceof Error ? e.message : "Could not return to the collection."); });
+            } : undefined}
+            initialReview={reviewTarget?.jobId === jobId ? reviewTarget : null}
+            openCollection={reviewTarget?.jobId === jobId && !reviewParent}
             jobId={jobId}
             initialJob={job}
             sourcingEnabled={sourcingEnabled}
             onShowPlan={() => setScreen("plan")}
             onAgain={() => {
+              reviewRequest.current++; setReviewTarget(null); setReviewParent(null);
               setUpload(null);
               setJob(null);
               setJobId(null);

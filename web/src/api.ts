@@ -983,7 +983,7 @@ export interface BatchPreview extends ShortPreview {
   clip_id: string; preview_id: string; text: string; context_before: string; context_after: string;
   payoff: string; warnings: string[]; music_note: string; has_music: boolean;
 }
-export interface BatchJob { clip_id: string; height: number; job: Job; platform?: string | null; variant_source?: string | null }
+export interface BatchJob { clip_id: string; height: number; job: Job; platform?: string | null; variant_source?: string | null; bookend_source?: string | null; signature?: string | null }
 export const getBatchShorts = (id: string) => request<{jobs: BatchJob[]}>(`/api/jobs/${id}/shorts/batch`);
 export const previewBatchShort = (id: string, choice: ShortChoice) =>
   request<BatchPreview>(`/api/jobs/${id}/shorts/batch/preview`, {method: "POST", body: JSON.stringify(choice)});
@@ -1001,8 +1001,8 @@ export const previewDestinationVariant = (id: string, choice: VariantChoice) =>
 export const exportDestinationVariants = (id: string, variants: string[]) =>
   request<{jobs: Job[]}>(`/api/jobs/${id}/shorts/batch/variants`, {method: "POST", body: JSON.stringify({variants})});
 export interface ShortCollection { key: string; name: string; bytes: number; clips: number; url: string }
-export const packageShortCollection = (id: string, title: string, clips: {job_id: string; title: string}[]) =>
-  request<ShortCollection>(`/api/jobs/${id}/shorts/batch/collections`, {method: "POST", body: JSON.stringify({title, clips})});
+export const packageShortCollection = (id: string, title: string, clips: {job_id: string; title: string}[], review_id?: string) =>
+  request<ShortCollection>(`/api/jobs/${id}/shorts/batch/collections`, {method: "POST", body: JSON.stringify({title, clips, review_id})});
 export const getShorts = (jobId: string) => request<ShortsControls>(`/api/jobs/${jobId}/shorts`);
 export const saveShort = (jobId: string, choice: ShortChoice) =>
   request<PlanEditResult>(`/api/jobs/${jobId}/shorts`, { method: "PUT", body: JSON.stringify(choice) });
@@ -1129,3 +1129,16 @@ export const listBookendSignatures = () => request<{signatures: BookendSignature
 export const saveBookendSignature = (jobId: string, name: string, revision: string, bookend_id: string) => request<BookendSignature>(`/api/jobs/${jobId}/bookend-signatures`, {method: "POST", body: JSON.stringify({name, revision, bookend_id})});
 export const deleteBookendSignature = (id: string) => request<void>(`/api/bookend-signatures/${id}`, {method: "DELETE"});
 export const previewBookendSignature = (jobId: string, choice: Pick<BookendChoice, "revision" | "last_word" | "first_word" | "replace_opening" | "replace_closing">, signature_id: string) => request<BookendPreview>(`/api/jobs/${jobId}/bookend-signatures/preview`, {method: "POST", body: JSON.stringify({...choice, signature_id})});
+
+export interface BookendCollectionControls { sources: {job: Job; controls: BookendControls; seconds: number}[] }
+export interface BookendCollectionChoice extends Pick<BookendChoice, "revision" | "last_word" | "first_word" | "replace_opening" | "replace_closing"> { source_job: string; signature_id: string }
+export interface BookendCollectionPreview extends CompletePreview { clip_id: string; source_job: string; opening: OpeningWindow; closing: ClosingWindow; settings: BookendChoice; signature: {id: string; name: string} }
+export const getBookendCollection = (id: string) => request<BookendCollectionControls>(`/api/jobs/${id}/bookend-collections`);
+export const previewBookendCollection = (id: string, choice: BookendCollectionChoice) => request<BookendCollectionPreview>(`/api/jobs/${id}/bookend-collections/preview`, {method: "POST", body: JSON.stringify(choice)});
+export const exportBookendCollection = (id: string, clips: string[]) => request<{jobs: Job[]}>(`/api/jobs/${id}/bookend-collections`, {method: "POST", body: JSON.stringify({clips})});
+
+export interface CollectionFinishReport { version: number; fingerprint: string; clips: {job_id: string; name: string; revision: string; width: number; height: number; seconds: number; issues: FinishIssue[]; blockers: string[]; sound: {integrated_lufs: number | null; true_peak: number | null} | null}[]; counts: FinishReport["counts"]; note: string }
+export const reviewCollection = (id: string, clips: string[]) => request<CollectionFinishReport>(`/api/jobs/${id}/shorts/batch/collections/review`, {method: "POST", body: JSON.stringify({clips})});
+export const approveCollectionReview = (id: string, clips: string[], fingerprint: string, checked: string[], watched: string[]) => request<{review_id: string}>(`/api/jobs/${id}/shorts/batch/collections/review/approve`, {method: "POST", body: JSON.stringify({clips, fingerprint, checked, watched})});
+export interface ClipReviewTarget { jobId: string; parent: string; scene: number | null; action: FinishAction }
+export function openClipReview(target: ClipReviewTarget) { document.dispatchEvent(new CustomEvent("voxframe:review-clip", {detail: target})); }

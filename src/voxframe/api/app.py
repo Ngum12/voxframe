@@ -415,6 +415,16 @@ class BookendSignaturePreview(BaseModel):
     replace_closing: bool = False
 
 
+class BookendCollectionPreview(BookendSignaturePreview):
+    source_job: str = Field(pattern=r"^[a-f0-9]{32}$")
+
+
+class BookendCollectionExport(BaseModel):
+    model_config = {"extra": "forbid"}
+    clips: list[Annotated[str, Field(pattern=r"^[a-f0-9]{24}$")]] = Field(
+        min_length=1, max_length=6)
+
+
 class CompleteWinner(BaseModel):
     revision: str = Field(pattern=r"^[a-f0-9]{24}$")
     preview_id: str = Field(pattern=r"^[a-f0-9]{24}$")
@@ -463,7 +473,20 @@ class CollectionItem(BaseModel):
     title: str = Field(min_length=1, max_length=80)
 
 
+class CollectionReviewRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    clips: list[Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]] = Field(
+        min_length=1, max_length=6)
+
+
+class CollectionReviewApproval(CollectionReviewRequest):
+    fingerprint: str = Field(pattern=r"^[a-f0-9]{24}$")
+    checked: list[str] = Field(max_length=2400)
+    watched: list[Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]] = Field(max_length=6)
+
+
 class CollectionRequest(BaseModel):
+    review_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{24}$")
     title: str = Field(min_length=1, max_length=80)
     clips: list[CollectionItem] = Field(min_length=1, max_length=6)
 
@@ -2060,6 +2083,8 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                           "height": job.options.get("height"),
                           "platform": job.options.get("batch_platform"),
                           "variant_source": job.options.get("batch_variant_source"),
+                          "bookend_source": job.options.get("bookend_source"),
+                          "signature": job.options.get("bookend_signature"),
                           "job": job.snapshot()}
                          for job in context.store.all_jobs()
                          if job.options.get("batch_parent") == job_id]}
@@ -2183,6 +2208,56 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 jobs.append(job.snapshot())
         return {"jobs": jobs}
 
+    def collection_report(job_id: str, ids: list[str], context: ApiContext) -> dict:
+        from voxframe.jobs.collection_review import ReviewClip, report
+
+        if context.store.get(job_id) is None:
+            raise HTTPException(404, "No such collection project.")
+        if len(set(ids)) != len(ids):
+            raise HTTPException(422, "Choose each finished clip once.")
+        clips = []
+        for child_id in ids:
+            child = context.store.get(child_id)
+            if child is None or child.options.get("batch_parent") != job_id:
+                raise HTTPException(404, "That clip does not belong to this collection project.")
+            if child.state.value != "succeeded":
+                raise HTTPException(409, "Finish every selected clip "
+                                    "before reviewing the collection.")
+            _, path, plan = _editable_plan(context, child_id)
+            files = []
+            for kind in ("video", "srt", "vtt"):
+                artifact = context.store.artifact_path(child_id, kind)
+                if artifact:
+                    _check_sandbox(context, artifact)
+                    files.append((kind, artifact))
+            height = int(child.summary.get("height") or child.options.get("height") or 1080)
+            clips.append(ReviewClip(child_id, child.audio_name, plan, path, tuple(files),
+                                    height, child.summary))
+        try:
+            return report(clips)
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(409, "A saved clip could not be reviewed. "
+                                "Open it, update the video and try again.") from exc
+
+    @app.post("/api/jobs/{job_id}/shorts/batch/collections/review")
+    def collection_finish_review(job_id: str, edit: CollectionReviewRequest,
+                                  context: ApiContext = Depends(ctx)) -> dict:
+        return collection_report(job_id, edit.clips, context)
+
+    @app.post("/api/jobs/{job_id}/shorts/batch/collections/review/approve")
+    def approve_collection_review(job_id: str, edit: CollectionReviewApproval,
+                                   context: ApiContext = Depends(ctx)) -> dict:
+        from voxframe.jobs.collection_review import approve
+
+        current = collection_report(job_id, edit.clips, context)
+        try:
+            approve(context.store.job_directory(job_id) / "collection-reviews", current,
+                    edit.fingerprint, edit.checked, edit.watched)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(409, str(exc) if isinstance(exc, ValueError)
+                                else "The review could not be saved. Try again.") from exc
+        return {"review_id": current["fingerprint"]}
+
     @app.post("/api/jobs/{job_id}/shorts/batch/collections")
     def package_short_collection(job_id: str, edit: CollectionRequest,
                                  context: ApiContext = Depends(ctx)) -> dict[str, Any]:
@@ -2196,6 +2271,20 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         title = " ".join(edit.title.split())
         if not title or any(not item.title.strip() for item in edit.clips):
             raise HTTPException(422, "Give the collection and every clip a name.")
+        review = None
+        needs_review = any(context.store.get(child_id) and
+            context.store.get(child_id).options.get("bookend_source") for child_id in ids)
+        if needs_review and edit.review_id is None:
+            raise HTTPException(409, "Review this finished bookend collection before packaging.")
+        if edit.review_id is not None:
+            from voxframe.jobs.collection_review import approved
+
+            try:
+                review = approved(context.store.job_directory(job_id) / "collection-reviews",
+                    edit.review_id, collection_report(job_id, ids, context))
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise HTTPException(409, "This collection review expired. "
+                                    "Refresh and review it again before packaging.") from exc
         clips, original = [], {}
         for item in edit.clips:
             child = context.store.get(item.job_id)
@@ -2222,9 +2311,19 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 width=child.summary.get("width"), height=child.summary.get("height"),
                 pending_edits=int(child.summary.get("pending_edits", 0)),
                 platform=(child.summary.get("short_export") or {}).get("platform"),
-                sound_destination=(child.summary.get("audio_mix") or {}).get("destination")))
+                sound_destination=(child.summary.get("audio_mix") or {}).get("destination"),
+                bookend_signature=child.options.get("bookend_signature"),
+                source_job=child.options.get("bookend_source")))
 
         def check_current() -> None:
+            if review is not None:
+                from voxframe.jobs.collection_review import approved
+
+                try:
+                    approved(context.store.job_directory(job_id) / "collection-reviews",
+                        edit.review_id, collection_report(job_id, ids, context))
+                except (OSError, ValueError, KeyError, TypeError) as exc:
+                    raise ValueError("The collection review changed during packaging.") from exc
             for child_id, previous in original.items():
                 child = context.store.get(child_id)
                 if child is None or (child.state, child.artifacts, child.summary) != previous:
@@ -2235,7 +2334,7 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
 
         try:
             result = package(title, clips, context.store.job_directory(job_id) / "collections",
-                             check_current)
+                             check_current, **({"review": review} if review else {}))
         except (OSError, ValueError, TypeError) as exc:
             log.warning("collection.package_failed", reason=type(exc).__name__)
             raise HTTPException(409, "A selected export changed or could not be read. "
@@ -2524,6 +2623,141 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                 if key not in {"plan", "stamps", "engine"}} | {
             "preview_id": result["key"],
             "url": f"/api/jobs/{job_id}/complete-previews/{result['key']}", "source_ranges": []}
+
+    def bookend_source(context: ApiContext, source_id: str) -> tuple:
+        job, _, plan = _editable_plan(context, source_id)
+        if (job.state.value != "succeeded" or "video" not in job.artifacts
+                or job.options.get("bookend_source")):
+            raise HTTPException(409, "Choose a finished original recording for this collection.")
+        return job, plan
+
+    @app.get("/api/jobs/{job_id}/bookend-collections")
+    def bookend_collection_controls(job_id: str,
+                                    context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.bookend_audition import controls
+
+        if context.store.get(job_id) is None:
+            raise HTTPException(404, "No such collection project.")
+        sources = []
+        for job in context.store.all_jobs():
+            if (job.state.value != "succeeded" or "video" not in job.artifacts
+                    or "plan" not in job.artifacts or job.options.get("bookend_source")):
+                continue
+            plan = _load_job_plan(context, job.id)
+            data = controls(plan)
+            if not data["eligible"]:
+                continue
+            sources.append({"job": job.snapshot(), "controls": data,
+                            "seconds": plan.total_frames / plan.fps})
+        return {"sources": sources}
+
+    @app.post("/api/jobs/{job_id}/bookend-collections/preview")
+    def bookend_collection_preview(job_id: str, edit: BookendCollectionPreview,
+                                    context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.config.bookend_signatures import load
+        from voxframe.plan.bookend_audition import audition
+        from voxframe.plan.bookend_collection import record
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.shorts import revision
+        from voxframe.render.compose.complete_preview import complete_preview
+
+        if context.store.get(job_id) is None:
+            raise HTTPException(404, "No such collection project.")
+        _, plan = bookend_source(context, edit.source_job)
+        if revision(plan) != edit.revision:
+            raise HTTPException(409, "This recording changed. "
+                                "Refresh recordings and preview again.")
+        try:
+            signature = next((item for item in load() if item.id == edit.signature_id), None)
+        except (OSError, ValueError, TypeError) as exc:
+            raise HTTPException(422, "Your bookend signatures could not be read. "
+                                "The file was kept.") from exc
+        if signature is None:
+            raise HTTPException(404, "That bookend signature was removed. Choose another.")
+        choice = BookendChoice(revision=edit.revision, last_word=edit.last_word,
+            first_word=edit.first_word, opening_look=signature.opening_look,
+            closing_look=signature.closing_look, opening_shot=signature.opening_shot,
+            closing_shot=signature.closing_shot, match_captions=signature.match_captions,
+            replace_opening=edit.replace_opening, replace_closing=edit.replace_closing)
+        try:
+            draft, opening, closing = audition(plan, choice)
+        except EditError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        check_complete_sources(draft, context)
+        root = context.store.job_directory(job_id)
+        try:
+            result = complete_preview(draft, edit.revision, root / "complete-previews")
+            key = record(root / "bookend-collection-previews", result["key"], edit.source_job,
+                         signature, choice)
+        except Exception as exc:
+            log.warning("bookend_collection.preview_failed", reason=type(exc).__name__)
+            raise HTTPException(422, "This recording could not be previewed. "
+                                "Check its media and music.") from exc
+        return {key: value for key, value in result.items()
+                if key not in {"plan", "stamps", "engine"}} | {
+            "clip_id": key, "preview_id": result["key"], "source_job": edit.source_job,
+            "url": f"/api/jobs/{job_id}/complete-previews/{result['key']}", "source_ranges": [],
+            "opening": opening, "closing": closing, "settings": choice.model_dump(mode="json"),
+            "signature": {"id": signature.id, "name": signature.name}}
+
+    @app.post("/api/jobs/{job_id}/bookend-collections", status_code=202)
+    def export_bookend_collection(job_id: str, edit: BookendCollectionExport,
+                                  context: ApiContext = Depends(ctx)) -> dict[str, Any]:
+        from voxframe.plan.bookend_audition import audition
+        from voxframe.plan.bookend_collection import metadata
+        from voxframe.plan.shorts import revision
+        from voxframe.render.compose.complete_preview import winner
+
+        if context.store.get(job_id) is None:
+            raise HTTPException(404, "No such collection project.")
+        if len(set(edit.clips)) != len(edit.clips):
+            raise HTTPException(422, "Choose each reviewed recording only once.")
+        root = context.store.job_directory(job_id)
+        choices, sources = [], set()
+        for key in edit.clips:
+            try:
+                info = metadata(root / "bookend-collection-previews", key)
+                source, plan = bookend_source(context, info.source_job)
+                if revision(plan) != info.choice.revision:
+                    raise ValueError("The recording changed.")
+                draft = winner(root / "complete-previews", info.preview_id, info.choice.revision,
+                    check_plan=lambda p: check_complete_sources(p, context))
+                expected, _, _ = audition(plan, info.choice)
+                if draft != expected:
+                    raise ValueError("The reviewed pair changed.")
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise HTTPException(409, "A recording, preview or media file changed. "
+                                    "Refresh recordings and preview again.") from exc
+            if source.id in sources:
+                raise HTTPException(422, "Choose one reviewed pair per recording.")
+            sources.add(source.id)
+            choices.append((key, source, draft, info))
+        jobs = []
+        with batch_queue_lock:
+            for key, source, draft, info in choices:
+                existing = next((job for job in context.store.all_jobs()
+                    if job.options.get("batch_parent") == job_id
+                    and job.options.get("batch_clip") == key
+                    and job.options.get("bookend_source") == source.id), None)
+                if existing:
+                    jobs.append(existing.snapshot())
+                    continue
+                height = (draft.short_export.height if draft.short_export
+                          else int(source.options.get("height", 720)))
+                job = context.store.create(
+                    audio_name=f"{source.audio_name} · {info.signature_name}",
+                    options={"batch_parent": job_id, "batch_clip": key, "bookend_source": source.id,
+                        "bookend_signature": info.signature_name, "height": height,
+                        "quality": "standard"})
+                folder = context.store.job_directory(job.id)
+                path = draft.save(folder / "bookend.plan.json")
+                approval = json.loads((root / "complete-previews" /
+                    f"{info.preview_id}.json").read_text(encoding="utf-8"))
+                (folder / "approved.json").write_text(json.dumps(approval), encoding="utf-8")
+                context.store.record_result(job, artifacts={"plan": path}, warnings=(), summary={})
+                context.store.submit(job, _plan_renderer(context))
+                jobs.append(job.snapshot())
+        return {"jobs": jobs}
 
     @app.get("/api/jobs/{job_id}/bookend-auditions")
     def bookend_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
@@ -4386,6 +4620,7 @@ def _record_outcome(context: ApiContext, job: Job, outcome: PipelineOutcome) -> 
     edit into the video, so the pending-edit count goes back to zero.
     """
     from voxframe.plan.editing import edited_scene_count
+    from voxframe.plan.shorts import revision
 
     artifacts: dict[str, Path] = {"video": outcome.result.video_path}
     if outcome.plan_path:
@@ -4423,6 +4658,7 @@ def _record_outcome(context: ApiContext, job: Job, outcome: PipelineOutcome) -> 
                 if scene.asset_source == "atmospheric"
             ) if outcome.plan else 0,
             "pending_edits": 0,
+            "rendered_revision": revision(outcome.plan) if outcome.plan else None,
             # The sound's measurements and checks, and the settings behind
             # them, for the mix controls (D-171).
             "sound": outcome.result.sound,

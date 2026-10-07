@@ -111,11 +111,16 @@ chapter cards and highlights. [Walk through the controls](docs/web-app.md).
   Mix their treatments or compare three coordinated pairs with sound. Review
   both ends, then apply the exact pair as one undoable edit; the middle stays
   yours. Save a reviewed pair as a named signature, then audition it on another
-  recording with fresh words, media and sound.
+  recording with fresh words, media and sound. Audition one signature across
+  up to six finished recordings, review each pair, then export separate editable
+  clips and package their videos, subtitles and credits in a collection ZIP.
 - **A finishing review.** Inspect potential caption, framing, timing and sound
   issues, with evidence and a route to the relevant controls. Mark intentional
   choices checked. The review uses saved settings and metadata; watch and listen
   to the updated video before sharing it.
+  Review finished bookend collections clip by clip, open the controls to fix
+  cues, and confirm watching and listening before packaging. The ZIP records
+  your review; changing the clips or their saved edits requires a fresh one.
 - **An editor that keeps you in control.** The video stays visible while you
   work with scenes and timed words. Undo and redo, saved edits, reusable render
   segments and interrupted-render recovery keep work from being lost.

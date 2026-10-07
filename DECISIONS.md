@@ -7071,3 +7071,68 @@ pair after controls change, reuses it on a new recording with audible music,
 checks both review gates, duplicate recovery, mobile layout, exact apply,
 Undo/Redo, export and removal. A separate flow verifies disjoint defaults on a
 shorter picture-only story and recovery from missing speaker footage.
+
+
+## D-228: bookend signature collections approve each source before exporting
+
+Collections select up to six finished 3–60 second original jobs. Use the same
+phrase-default helper as individual signatures, with independent word ranges
+and pinned replacement choices per recording. The server loads the chosen saved
+recipe and rejects client style overrides. Each full preview includes that
+recording’s own sound and is stored under the collection’s anchor project.
+
+Persist a typed source-specific approval containing the original job, resolved
+paired choice, signature identity/name and complete-preview identity. Bind the
+record to its content hash. Queue requests validate every approval, current source
+revision, media/renderer freshness, sandbox and reproduction of the exact plan
+before creating any export jobs. Reject duplicate clips or multiple choices for
+one recording. Signature deletion does not invalidate existing approvals; the
+recorded choice reproduces the reviewed draft without loading the recipe again.
+
+Queue each approved plan as a new editable child using the existing batch renderer
+and its first-export freshness guards. Original projects remain untouched. Retain
+the source’s export height and destination settings. A queue lock and approval
+identity make repeat requests reuse jobs. Stop/resume and progress use existing
+job actions. Shared collection packaging adds recipe and source provenance to
+bookend manifest entries while retaining finished-file checksums, credits, subtitle
+companions and pending-edit metadata. No source files or plans enter the ZIP.
+
+The UI requires two reviews for each current choice. Phrase or recipe changes
+unmount and pause old players; new renders clear reviews. Source refresh changes
+revision-bound choices. Previews can be rerendered after media-only changes.
+
+Units cover full sound, privacy, approval provenance, exact multi-source plans,
+idempotent queueing, removed recipes, per-end permissions, stale all-or-nothing
+preflight, authentication, duplicate/size limits, sandboxing and ZIP provenance.
+Chromium renders two different recordings with distinct music, tests both review
+gates and pinned choices, pauses changed previews, measures each export’s frames
+and soundtrack, checks mobile layout and repeat queueing, then downloads and
+inspects the actual collection ZIP. Existing packaging and signature flows are
+regression-checked.
+
+
+## D-229 — Finished bookend collections require an output-bound review
+
+Reuse individual finishing cues and recorded render sound measurements, with
+unique clip-scoped cue IDs. Report missing outputs and unrendered saved edits as
+blockers. Record the rendered plan revision for new outputs; use plan history
+and conservative timestamp checks for older projects. Do not claim pixel or
+semantic inspection.
+
+Require acknowledgement of every current cue plus a watch/listen confirmation
+for every selected finished clip. Bind approvals to selection order, saved plan
+revisions, output file stamps and sound measurements. Recheck before and during
+ZIP packaging. Include the public receipt in the manifest, without local paths
+or source plans. Legacy ordinary Shorts snapshot packaging remains compatible.
+
+The collection screen shows finished players and links to the relevant clip,
+scene and controls. Return navigation restores selected clips, names and order
+from optional browser session storage. Changing selections resets approval.
+
+Validation covers missing subtitles, recorded sound failures, per-clip cue IDs,
+required confirmations, pending edits, stale files/plans/order/measurements,
+authentication and changes during packaging. Chromium renders and plays two
+finished clips, checks exclusive audible playback, follows a cue into Export
+and returns with the collection form intact, then verifies the actual ZIP
+receipt and phone layout. Existing Shorts and individual finishing review
+workflows remain covered.

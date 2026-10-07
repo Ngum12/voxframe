@@ -27,6 +27,8 @@ class CollectionClip:
     pending_edits: int = 0
     platform: str | None = None
     sound_destination: str | None = None
+    bookend_signature: str | None = None
+    source_job: str | None = None
 
 
 def slug(name: str) -> str:
@@ -46,14 +48,18 @@ def _stamps(clips: list[CollectionClip]) -> list:
 
 
 def package(title: str, clips: list[CollectionClip], directory: Path,
-            check_current: Callable[[], None]) -> dict:
+            check_current: Callable[[], None], *, review: dict | None = None) -> dict:
     check_current()
     before = _stamps(clips)
     material = {"version": 1, "title": title, "files": before,
                 "clips": [{"id": c.job_id, "title": c.title, "credits": c.credits,
                            "width": c.width, "height": c.height,
                            "pending_edits": c.pending_edits, "platform": c.platform,
-                           "sound_destination": c.sound_destination} for c in clips]}
+                           "sound_destination": c.sound_destination,
+                           "bookend_signature": c.bookend_signature, "source_job": c.source_job}
+                          for c in clips]}
+    if review is not None:
+        material["finishing_review"] = review
     key = hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()[:24]
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / f"{key}.zip"
@@ -66,6 +72,8 @@ def package(title: str, clips: list[CollectionClip], directory: Path,
     folder_name = slug(title)
     manifest = {"version": 1, "collection": title,
                 "created_at": datetime.now(UTC).isoformat(), "clips": []}
+    if review is not None:
+        manifest["finishing_review"] = review
     credit_sections = []
     with tempfile.TemporaryDirectory(prefix="package-", dir=directory) as folder:
         partial = Path(folder) / "collection.zip"
@@ -77,6 +85,9 @@ def package(title: str, clips: list[CollectionClip], directory: Path,
                         "pending_edits": clip.pending_edits, "platform": clip.platform,
                         "sound_destination": clip.sound_destination, "files": [],
                         "credits": list(clip.credits)}
+                if clip.bookend_signature is not None:
+                    item["bookend_signature"] = clip.bookend_signature
+                    item["source_project_id"] = clip.source_job
                 for kind, source in clip.files:
                     name = f"{stem}.{kind}"
                     digest, size = hashlib.sha256(), 0
