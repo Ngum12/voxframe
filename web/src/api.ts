@@ -1053,3 +1053,138 @@ export const correctCaption = (jobId: string, index: number, text: string) =>
     method: "PUT",
     body: JSON.stringify({ text }),
   });
+
+// --- the hook and the pace (D-199) ----------------------------------------------
+
+/** A scene of the video as it will be made, cuts and cold open applied. */
+export interface TimelineScene extends PlannedScene {
+  /** Which scene of the plan this is: edits go to it. */
+  story_index: number;
+  /** For each of its words, that word's position in the plan's scene. */
+  story_words: number[];
+  /** The cold open's copy of a later line. */
+  teaser?: boolean;
+}
+
+/** The plan as the video will play it (``GET /timeline``). */
+/** An unbroken stretch of the recording as the video plays it. */
+export interface TimelinePiece {
+  story_start: number;
+  story_end: number;
+  video_start: number;
+  teaser: boolean;
+}
+
+export interface TimelinePlan extends Omit<ScenePlan, "scenes"> {
+  scenes: TimelineScene[];
+  /** Empty when nothing is cut or moved: the video's clock is the plan's. */
+  pieces: TimelinePiece[];
+}
+
+/** Where a moment of the video is on the plan's clock; null in the cold open. */
+export function videoToStory(timeline: TimelinePlan | null, seconds: number): number | null {
+  if (!timeline || timeline.pieces.length === 0) return seconds;
+  for (const piece of timeline.pieces) {
+    const length = piece.story_end - piece.story_start;
+    if (seconds >= piece.video_start - 1e-6 && seconds <= piece.video_start + length + 1e-6) {
+      return piece.teaser ? null : piece.story_start + (seconds - piece.video_start);
+    }
+  }
+  return null;
+}
+
+/**
+ * Where a moment of the plan plays in the video. A moment that is cut plays
+ * as the next moment kept, so a click on a cut word still lands near it.
+ */
+export function storyToVideo(timeline: TimelinePlan | null, seconds: number): number {
+  if (!timeline || timeline.pieces.length === 0) return seconds;
+  let after: number | null = null;
+  for (const piece of timeline.pieces) {
+    if (piece.teaser) continue;
+    if (seconds >= piece.story_start - 1e-6 && seconds <= piece.story_end + 1e-6) {
+      return piece.video_start + (seconds - piece.story_start);
+    }
+    if (piece.story_start > seconds && (after === null || piece.video_start < after)) after = piece.video_start;
+  }
+  return after ?? timeline.total_frames / timeline.fps;
+}
+
+export type CutKind = "silence" | "filler" | "repeat" | "edge" | "manual";
+
+export interface PaceCut {
+  index: number;
+  start: number;
+  end: number;
+  kind: CutKind;
+  on: boolean;
+  label: string;
+  /** Where it is in the video, or null when it falls in another cut. */
+  video_at: number | null;
+}
+
+export interface PacePunchIn {
+  index: number;
+  start: number;
+  end: number;
+  zoom: number;
+  word: string;
+  on: boolean;
+  video_at: number | null;
+}
+
+export interface HookLine {
+  start: number;
+  end: number;
+  text: string;
+  score: number;
+  reasons: string[];
+  video_at: number | null;
+}
+
+export interface PaceState {
+  cuts: PaceCut[];
+  cold_open: [number, number] | null;
+  punch_ins: PacePunchIn[];
+  alternate_zoom: boolean;
+  hook_title: string;
+  recording_seconds: number;
+  video_seconds: number;
+  hooks: HookLine[];
+  /** Stretches where nothing new comes on screen, on the video's clock. */
+  stillness: { start: number; end: number }[];
+}
+
+export interface FindCutsSettings {
+  keep_pause: number;
+  fillers: boolean;
+  repeats: boolean;
+  edges: boolean;
+}
+
+export const getTimeline = (jobId: string) => request<TimelinePlan>(`/api/jobs/${jobId}/timeline`);
+export const getPace = (jobId: string) => request<PaceState>(`/api/jobs/${jobId}/pace`);
+
+const pacePut = (jobId: string, path: string, body: unknown, method = "PUT") =>
+  request<PaceState & PlanHistory>(`/api/jobs/${jobId}/${path}`, {
+    method,
+    body: JSON.stringify(body),
+  });
+
+export const findCuts = (jobId: string, settings: FindCutsSettings) =>
+  pacePut(jobId, "pace/cuts/find", settings, "POST");
+export const switchCut = (jobId: string, index: number, on: boolean) =>
+  pacePut(jobId, `pace/cuts/${index}`, { on });
+/** Cut a stretch of the video, in the video's own seconds. */
+export const addCut = (jobId: string, start: number, end: number) =>
+  pacePut(jobId, "pace/cuts", { start, end }, "POST");
+export const removeCut = (jobId: string, index: number) =>
+  request<PaceState & PlanHistory>(`/api/jobs/${jobId}/pace/cuts/${index}`, { method: "DELETE" });
+/** Open on a line of the plan, given on the plan's clock; null for none. */
+export const setColdOpen = (jobId: string, span: { start: number; end: number } | null) =>
+  pacePut(jobId, "pace/cold-open", { span });
+export const findPunchIns = (jobId: string) => pacePut(jobId, "pace/punch-ins/find", {}, "POST");
+export const switchPunchIn = (jobId: string, index: number, on: boolean) =>
+  pacePut(jobId, `pace/punch-ins/${index}`, { on });
+export const setAlternateZoom = (jobId: string, on: boolean) => pacePut(jobId, "pace/alternate-zoom", { on });
+export const setHookTitle = (jobId: string, text: string) => pacePut(jobId, "hook-title", { text });

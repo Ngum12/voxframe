@@ -2939,3 +2939,173 @@ main:has(.welcome) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* --- the hook and the pace (D-199) ------------------------------------------- */
+
+.pace {
+  display: grid;
+  gap: 14px;
+}
+
+.pace h3 {
+  margin: 14px 0 6px;
+  font-size: 14px;
+}
+
+.pace-opening {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+  padding: 8px 10px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.pace-opening span {
+  flex: 1 1 180px;
+}
+
+.pace-hooks {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pace-hooks li {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
+
+.pace-hooks li[aria-current="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.pace-hooks q {
+  font-weight: 600;
+}
+
+.pace-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pace-reason {
+  padding: 1px 8px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+}
+
+.pace-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.pace-tightness {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+}
+
+.pace-tightness legend {
+  margin-bottom: 4px;
+}
+
+.pace-switches {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.pace-switch {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.pace-count {
+  margin: 10px 0 4px;
+}
+
+.pace-list {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.pace-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pace-list li > label,
+.pace-list li > span {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.pace-list li[data-on="false"] > label span {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+
+.pace-kind {
+  min-width: 72px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.pace-mark {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+/* Where the video jumps: a cut, or the end of the cold open. */
+.timeline-cut {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.timeline-teaser {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  pointer-events: none;
+}

@@ -23,6 +23,7 @@ import {
   type PlanHistory,
   type PlannedScene,
   type ScenePlan,
+  type TimelinePlan,
   addTitle,
   artifactUrl,
   followJob,
@@ -32,23 +33,27 @@ import {
   getOverlays,
   getPlan,
   getPlanHistory,
+  getTimeline,
   openFolder,
   redoPlan,
   rerenderJob,
   setCaptions,
+  storyToVideo,
   undoPlan,
   updateOverlay,
+  videoToStory,
 } from "../api";
 import { Notice } from "../components";
 import { CaptionStyle, SceneCaptionStyle } from "./CaptionStyle";
 import { SceneDetail, TitleAdder, sceneThumbnail, sharesFrame, showsSpeaker } from "./Filmstrip";
 import { LayoutPicker } from "./Layout";
+import { PacePanel } from "./Pace";
 import { PopupLayer, PopupsPanel } from "./Popups";
 import { liveCaptionsSupported, useLiveCaptions } from "./LiveCaptions";
 import { SoundPanel } from "./Sound";
 import { Timeline, type TimedWord } from "./Timeline";
 
-type Tab = "scenes" | "captions" | "popups" | "sound" | "style";
+type Tab = "scenes" | "captions" | "popups" | "sound" | "style" | "pace";
 
 /** The studio's panel sizes and whether each is open, kept between sessions (D-183). */
 interface Layout {
@@ -135,6 +140,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "sound", label: "Sound" },
   { id: "style", label: "Style" },
   { id: "popups", label: "Pop-ups" },
+  { id: "pace", label: "Hook & pace" },
 ];
 
 const ARTIFACT_LABELS: Record<string, string> = {
@@ -213,6 +219,8 @@ export function Studio({
   const [dragAnchor, setDragAnchor] = useState<number | null>(null);
   const [popups, setPopups] = useState<OverlaysState | null>(null);
   const [selectedPopup, setSelectedPopup] = useState<string | null>(null);
+  // The video as it will be made: the plan with its cuts and cold open (D-199).
+  const [timeline, setTimeline] = useState<TimelinePlan | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
   const frame = useRef<HTMLDivElement>(null);
   const shortcuts = useRef<HTMLDialogElement>(null);
@@ -261,11 +269,13 @@ export function Studio({
         getCaptionLook(jobId),
         live ? getCaptions(jobId) : Promise.resolve(null),
         getOverlays(jobId),
+        getTimeline(jobId),
       ])
-        .then(([loadedLook, document, overlays]) => {
+        .then(([loadedLook, document, overlays, loadedTimeline]) => {
           if (!current) return;
           setLook(loadedLook);
           setPopups(overlays);
+          setTimeline(loadedTimeline);
           if (document !== null) setCaptionsDoc(document);
         })
         .catch(() => current && live && setLiveFailed(true));
@@ -301,7 +311,10 @@ export function Studio({
     return () => cancelAnimationFrame(frameId);
   }, [playing]);
 
-  const duration = plan ? plan.total_frames / plan.fps : 0;
+  // The player plays the video, on its own clock: the plan with its cuts
+  // and cold open applied (D-199). Edits go to the plan's scenes.
+  const view: ScenePlan | null = timeline ?? plan;
+  const duration = view ? view.total_frames / view.fps : 0;
   const seek = useCallback(
     (seconds: number) => {
       const to = Math.max(0, Math.min(seconds, Math.max(0, duration - 0.05)));
@@ -317,30 +330,35 @@ export function Studio({
     else element.pause();
   }, []);
 
-  const words = useMemo(() => (plan ? timedWords(plan) : []), [plan]);
+  const words = useMemo(() => (view ? timedWords(view) : []), [view]);
   const sceneAt = useCallback(
     (seconds: number): PlannedScene | null => {
-      if (!plan) return null;
-      const at = Math.floor(seconds * plan.fps);
-      return plan.scenes.find((s) => at >= s.start_frame && at < s.end_frame) ?? plan.scenes[plan.scenes.length - 1] ?? null;
+      if (!view) return null;
+      const at = Math.floor(seconds * view.fps);
+      return view.scenes.find((s) => at >= s.start_frame && at < s.end_frame) ?? view.scenes[view.scenes.length - 1] ?? null;
     },
-    [plan],
+    [view],
   );
-  const scene = sceneAt(time);
+  // The scene at the playhead in the video, and the plan's scene it is.
+  const videoScene = sceneAt(time);
+  const storyIndex = (s: PlannedScene) => (s as PlannedScene & { story_index?: number }).story_index ?? s.index;
+  const scene = (videoScene && plan?.scenes.find((s) => s.index === storyIndex(videoScene))) ?? null;
+  const storyTime = videoToStory(timeline, time) ?? (scene && plan ? scene.start_frame / plan.fps : time);
+  const seekStory = useCallback((seconds: number) => seek(storyToVideo(timeline, seconds)), [seek, timeline]);
   const sceneNumber = (index: number) =>
     plan ? plan.scenes.slice(0, index + 1).filter((s) => !s.card_kind).length : 0;
 
   const goToScene = useCallback(
     (offset: number) => {
-      if (!plan || !scene) return;
-      const position = plan.scenes.findIndex((s) => s.index === scene.index);
-      const here = scene.start_frame / plan.fps;
+      if (!view || !videoScene) return;
+      const position = view.scenes.findIndex((s) => s.index === videoScene.index);
+      const here = videoScene.start_frame / view.fps;
       // Back goes to the start of this scene first, as editors do.
       const target =
-        offset < 0 && time - here > 1 ? scene : plan.scenes[Math.max(0, Math.min(plan.scenes.length - 1, position + offset))];
-      seek(target.start_frame / plan.fps + 0.001);
+        offset < 0 && time - here > 1 ? videoScene : view.scenes[Math.max(0, Math.min(view.scenes.length - 1, position + offset))];
+      seek(target.start_frame / view.fps + 0.001);
     },
-    [plan, scene, time, seek],
+    [view, videoScene, time, seek],
   );
 
   // --- edits, history and updating ------------------------------------------------
@@ -462,7 +480,7 @@ export function Studio({
       } else if (key === "?") shortcuts.current?.showModal();
       else if (key === "[" && !mod) togglePanel();
       else if (key === "]" && !mod) toggleTimeline();
-      else if (["1", "2", "3", "4", "5"].includes(key) && !mod) setTab(TABS[Number(key) - 1].id);
+      else if (["1", "2", "3", "4", "5", "6"].includes(key) && !mod) setTab(TABS[Number(key) - 1].id);
       else if ((key === "+" || key === "=") && !mod) window.dispatchEvent(new CustomEvent("voxframe:zoom", { detail: 1.5 }));
       else if (key === "-" && !mod) window.dispatchEvent(new CustomEvent("voxframe:zoom", { detail: 1 / 1.5 }));
     };
@@ -473,7 +491,7 @@ export function Studio({
   // --- rendering ----------------------------------------------------------------
 
   if (error && !plan) return <Notice tone="error">{error}</Notice>;
-  if (!plan || !scene) return <p className="muted studio-loading">Opening the studio…</p>;
+  if (!plan || !scene || !view || !videoScene) return <p className="muted studio-loading">Opening the studio…</p>;
 
   const summary = job.summary ?? {};
   const hasVideo = job.artifacts.includes("video");
@@ -492,7 +510,7 @@ export function Studio({
     plan.scenes.filter((s) => s.asset?.id === assetId && s.index !== scene.index).map((s) => sceneNumber(s.index));
   const firstSpoken = plan.scenes.findIndex((s) => !s.card_kind);
   const canStartChapter = !scene.card_kind && scene.index > firstSpoken && !plan.scenes[scene.index - 1]?.card_kind;
-  const sceneWords = words.filter((w) => w.scene === scene.index);
+  const sceneWords = words.filter((w) => w.scene === videoScene.index);
 
   return (
     <div className="studio" data-timeline={layout.timelineOpen ? "open" : "closed"}>
@@ -759,7 +777,7 @@ export function Studio({
                   onPlanEdited={(result, select) => {
                     afterEdit(result);
                     const target = result.plan.scenes[Math.min(select, result.plan.scenes.length - 1)];
-                    if (target) seek(target.start_frame / result.plan.fps + 0.001);
+                    if (target) seekStory(target.start_frame / result.plan.fps + 0.001);
                   }}
                   part="picture"
                 />
@@ -845,10 +863,10 @@ export function Studio({
                   scene={scene}
                   scenes={plan.scenes}
                   state={popups}
-                  time={time}
+                  time={storyTime}
                   selected={selectedPopup}
                   onSelect={setSelectedPopup}
-                  onSeek={seek}
+                  onSeek={seekStory}
                   onSaved={(state, where) => {
                     setPopups(state);
                     setHistory(where);
@@ -857,6 +875,21 @@ export function Studio({
                   }}
                 />
               ))}
+
+            {tab === "pace" && (
+              <PacePanel
+                jobId={jobId}
+                time={time}
+                refresh={planVersion}
+                footage={!!plan.footage}
+                onSeek={seek}
+                onSaved={(where) => {
+                  setHistory(where);
+                  // The timeline, the captions and the pop-ups' times follow.
+                  setPlan((current) => current && { ...current });
+                }}
+              />
+            )}
 
             {tab === "sound" && hasVideo && (
               <SoundPanel
@@ -926,16 +959,17 @@ export function Studio({
       {layout.timelineOpen && (
       <Timeline
         jobId={jobId}
-        plan={plan}
+        plan={view}
         words={words}
         time={time}
-        currentScene={scene.index}
+        currentScene={videoScene.index}
         changed={changed}
         onSeek={seek}
         sceneLane={layout.timeline}
+        pieces={timeline?.pieces}
         onScene={(index) => {
-          const target = plan.scenes.find((s) => s.index === index);
-          if (target) seek(target.start_frame / plan.fps + 0.001);
+          const target = view.scenes.find((s) => s.index === index);
+          if (target) seek(target.start_frame / view.fps + 0.001);
           setTab("scenes");
           setLayout((l) => (l.panelOpen ? l : { ...l, panelOpen: true }));
         }}
@@ -950,7 +984,7 @@ export function Studio({
           <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Back or forward one second</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Undo the last change</dd>
           <dt><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></dt><dd>Redo</dd>
-          <dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Scenes, Captions, Sound, Style, Pop-ups</dd>
+          <dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>Scenes, Captions, Sound, Style, Pop-ups, Hook &amp; pace</dd>
           <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Zoom the timeline</dd>
           <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Hide or show the side panel, the timeline</dd>
           <dt><kbd>?</kbd></dt><dd>This list</dd>

@@ -6365,3 +6365,61 @@ fill matching the time to within 6%; a sticker change burning again over the
 same pictures), and in Chromium (a suggestion added and shown over the
 player on its word, text drawn live and dragged into place, the progress
 bar).
+
+### D-199 · Shorts that hook, step 4: the hook and the pace
+
+The owner asked for Shorts with strong hooks that keep people watching. The
+first seconds decide whether someone stays, and dead air loses them after.
+
+**The plan keeps the whole recording; the pace says what to do with it.**
+`ScenePlan.pace` (`PaceEdits`) lists cuts (each with its kind, a label for
+people, and whether it is on), a cold open, punch-ins, and the zoom on
+alternate cuts; `ScenePlan.hook_title` is the title over the first seconds.
+Nothing is deleted, so every cut can be put back on its own, and finding the
+cuts again keeps the ones a person turned off and their own cuts.
+
+**One projection, used by the renderer and the studio.** `project(plan)`
+turns the plan and its pace into the video: scenes with their cut stretches
+taken out (a scene cut away entirely is gone), led by a copy of the cold
+open's line; words where they are said in the video (a word mostly cut is
+gone); speaker scenes knowing the stretches of the recording they play
+(`footage_spans`) and their punch-ins (`zooms`); pop-ups moved with their
+words. The renderer makes the edited recording from the same pieces (each
+trimmed with 5 ms fades, concatenated), so sound and picture are cut from
+one list and stay in sync: a clapper recording, cut, reordered and zoomed,
+keeps every flash on its tone. With nothing cut, the projection is the plan.
+
+**Finding, by plain signals, never applied unseen:**
+
+- **Jump cuts:** pauses longer than a breath trimmed to one (tight, natural
+  or relaxed); "um", "uh" and the like; a word or a pair of words said twice
+  (numbers excepted); the silence before the first word and after the last.
+  A person can also cut any stretch they mark in the player.
+- **Hook lines:** sentences of 1.5 to 9 seconds, scored for a question, a
+  number, talking to "you", a turn or a stake, being short, and the energy
+  of the voice; the opening sentence is skipped, since it already opens.
+  "Open with this" plays it first, then the video from the start.
+- **Punch-ins:** words said at least 2 dB louder than those round them, a
+  few a minute and never close together, on scenes that show the speaker;
+  the camera moves in toward the eyes and back out. Every other jump cut
+  can also move in a little (8%), so cuts do not jump on the spot.
+- **Holding attention:** stretches of more than four seconds with no new
+  picture, cut, punch-in or pop-up, listed so something can be added there.
+  Captions do not count: they change all the time.
+
+**The studio plays the video's clock.** `GET /timeline` gives the projected
+plan, each scene saying which plan scene it is (`story_index`) and which of
+its words (`story_words`), and the pieces, so the studio maps any moment of
+the video to the plan and back. The player, the time and the timeline use
+it; edits go to the plan's scenes. The timeline marks where the video
+jumps, and shades the cold open. The Hook & pace tab (6) holds the hook
+lines, the title, the cuts, the punch-ins and the still stretches.
+
+**Tests:** the projection (cuts, a cold open, cards, words, pop-ups,
+punch-ins, frames adding up), the finders (pauses, fillers, restarts,
+edges, the best hook, the loudest word, stillness), the routes (cuts found,
+one undone and kept undone, a hook opening the video, a stretch cut from
+the video's time, the hook title drawn), sync measured on rendered video
+(a cut and a cold open, cuts after a card, a punch-in zooming in and back
+out), and in Chromium (nothing to cut said plainly, a stretch cut by hand
+and put back, the timeline following, the hook title drawn live).

@@ -10,7 +10,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { type ScenePlan } from "../api";
+import { type PlannedScene, type ScenePlan, type TimelinePiece } from "../api";
 import { sceneThumbnail, showsSpeaker } from "./Filmstrip";
 
 export interface TimedWord {
@@ -38,6 +38,7 @@ export function Timeline({
   sceneLane,
   onSeek,
   onScene,
+  pieces = [],
 }: {
   jobId: string;
   plan: ScenePlan;
@@ -49,6 +50,8 @@ export function Timeline({
   sceneLane: number;
   onSeek: (seconds: number) => void;
   onScene: (index: number) => void;
+  /** The recording's stretches as the video plays them, when it is cut (D-199). */
+  pieces?: TimelinePiece[];
 }) {
   const duration = plan.total_frames / plan.fps;
   // Pixels a second: long talks start zoomed out so they fit a few screens.
@@ -102,6 +105,19 @@ export function Timeline({
   const visible = words
     .map((word, index) => ({ word, index }))
     .filter(({ word }) => word.end >= from && word.start <= to);
+
+  // Where the video jumps in the recording: a jump cut, or out of the cold open.
+  const jumps = useMemo(() => {
+    const list: number[] = [];
+    pieces.forEach((piece, index) => {
+      const before = pieces[index - 1];
+      if (before && Math.abs(before.story_end - piece.story_start) > 0.01) list.push(piece.video_start);
+    });
+    return list;
+  }, [pieces]);
+  const teaserEnd = pieces.filter((p) => p.teaser).reduce((end, p) => Math.max(end, p.video_start + p.story_end - p.story_start), 0);
+  // A scene of the cut video is a scene of the plan: its picture and changes are that scene's.
+  const story = (scene: PlannedScene) => (scene as PlannedScene & { story_index?: number }).story_index ?? scene.index;
 
   const seekFromClick = (event: React.MouseEvent<HTMLElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
@@ -165,9 +181,9 @@ export function Timeline({
                     onClick={() => onScene(scene.index)}
                   >
                     {(scene.asset || showsSpeaker(scene)) && sceneWidth > 28 && (
-                      <img src={sceneThumbnail(jobId, scene)} alt="" loading="lazy" />
+                      <img src={sceneThumbnail(jobId, { ...scene, index: story(scene) })} alt="" loading="lazy" />
                     )}
-                    {changed.has(scene.index) && <i className="timeline-changed" aria-hidden="true" />}
+                    {changed.has(story(scene)) && <i className="timeline-changed" aria-hidden="true" />}
                     <span>{label}</span>
                   </button>
                 </div>
@@ -206,6 +222,12 @@ export function Timeline({
               </span>
             </div>
           </div>
+          {teaserEnd > 0 && (
+            <div className="timeline-teaser" style={{ left: 0, width: teaserEnd * zoom }} title="The cold open" aria-hidden="true" />
+          )}
+          {jumps.map((at) => (
+            <div key={at} className="timeline-cut" style={{ left: at * zoom }} aria-hidden="true" />
+          ))}
           <div className="timeline-playhead" style={{ left: time * zoom }} aria-hidden="true" />
         </div>
       </div>

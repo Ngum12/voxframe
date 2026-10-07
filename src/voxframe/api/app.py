@@ -1827,7 +1827,7 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             "hook_title": plan.hook_title,
             "recording_seconds": round(plan.total_frames / plan.fps, 3),
             "video_seconds": round(video.total_frames / video.fps, 3),
-            "hooks": [asdict(hook) for hook in hooks],
+            "hooks": [{**asdict(hook), "video_at": at(hook.start)} for hook in hooks],
             "stillness": [asdict(still) for still in find_stillness(video)],
         }
 
@@ -1854,6 +1854,18 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             scene["story_words"] = projection.story_words.get(
                 scene["index"], list(range(len(scene.get("words", []))))
             )
+        # The stretches of the recording the video plays, in order: how the
+        # studio turns a moment of the video into one of the plan and back.
+        # None when nothing is cut or moved: the clocks are the same.
+        payload["pieces"] = [
+            {
+                "story_start": round(piece.story_start, 4),
+                "story_end": round(piece.story_end, 4),
+                "video_start": round(piece.video_start, 4),
+                "teaser": piece.teaser,
+            }
+            for piece in projection.pieces
+        ]
         return payload
 
     @app.get("/api/jobs/{job_id}/pace")

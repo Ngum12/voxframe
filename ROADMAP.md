@@ -86,7 +86,7 @@ each step usable on its own:
 - **Entrances and exits** (pop, slide, bounce, fade), placed by dragging in
   the player, and suggestions you accept with a click.
 
-### 4. The hook and the pace
+### 4. The hook and the pace (D-199) - done
 
 - **A hook finder** that ranks your strongest opening lines by plain signals
   (a question, a number, "you", a short sentence, the energy in your voice),
@@ -96,6 +96,8 @@ each step usable on its own:
   timestamps, every cut shown and undoable; **zoom punch-ins** on stressed
   words.
 - **A retention check** that marks long stretches where nothing changes.
+- All in the studio's **Hook & pace** tab; the player and timeline follow
+  the cut video, and the timeline marks every jump.
 
 ### Waiting: clips from a long recording
 

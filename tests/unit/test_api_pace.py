@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
+
 import pytest
 
 pytest.importorskip("fastapi", reason="web extra not installed")
@@ -62,6 +64,13 @@ def test_cuts_are_found_listed_and_made(client: TestClient, context: ApiContext)
     assert timeline["scenes"][0]["story_index"] == 0
     # "So" is word 0 and "the" word 2 in the plan; "um" is gone from the video.
     assert timeline["scenes"][0]["story_words"][:2] == [0, 2]
+    # How the studio maps its clock to the plan's: the pieces, end to end.
+    pieces = timeline["pieces"]
+    assert len(pieces) >= 2 and pieces[0]["video_start"] == 0.0
+    assert not any(piece["teaser"] for piece in pieces)
+    for before, after in pairwise(pieces):
+        length = before["story_end"] - before["story_start"]
+        assert after["video_start"] == pytest.approx(before["video_start"] + length, abs=1e-3)
 
 
 def test_a_cut_is_undone_on_its_own(client: TestClient, context: ApiContext) -> None:
@@ -85,6 +94,7 @@ def test_the_best_hook_is_offered_and_opens_the_video(
     hooks = client.get(f"/api/jobs/{job}/pace").json()["hooks"]
     best = hooks[0]
     assert best["text"] == "Did you know three towns flooded?"
+    assert best["video_at"] == pytest.approx(best["start"])  # nothing cut yet
     body = client.put(
         f"/api/jobs/{job}/pace/cold-open", json={"span": {"start": best["start"], "end": best["end"]}}
     ).json()
@@ -92,6 +102,7 @@ def test_the_best_hook_is_offered_and_opens_the_video(
     timeline = client.get(f"/api/jobs/{job}/timeline").json()
     assert timeline["scenes"][0]["teaser"] is True
     assert timeline["scenes"][0]["words"][0]["text"] == "Did"
+    assert timeline["pieces"][0]["teaser"] is True
     assert client.put(f"/api/jobs/{job}/pace/cold-open", json={"span": None}).status_code == 200
     assert _saved(context, job).pace.cold_open is None
 
