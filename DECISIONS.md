@@ -7037,3 +7037,37 @@ overlap, missing timings, stale approvals and exact apply/Undo. Real renders com
 soundtrack samples and frame counts and verify delayed speaker claps. Chromium
 checks custom and coordinated pairs, overlap blocking, both review gates, synchronized
 playback, one audible track, mobile layout, exact apply, Undo/Redo and export.
+
+
+## D-227: reusable bookend recipes are derived from exact reviewed snapshots
+
+Record the resolved paired choice alongside each complete-preview identity.
+Saving names this server record, validates the original revision, authenticated
+job, source sandbox and complete-preview freshness, and reproduces the approved
+plan before extracting the recipe. Mutable client style fields are not accepted.
+Saving does not apply or edit a project.
+
+Persist only both looks, keep/speaker preferences, caption matching and preferred
+opening/closing word counts. Words, source paths, picture indexes, audio settings,
+revision and replacement permissions stay out of the portable recipe. A new
+recording needs a fresh complete preview with its own media and soundtrack.
+Pinned ends require separate new permissions. Applying uses the existing exact
+winner and one undoable history entry.
+
+Signature selection chooses a disjoint pair nearest to the two preferred counts
+using the actual transcript token count, rather than inferring the final word
+from available cut boundaries. Users can adjust phrases; changing style settings
+exits the saved recipe. Saving is gated on both reviews of the named draft.
+
+Names are normalized and unique ignoring case, up to 30 recipes. Locking and
+atomic file replacement protect concurrent saves; failed writes clean temporary
+files and keep previous data. Corrupt stores are kept and reported. Removal
+changes only the recipe list and does not invalidate existing reviewed previews.
+
+Units cover privacy, persistence, limits, concurrency, damaged files, failed
+atomic writes, stale and forged approvals, fresh words and sound, independent
+replacement permissions, authentication and removal. Chromium saves a reviewed
+pair after controls change, reuses it on a new recording with audible music,
+checks both review gates, duplicate recovery, mobile layout, exact apply,
+Undo/Redo, export and removal. A separate flow verifies disjoint defaults on a
+shorter picture-only story and recovery from missing speaker footage.

@@ -1,14 +1,21 @@
 """Audition two disjoint spoken treatments as one complete story edit."""
 
+import hashlib
+import json
+import re
+from collections.abc import Callable
+from pathlib import Path
 from typing import Literal
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from voxframe.config.bookend_signatures import BookendStyle
 from voxframe.plan import closing_audition as closing
 from voxframe.plan import opening_audition as opening
 from voxframe.plan.editing import EditError
 from voxframe.plan.scene_plan import ScenePlan
-from voxframe.plan.shorts import revision
+from voxframe.plan.shorts import revision, tokens
 
 
 class BookendChoice(BaseModel):
@@ -53,6 +60,7 @@ def controls(plan: ScenePlan) -> dict:
         )
     return {
         "revision": revision(plan),
+        "word_count": len(tokens(plan)),
         "eligible": first["eligible"],
         "opening": first,
         "closing": last,
@@ -99,3 +107,53 @@ def audition(plan: ScenePlan, choice: BookendChoice) -> tuple[ScenePlan, dict, d
     begun = begun.model_copy(update={"scenes": tuple(restored)})
     draft, _ = closing.audition(begun, end_choice)
     return draft, start, end
+
+
+def record(directory: Path, choice: BookendChoice, preview_id: str) -> str:
+    """Bind reusable intent to the exact server-rendered pair."""
+    payload = {"choice": choice.model_dump(mode="json"), "preview_id": preview_id}
+    key = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:24]
+    directory.mkdir(parents=True, exist_ok=True)
+    temporary = directory / f"{uuid4().hex}.partial"
+    try:
+        temporary.write_text(json.dumps(payload), encoding="utf-8")
+        temporary.replace(directory / f"{key}.json")
+    finally:
+        temporary.unlink(missing_ok=True)
+    return key
+
+
+def reviewed_style(
+    plan: ScenePlan,
+    directory: Path,
+    bookend_id: str,
+    origin_revision: str,
+    check_plan: Callable[[ScenePlan], None],
+) -> BookendStyle:
+    """Extract both ends from the approved snapshot, never mutable form fields."""
+    from voxframe.render.compose.complete_preview import winner
+
+    if re.fullmatch(r"[a-f0-9]{24}", bookend_id) is None:
+        raise ValueError("This bookend approval is invalid.")
+    payload = json.loads(
+        (directory / "bookend-previews" / f"{bookend_id}.json").read_text(encoding="utf-8")
+    )
+    choice = BookendChoice.model_validate(payload["choice"])
+    preview_id = payload["preview_id"]
+    if re.fullmatch(r"[a-f0-9]{24}", str(preview_id)) is None or choice.revision != origin_revision:
+        raise ValueError("This pair belongs to an earlier edit.")
+    actual = winner(
+        directory / "complete-previews", preview_id, origin_revision, check_plan=check_plan
+    )
+    expected, _, _ = audition(plan, choice)
+    if actual != expected:
+        raise ValueError("This bookend recipe no longer matches its preview.")
+    return BookendStyle(
+        opening_look=choice.opening_look,
+        closing_look=choice.closing_look,
+        opening_shot=choice.opening_shot,
+        closing_shot=choice.closing_shot,
+        match_captions=choice.match_captions,
+        opening_words=choice.last_word + 1,
+        closing_words=len(tokens(plan)) - choice.first_word,
+    )

@@ -1119,7 +1119,13 @@ export const getClosingAuditions = (id: string) => request<ClosingControls>(`/ap
 export const previewClosing = (id: string, choice: ClosingChoice) => request<ClosingPreview>(`/api/jobs/${id}/closing-auditions/preview`, {method: "POST", body: JSON.stringify(choice)});
 
 export interface BookendChoice { revision: string; last_word: number; first_word: number; opening_look: OpeningChoice["look"]; closing_look: ClosingChoice["look"]; opening_shot: "keep" | "speaker"; closing_shot: "keep" | "speaker"; match_captions: boolean; replace_opening: boolean; replace_closing: boolean }
-export interface BookendControls { revision: string; eligible: boolean; opening: OpeningControls; closing: ClosingControls; default_last_word: number | null; default_first_word: number | null }
-export interface BookendPreview extends CompletePreview { opening: OpeningWindow; closing: ClosingWindow; settings: BookendChoice }
+export interface BookendControls { revision: string; word_count: number; eligible: boolean; opening: OpeningControls; closing: ClosingControls; default_last_word: number | null; default_first_word: number | null }
+export interface BookendPreview extends CompletePreview { opening: OpeningWindow; closing: ClosingWindow; settings: BookendChoice; bookend_id: string; signature?: {id: string; name: string} }
 export const getBookendAuditions = (id: string) => request<BookendControls>(`/api/jobs/${id}/bookend-auditions`);
 export const previewBookend = (id: string, choice: BookendChoice) => request<BookendPreview>(`/api/jobs/${id}/bookend-auditions/preview`, {method: "POST", body: JSON.stringify(choice)});
+
+export interface BookendSignature extends Pick<BookendChoice, "opening_look" | "closing_look" | "opening_shot" | "closing_shot" | "match_captions"> { id: string; name: string; opening_words: number; closing_words: number }
+export const listBookendSignatures = () => request<{signatures: BookendSignature[]}>("/api/bookend-signatures");
+export const saveBookendSignature = (jobId: string, name: string, revision: string, bookend_id: string) => request<BookendSignature>(`/api/jobs/${jobId}/bookend-signatures`, {method: "POST", body: JSON.stringify({name, revision, bookend_id})});
+export const deleteBookendSignature = (id: string) => request<void>(`/api/bookend-signatures/${id}`, {method: "DELETE"});
+export const previewBookendSignature = (jobId: string, choice: Pick<BookendChoice, "revision" | "last_word" | "first_word" | "replace_opening" | "replace_closing">, signature_id: string) => request<BookendPreview>(`/api/jobs/${jobId}/bookend-signatures/preview`, {method: "POST", body: JSON.stringify({...choice, signature_id})});

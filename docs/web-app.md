@@ -722,3 +722,31 @@ one undoable edit. **Update video** exports the chosen story.
 Changing form controls does not rebuild older comparison drafts. Plan or source
 changes require fresh previews. The last six drafts remain available during
 this session; the review belongs to the rendered pair, not the current controls.
+
+
+## Reuse your bookend signature
+
+In **Director → Bookend auditions**, preview a pair, review both ends, then
+choose it in **Pair to save**, enter a name and choose **Save reviewed bookend
+signature**. Save before applying it to this project. The recipe comes from
+the named reviewed snapshot even after the controls change. Expired media or
+plan edits require another preview before saving.
+
+On another 3–60 second recording, choose its name in **Bookend signature**.
+Both treatments, shot choices, caption matching and preferred phrase lengths
+populate the controls. Voxframe chooses separate timed phrases close to those
+lengths; adjust the words to finish each thought. Counts are starting points,
+not copied quotes. Speaker preferences require footage. Changing a treatment,
+shot or caption matching exits the saved recipe so you can make a new pair.
+
+Choose **Preview saved bookend signature**, watch the complete story with this
+recording’s soundtrack and review both ends. **Use this pair** applies the exact
+preview as one undoable edit; **Update video** creates the export. The recipe
+never copies old words, media paths, music, mix settings or permission to replace
+pinned text. Each end needs its own fresh replacement choice when pinned.
+
+Signatures persist in local configuration across restarts. Names are unique
+ignoring case, with up to 30 recipes. **Remove saved bookend signature** removes
+only the named recipe, leaving projects and rendered drafts intact. Damaged
+signature files are reported and kept. Existing opening signatures are stored
+separately and remain available.
