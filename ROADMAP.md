@@ -213,6 +213,20 @@ Next: reusable style kits that combine captions, photo motion and sound.
   a 3-60 second portrait edit, saved picture size, destination loudness, and
   adjustable guides for captions and text. App controls vary by device.
 
+## Story production
+
+- **Story Composer — implemented:** trim and reorder up to eight transcript
+  passages, label their roles, inspect surrounding words, render a read-only
+  preview and save one undoable 3–60 second edit. Source clocks keep speaker
+  footage, narration and captions synchronized; overlapping speech is refused.
+- **Next: visual story placement.** Choose exactly where supporting pictures,
+  speaker shots and text enter the composed story, with rendered previews.
+- **Then: complete auditions with sound.** Compare picture, captions and music
+  together before selecting a complete treatment.
+- **Later: signature style kits and batch Shorts.** Extend saved creative
+  presets into reusable treatments, and review several distinct clips from
+  one recording before exporting them.
+
 ## Later
 
 - **Music composed for your video.** A score written for each recording,

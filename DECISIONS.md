@@ -6721,3 +6721,31 @@ checks cover crop limits, cache invalidation, stale edits, read-only previews
 and history. Encoded-frame checks measure all six directions in preview and
 export, edge coverage, bounded preview speed and a static hold. Chromium
 checks selection, preview playback, phone width, save, history and Update video.
+
+
+## D-216 — Compose an explicit transcript sequence
+
+Story Composer combines one to eight user-selected, non-overlapping timed
+passages into a 3–60 second sequence. The chronological starting proposal and
+editable roles make no semantic quality or view prediction claim. Each block
+retains its source audio and footage clock; destination frames and caption
+words are rebased. Cards are omitted. Adjacent source ranges divide padding
+at a frame boundary without cutting a selected word or replaying shared sound.
+Actual overlapping speech is refused. New block joins are hard cuts; internal
+scene treatments remain. Stale director-generated text is cleared when its
+quote is absent, while explicit user text survives.
+
+Role and block metadata persist per scene, participate in revisions and keep
+later director restoration from merging distinct story sections. Authenticated
+GET, PUT and preview routes enforce current revisions and the existing editable
+job guard. Saving is one history step. Preview uses the real draft renderer,
+leaves the plan untouched and defers added music until Update video. The UI
+supports keyboard-accessible move and remove controls, word-boundary trimming,
+context review and mobile layout. Generation guards reject stale responses;
+changing or collapsing a preview pauses its captured player.
+
+Validation covers reordered words and source clocks, duration and overlap
+rejection, saved roles, earlier pause cuts, emphasis, stale edits and undo/redo.
+Real encoded-video checks measure clap/flash synchronization in reverse order
+with and without recording delay. Chromium checks preview playback, duplicate
+rejection, trimming, role editing, phone width, history and final export.

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getShorts, getStoryboard, previewShort, saveShort, type ShortsControls, type ShortPreview,
   type ShortChoice, type ScenePlan, type PlanEditResult, type Storyboard, type VisualBeat } from "../api";
 import { StoryComparison, type StoryVariant } from "./StoryComparison";
+import { StoryComposer } from "./StoryComposer";
 import { Notice } from "../components";
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
@@ -92,6 +93,7 @@ export function ShortsStudio({ jobId, plan, canListen, onEdited, onSeek }: {
     <div className="shorts-heading"><span className="shorts-eyebrow">SHORTS PRODUCER</span><h3>Find your opening.</h3>
       <p>Keep a passage worth watching. Give it a clear beginning and an ending that delivers.</p></div>
     <p className="hint">Audition a complete story before you commit. Quoted openings, complete passages and context help you choose.</p>
+    <StoryComposer jobId={jobId} plan={plan} onEdited={onEdited} />
     {error && <Notice tone="error">{error}</Notice>}
     {!data && !error && <p role="status">Looking for passages…</p>}
     {data && !data.words.length && <p>Word timings are needed to make a short. Transcribe this recording first.</p>}

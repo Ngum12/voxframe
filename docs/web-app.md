@@ -417,3 +417,24 @@ filter. It includes up to the first 12 seconds at the scene’s original speed.
 Captions and sound appear in the finished video. **Save camera movement**,
 then **Update video** to render it. Undo restores your previous choice.
 Video clips and speaker shots use their separate motion controls.
+
+## Story Composer
+
+Open **Shorts → Story Composer · build your sequence** after transcription.
+Start with the proposed transcript order, or add individual sentence passages.
+Assign Hook, Key point, Payoff or Ending, trim the first and last word numbers,
+then use Move up, Move down or Remove to shape the sequence. Roles are your
+labels, not a promise of automatic story understanding. Review surrounding
+words so moving a passage does not change what the speaker meant.
+
+A sequence contains one to eight non-overlapping passages and lasts 3–60
+seconds. Duplicate words are refused; adjacent cuts divide any shared audio
+padding so it cannot repeat. Speaker footage, narration and captions retain
+their source timing when passages move. Title and chapter cards are omitted.
+The composer uses the current edited transcript; Undo restores the previous
+sequence when you need a passage removed by a saved edit.
+
+**Preview story sequence** renders actual footage, voice and captions without
+saving. Added music is heard after **Update video**. **Use this sequence** saves
+one undoable edit, keeping the original upload. Update video, review and
+download the result. Reopening the composer restores the saved passage roles.

@@ -2781,3 +2781,19 @@ input[type="checkbox"], input[type="radio"] { flex: none; }
 .camera-heading h3 { margin: 6px 0 16px; }
 .camera-studio select { min-width: 0; width: 100%; max-width: 100%; }
 .camera-studio video { max-height: 400px; object-fit: contain; }
+
+.story-composer { border: 1px solid var(--line); border-radius: 16px; margin: 1.25rem 0; padding: 1rem; min-width: 0; }
+.story-composer > summary { font-weight: 700; cursor: pointer; }
+.story-composer section { margin-top: 1rem; min-width: 0; }
+.story-blocks { list-style: none; padding: 0; display: grid; gap: 1rem; }
+.story-block { border: 1px solid var(--line); border-radius: 12px; padding: 1rem; min-width: 0; }
+.story-composer fieldset { border: 0; padding: 0; margin: 0 0 1rem; min-width: 0; }
+.story-composer legend { font-weight: 700; margin-bottom: .75rem; }
+.story-fields { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: .75rem; }
+.story-composer label { display: grid; gap: .4rem; min-width: 0; margin-bottom: .75rem; }
+.story-composer select, .story-composer input[type=number] { width: 100%; min-width: 0; max-width: 100%; }
+.story-composer blockquote { margin: .75rem 0; padding: .75rem; border-left: 3px solid var(--accent); overflow-wrap: anywhere; }
+.story-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.story-composer .check { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; }
+.story-preview video { width: 100%; max-height: 480px; background: #101318; border-radius: 12px; margin-top: 1rem; }
+@media (max-width: 540px) { .story-fields { grid-template-columns: 1fr 1fr; } .story-fields label:first-child { grid-column: 1 / -1; } .story-block { padding: .75rem; } }

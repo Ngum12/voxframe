@@ -1045,3 +1045,14 @@ export interface FinishReport {
   issues: FinishIssue[]; counts: Record<FinishIssue["category"], number>; note: string;
 }
 export const getFinishReview = (jobId: string) => request<FinishReport>(`/api/jobs/${jobId}/finish-review`);
+
+export interface StoryBlock { role: "hook" | "keypoint" | "payoff" | "ending"; first_word: number; last_word: number }
+export interface StoryControls { revision: string; proposal: StoryBlock[]; note: string;
+  words: ShortsControls["words"];
+  passages: { first_word: number; last_word: number; text: string; seconds: number;
+    context_before: string; context_after: string; warnings: string[] }[] }
+export const getStory = (id: string) => request<StoryControls>(`/api/jobs/${id}/story`);
+export const previewStory = (id: string, revision: string, blocks: StoryBlock[], vertical: boolean) =>
+  request<ShortPreview>(`/api/jobs/${id}/story/preview`, {method: "POST", body: JSON.stringify({revision, blocks, vertical})});
+export const saveStory = (id: string, revision: string, blocks: StoryBlock[], vertical: boolean) =>
+  request<PlanEditResult>(`/api/jobs/${id}/story`, {method: "PUT", body: JSON.stringify({revision, blocks, vertical})});
