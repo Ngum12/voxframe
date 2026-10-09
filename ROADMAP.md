@@ -6,7 +6,7 @@ what has shipped. If you'd like to help with any of this, see
 [CONTRIBUTING.md](CONTRIBUTING.md), and please open an issue before starting
 on anything large.
 
-## Studio expansion after 2.1.0
+## Studio expansion — 2.2.0
 
 Three additions to the studio, built in this order.
 
@@ -278,6 +278,11 @@ Reusable style kits now combine captions, photo motion, transitions and sound
 - **Next: collection delivery notes.** Prepare a reusable handoff with clip
   descriptions, intended destinations and publishing notes alongside the
   reviewed videos, subtitles and credits.
+
+- **Manual section trim and separate tracks — implemented.** Keep or remove a
+  chosen time range with frame-aligned voice, footage and captions, preview it,
+  and use Undo/Redo. Download separate recorded-voice and added-music WAVs from
+  the last finished render. Music controls remain independent of pictures.
 
 ## Later
 

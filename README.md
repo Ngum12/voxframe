@@ -114,6 +114,12 @@ chapter cards and highlights. [Walk through the controls](docs/web-app.md).
   recording with fresh words, media and sound. Audition one signature across
   up to six finished recordings, review each pair, then export separate editable
   clips and package their videos, subtitles and credits in a collection ZIP.
+- **Cut any section.** Choose exact start and end times in Pacing, keep that
+  passage or cut it out, and restore it with Undo. Voice, footage and timed
+  captions stay together; Update video fits the soundtrack to the new duration.
+- **Take the soundtrack with you.** Listen to and download recorded voice and
+  added music independently as WAVs. The music lane opens Sound directly, where
+  you can change its track, level and ducking after a render.
 - **A finishing review.** Inspect potential caption, framing, timing and sound
   issues, with evidence and a route to the relevant controls. Mark intentional
   choices checked. The review uses saved settings and metadata; watch and listen

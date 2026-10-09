@@ -22,9 +22,15 @@ Nothing is built or published any other way.
 
 ## Tagging
 
+For the prepared 2.2.0 release, first merge the version/features pull request,
+confirm the checks on `main` pass, and complete the local checks above. Verify
+that `pyproject.toml` says `2.2.0` before creating this tag.
+
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git switch main
+git pull --ff-only
+git tag v2.2.0
+git push origin v2.2.0
 ```
 
 ## What the workflow does (`.github/workflows/release.yml`)

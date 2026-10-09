@@ -810,3 +810,35 @@ The ZIP manifest includes the review date, checked cues and watched clip IDs,
 without source paths or saved plans. Approval records your review, not a guarantee
 of visual quality. Existing ordinary Shorts collections continue to package
 finished snapshots without this bookend review gate.
+
+## Trim or cut a section
+
+Open **Pacing → Your cut. Your timing.** Choose **Remove section** to cut out
+the selected interval and close the gap, or **Keep only this section** to trim
+the beginning and end. Enter start/end seconds, or pause the finished player
+and use the playhead buttons. Times snap to video frames.
+
+**Preview section edit** plays a 3–60 second result without saving. **Save
+section edit** keeps the original recording and changes the editable timeline.
+Use **Update video** to render the result and fit its music to the new length.
+Voice, footage, word captions and emphasis move together. Undo/Redo restores
+the whole saved edit. Existing export presets keep their duration rules.
+
+Cuts inside corrected or untimed captions cannot infer which words to keep.
+Select the whole scene, or restore original timed captions before cutting
+inside it. Corrections are never silently discarded.
+
+## Download separate voice and added music
+
+Click the timeline's **Edit music track** button to open Sound. Choose
+**Separate voice and music tracks** to play either track or download its WAV.
+The sliders, track replacement and music choices below remain independent
+from the pictures. Only one audible player plays at a time.
+
+Downloads follow the last finished render, including its cuts and card
+silences. They are intended for editing: recorded voice is the original
+recording's audio, and added music is exported before mix levels and ducking.
+They do not isolate music already baked into the uploaded recording, and
+adding them together at full level does not reproduce the mastered MP4 mix.
+Save timing changes and Update video before downloading updated tracks.
+Generated-score FLAC files are converted to genuine 48 kHz WAV downloads.
