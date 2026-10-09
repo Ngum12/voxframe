@@ -115,6 +115,7 @@ jobs:
     timeout-minutes: 45
     env:
       PYTHONUTF8: "1"
+      VOXFRAME_BROWSER_DIAGNOSTICS: test-results/browser-failures
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -134,3 +135,11 @@ jobs:
           key: hf-${{ runner.os }}-whisper-v1
       - name: Browser tests
         run: python -m pytest -rfE -m "browser" tests/browser
+      - name: Browser failure screenshots and player state
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-diagnostics
+          path: test-results/browser-failures
+          if-no-files-found: ignore
+          retention-days: 7
