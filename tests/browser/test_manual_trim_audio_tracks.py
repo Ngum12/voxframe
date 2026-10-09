@@ -192,6 +192,10 @@ def test_beat_fitted_music_downloads_after_destination_and_track_changes(server,
     tracks = page.get_by_role("region", name="Separate audio tracks", exact=True)
     fixtures.playwright_api.expect(tracks.get_by_role("link", name="Download music WAV", exact=True)).to_be_visible()
     fixtures.playwright_api.expect(page.locator(".notice-error")).to_have_count(0)
+    from tests.browser import test_sound_panel as sound_checks
+    sound_checks.test_a_close_setting_warns_and_plays_a_preview(page)
+    sound_checks.test_polished_and_original_are_compared_in_the_preview(page)
+    page.locator("#music-under-voice").fill("15")
     page.locator("#destination").select_option("podcast")
     page.get_by_role("button", name="Apply to the video", exact=True).click()
     page.locator(".studio-status").get_by_text("Updating your video").wait_for(timeout=30_000)
