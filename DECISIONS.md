@@ -7169,3 +7169,16 @@ on update-state changes and refresh on completion. A transient running-job 409
 is not a failed render. Browser coverage delays the panel reload to reproduce
 this race for destination changes and replacement music, and verifies that the
 replacement WAV contains the newly selected track.
+
+
+## D-231 — Pin the documented scan false positive; release as 2.2.1
+
+Gitleaks 8.30.1 treats the prose following "authentication" on DECISIONS.md
+line 7106 in commit 1faec42 as a generic API credential. The finding is the
+words "duplicate/size" in test coverage prose. Allow only that exact historical
+fingerprint, preserving every other rule and the whole-history scan. Store a
+fully redacted JSON report as an artifact when a release scan fails.
+
+The existing v2.2.0 tag failed before installer builds. Prepare patch version
+2.2.1 with all 2.2 studio features and these release corrections, so a new
+version tag builds the corrected configuration without moving an existing tag.

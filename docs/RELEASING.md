@@ -22,16 +22,20 @@ Nothing is built or published any other way.
 
 ## Tagging
 
-For the prepared 2.2.0 release, first merge the version/features pull request,
+For the prepared 2.2.1 release, first merge the version/features pull request,
 confirm the checks on `main` pass, and complete the local checks above. Verify
-that `pyproject.toml` says `2.2.0` before creating this tag.
+that `pyproject.toml` says `2.2.1` before creating this tag.
 
 ```bash
 git switch main
 git pull --ff-only
-git tag v2.2.0
-git push origin v2.2.0
+git tag v2.2.1
+git push origin v2.2.1
 ```
+
+The existing `v2.2.0` tag retains the configuration that failed its scan.
+Use `v2.2.1` after merging the correction; a rerun of the old tag does not
+include newer commits. Failed scans attach a fully redacted finding report.
 
 ## What the workflow does (`.github/workflows/release.yml`)
 
