@@ -7182,3 +7182,10 @@ fully redacted JSON report as an artifact when a release scan fails.
 The existing v2.2.0 tag failed before installer builds. Prepare patch version
 2.2.1 with all 2.2 studio features and these release corrections, so a new
 version tag builds the corrected configuration without moving an existing tag.
+
+Collection playback checks wait until polling has observed a changed clip’s
+recorded subtitle artifacts before opening its finishing review. This prevents
+a later, valid review invalidation from replacing a player under the test.
+Watch both visible players and verify that the second pauses the first.
+Failed browser calls capture a screenshot and player-state JSON in CI, without
+including media URLs or changing the original test result.

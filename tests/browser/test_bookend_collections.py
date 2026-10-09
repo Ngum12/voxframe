@@ -134,7 +134,17 @@ def test_collection_previews_each_recording_exports_exact_plans_and_packages_pro
     assert [item["id"] for item in repeat.value.json()["jobs"]] == ids
     # One finished export intentionally has no recorded subtitle companions.
     child = store.get(ids[0])
-    store.record_result(child, artifacts={key: Path(value) for key, value in child.artifacts.items() if key not in {"srt", "vtt"}}, warnings=tuple(child.warnings), summary=dict(child.summary))
+    def refreshed_exports(response):
+        if not response.url.endswith(f"/api/jobs/{anchor.id}/shorts/batch"):
+            return False
+        records = {item["job"]["id"]: item["job"] for item in response.json()["jobs"]}
+        return all(records.get(job_id, {}).get("state") == "succeeded" for job_id in ids) and not (
+            {"srt", "vtt"} & set(records[ids[0]]["artifacts"]))
+
+    # Wait for the polling view to observe the fixture change before selecting
+    # clips. Otherwise its later stamp update replaces an already-playing review.
+    with page.expect_response(refreshed_exports):
+        store.record_result(child, artifacts={key: Path(value) for key, value in child.artifacts.items() if key not in {"srt", "vtt"}}, warnings=tuple(child.warnings), summary=dict(child.summary))
     bundle = panel.get_by_role("region", name="Bookend collection", exact=True)
     fixtures.playwright_api.expect(bundle.get_by_role("button", name="Select finished clips", exact=True)).to_be_enabled(timeout=30_000)
     bundle.get_by_role("button", name="Select finished clips", exact=True).click()
@@ -143,9 +153,16 @@ def test_collection_previews_each_recording_exports_exact_plans_and_packages_pro
     fixtures.playwright_api.expect(review.get_by_role("button", name="Approve collection review", exact=True)).to_be_visible()
     fixtures.playwright_api.expect(bundle.get_by_role("button", name="Build collection", exact=True)).to_be_disabled()
     page.wait_for_function("() => [...document.querySelectorAll('.collection-finish-review video')].length === 2 && [...document.querySelectorAll('.collection-finish-review video')].every(video => video.readyState >= 2)")
-    review.locator("video").first.evaluate("video => video.play()")
-    page.wait_for_function("() => document.querySelector('.collection-finish-review video').currentTime > .1")
-    review.locator("video").nth(1).evaluate("video => video.play()")
+    first_finished = review.locator("video").first
+    first_finished.scroll_into_view_if_needed()
+    first_finished.evaluate("video => video.play()")
+    page.wait_for_function("video => video.isConnected && !video.paused && video.currentTime > .1",
+                           arg=first_finished.element_handle())
+    second_finished = review.locator("video").nth(1)
+    second_finished.scroll_into_view_if_needed()
+    second_finished.evaluate("video => video.play()")
+    page.wait_for_function("video => video.isConnected && !video.paused && video.currentTime > .1",
+                           arg=second_finished.element_handle())
     assert review.locator("video").first.evaluate("video => video.paused")
     review.get_by_role("button", name="Review in Export", exact=True).click()
     fixtures.playwright_api.expect(page.get_by_role("button", name="Back to collection", exact=True)).to_be_visible()

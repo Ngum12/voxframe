@@ -73,3 +73,6 @@ web/dist/
 
 # The default library, created on first use. Personal: never committed (D-150).
 /library/
+
+# Browser failure artifacts generated in CI.
+test-results/
