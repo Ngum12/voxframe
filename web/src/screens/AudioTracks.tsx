@@ -2,21 +2,23 @@ import { useEffect, useState } from "react";
 import { getAudioTracks, audioTrackUrl, type AudioTrackState } from "../api";
 import { Notice } from "../components";
 
-export function AudioTracks({jobId}: {jobId: string}) {
+export function AudioTracks({jobId, updating = false}: {jobId: string; updating?: boolean}) {
   const [state, setState] = useState<AudioTrackState | null>(null), [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     let live = true; setState(null); setError(null);
+    if (updating) return;
     void getAudioTracks(jobId).then(value => { if (live) setState(value); })
       .catch(e => { if (live) setError(e instanceof Error ? e.message : "Audio tracks are unavailable."); });
     return () => { live = false; };
-  }, [jobId, refresh]);
+  }, [jobId, refresh, updating]);
   return <details className="audio-tracks"><summary>Separate voice and music tracks</summary>
     <section aria-label="Separate audio tracks"><h3>Your soundtrack, in separate pieces.</h3>
       <p>Use the voice and added music independently in another editor. Change or replace the music with the controls below.</p>
-      <button className="btn" onClick={() => setRefresh(value => value + 1)}>Refresh audio tracks</button>
-      {!state && !error && <p role="status">Loading finished audio tracks…</p>}
-      {state && <><p className="hint">{state.note}</p>
+      <button className="btn" disabled={updating} onClick={() => setRefresh(value => value + 1)}>Refresh audio tracks</button>
+      {updating && <p role="status">Separate tracks will be available when the update finishes.</p>}
+      {!updating && !state && !error && <p role="status">Loading finished audio tracks…</p>}
+      {!updating && state && <><p className="hint">{state.note}</p>
         {!!state.pending_edits && <Notice>These downloads match the last finished video. Update video to include your saved cuts and edits.</Notice>}
         {!state.tracks.length && <p>Update video once to create its separate tracks.</p>}
         {state.tracks.map(track => <article className="story-block" key={track.id}><h4>{track.id === "music" ? "Added music" : "Recorded voice"}</h4>
@@ -25,7 +27,7 @@ export function AudioTracks({jobId}: {jobId: string}) {
         </article>)}
         {!!state.tracks.length && !state.tracks.some(track => track.id === "music") && <p>No added music was used in this render. Add a track below, then Update video.</p>}
       </>}
-      {error && <Notice tone="error">{error}</Notice>}
+      {!updating && error && <Notice tone="error">{error}</Notice>}
     </section>
   </details>;
 }
