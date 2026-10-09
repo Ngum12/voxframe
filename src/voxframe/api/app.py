@@ -1678,12 +1678,14 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
             stems = Stems.load(manifest)
             tracks = {"voice": stems.voice, **({"music": stems.music} if stems.music else {})}
             for path in tracks.values():
-                # The renderer keeps stems here, outside the project output directory.
+                # The renderer keeps stems in these caches, outside the project output directory.
                 # Extend this route only, not the general artifact sandbox.
                 try:
-                    sound_cache = context.settings.cache_path / "sound"
-                    resolve_within(sound_cache, (context.settings.cache_path,))
-                    resolve_within(path, (*context.allowed_paths, sound_cache))
+                    cache = context.settings.cache_path
+                    generated_audio = (cache / "sound", cache / "music" / "beds")
+                    for directory in generated_audio:
+                        resolve_within(directory, (cache,))
+                    resolve_within(path, (*context.allowed_paths, *generated_audio))
                 except PathOutsideSandbox as exc:
                     raise HTTPException(403, "That audio file is outside "
                                         "the allowed directories.") from exc

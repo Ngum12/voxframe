@@ -138,8 +138,8 @@ def test_a_close_setting_warns_and_plays_a_preview(made) -> None:  # type: ignor
     card.locator("#music-under-voice").fill("8")
 
     card.get_by_text(re.compile(r"only 8 dB under the voice")).wait_for(timeout=5_000)
-    card.locator("audio").wait_for(timeout=10_000)
-    assert card.locator("audio").get_attribute("src", timeout=5_000)
+    card.get_by_label("Sound preview", exact=True).wait_for(timeout=10_000)
+    assert card.get_by_label("Sound preview", exact=True).get_attribute("src", timeout=5_000)
 
 
 def test_polished_and_original_are_compared_in_the_preview(made) -> None:  # type: ignore[no-untyped-def]
@@ -148,7 +148,7 @@ def test_polished_and_original_are_compared_in_the_preview(made) -> None:  # typ
     original = card.get_by_role("button", name="Original", exact=True)
     assert polished.get_attribute("aria-pressed") == "true"
     assert card.get_by_text("already has music").count() == 0  # the sonnet has none
-    before = card.locator("audio").get_attribute("src")
+    before = card.get_by_label("Sound preview", exact=True).get_attribute("src")
 
     with made.expect_request(
         lambda request: request.url.endswith("/mix/preview")
@@ -159,7 +159,7 @@ def test_polished_and_original_are_compared_in_the_preview(made) -> None:  # typ
     card.get_by_text("Exactly as recorded, nothing changed.").wait_for(timeout=5_000)
     assert original.get_attribute("aria-pressed") == "true"
     made.wait_for_function(
-        "before => document.querySelector('.sound-panel audio')?.src !== before", arg=before
+        "before => document.querySelector('.sound-panel audio[aria-label=\"Sound preview\"]')?.src !== before", arg=before
     )
     polished.click()
     card.get_by_text("Gentle noise reduction").wait_for(timeout=5_000)
@@ -176,7 +176,7 @@ def test_applying_a_destination_remixes_to_its_loudness(made) -> None:  # type: 
         timeout=600_000
     )
 
-    assert made.locator(".notice-error").count() == 0
+    assert made.locator(".notice-error").count() == 0, made.locator(".notice-error").all_inner_texts()
     card = made.locator(".sound-panel")
     card.get_by_text("Sound checks passed").wait_for(timeout=15_000)
     assert "aiming for -16" in card.inner_text()
@@ -214,7 +214,7 @@ def test_a_track_of_your_own_is_added_heard_switched_and_removed(made, server) -
     made.get_by_text("Your video is ready").or_(made.locator(".notice-error")).first.wait_for(
         timeout=600_000
     )
-    assert made.locator(".notice-error").count() == 0
+    assert made.locator(".notice-error").count() == 0, made.locator(".notice-error").all_inner_texts()
     card = made.locator(".sound-panel")
     chip = card.get_by_role("button", name="Your track: second song.wav")
     chip.wait_for(timeout=15_000)

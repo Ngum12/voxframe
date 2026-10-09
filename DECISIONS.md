@@ -7148,9 +7148,10 @@ untimed captions; never discard their text silently. Preserve edit history
 and export duration constraints. Previews use the existing short draft renderer.
 
 Expose kept voice and music stems from a finished render as independent
-authenticated downloads and players. Permit the generated sound-cache folder
-for these routes only, including a containment check on that folder; keep
-other cache files and outside paths blocked. Convert score FLACs atomically
+authenticated downloads and players. Permit the generated sound cache and
+beat-fitted music beds in music/beds for these routes only, with containment
+checks on both folders. Keep decoded music, speech, analyses, other cache
+files and outside paths blocked. Convert score FLACs atomically
 to cached 48 kHz PCM WAVs. Describe pre-mix tracks and pending edits clearly.
 
 The music lane opens Sound. Existing music source, level and ducking controls
@@ -7161,3 +7162,10 @@ Prepare version 2.2.0 consistently across Python, web package and lockfile,
 with release notes covering the studio work since 2.1.0. Retain the existing
 version-tag-triggered installer workflow and maintainer-reviewed draft release.
 A version bump does not claim that new public installers already exist.
+
+While Update video is running, Sound defers track discovery and hides download
+players until the finished files are available. Cancel stale discovery results
+on update-state changes and refresh on completion. A transient running-job 409
+is not a failed render. Browser coverage delays the panel reload to reproduce
+this race for destination changes and replacement music, and verifies that the
+replacement WAV contains the newly selected track.

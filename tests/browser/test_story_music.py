@@ -38,15 +38,23 @@ def test_story_arcs_preview_undo_apply_and_export(server, page, caps):
     page.get_by_text("music-story.mp4", exact=True).first.click()
     page.get_by_role("tab", name="Sound", exact=True).click()
     panel = page.locator(".sound-panel")
+    audio = panel.get_by_label("Sound preview", exact=True)
     for title, arc in (("Cinematic rise", "rise"), ("Punch & breathe", "punch")):
+        before = audio.get_attribute("src") if audio.count() else ""
         with page.expect_response(lambda response: response.url.endswith("/mix/preview")) as preview:
             panel.get_by_role("button", name=title, exact=False).click()
         assert preview.value.status == 200
         assert json.loads(preview.value.request.post_data)["mix"]["music_arc"] == arc
-        audio = panel.get_by_label("Sound preview")
         audio.wait_for()
-        page.wait_for_function("() => document.querySelector('[aria-label=\"Sound preview\"]').readyState >= 2")
-        assert audio.evaluate("a => a.duration") > 0
+        # The response can arrive while the old preview is still loaded.
+        # Read readiness and duration together for the newly adopted source.
+        duration = page.wait_for_function("""before => {
+            const audio = document.querySelector('audio[aria-label="Sound preview"]');
+            return audio && audio.src !== before && audio.currentSrc === audio.src &&
+                audio.readyState >= 2 && Number.isFinite(audio.duration) && audio.duration > 0
+                ? audio.duration : false;
+        }""", arg=before).json_value()
+        assert duration > 0
         assert ScenePlan.load(path) == plan
     panel.get_by_role("button", name="Undo", exact=True).click()
     fixtures.playwright_api.expect(panel.get_by_role("button", name="Cinematic rise")).to_have_attribute("aria-pressed", "true")
@@ -60,6 +68,7 @@ def test_story_arcs_preview_undo_apply_and_export(server, page, caps):
     page.screenshot(path=str(work / "music-arc-phone.png"), full_page=True)
     page.set_viewport_size({"width": 1440, "height": 900})
     panel.get_by_role("button", name="Apply to the video", exact=True).click()
+    page.locator(".studio-status").get_by_text("Updating your video").wait_for(timeout=30_000)
     page.locator(".studio-status").get_by_text("Your video is ready").wait_for(timeout=120_000)
     assert ScenePlan.load(path).audio_mix.music_arc == "rise"
     assert video.is_file() and video.stat().st_size > 1000
