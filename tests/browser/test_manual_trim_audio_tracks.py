@@ -160,3 +160,63 @@ def test_trim_preview_history_export_and_separate_audio_downloads(server, page, 
     assert track_statuses and all(status == 200 for status in track_statuses), track_statuses
     assert page._voxframe_errors == []
     page.unroute(f"**/api/jobs/{job.id}/mix", delay_panel_reload)
+
+
+def test_beat_fitted_music_downloads_after_destination_and_track_changes(server, page, caps):
+    from tests.integration.test_music_directed_render import generated_track
+    from voxframe.render.audio.mixdown import Stems
+    from voxframe.render.compose.from_plan import stems_path
+
+    handle, work = server
+    store = handle.store
+    job = store.create(audio_name="beat-fitted-soundtrack.mp4", options={"height": 240, "quality": "draft"})
+    folder = store.job_directory(job.id)
+    original = directed_recording(caps, folder)
+    music = folder / "steady-music.wav"
+    generated_track(music, bars=24)
+    plan = original.model_copy(update={"music_path": str(music)})
+    path = plan.save(folder / "source.plan.json")
+    rendered = render_from_plan(plan, Path(plan.audio_path), get_template(), caps,
+                               folder / "video.mp4", height=240, music=MusicSettings(path=music),
+                               cache_dir=work / "cache" / "segments")
+    first_stems = Stems.load(stems_path(rendered.video_path))
+    assert first_stems.music.parent == work / "cache" / "music" / "beds"
+    store.submit(job, lambda _: None)
+    job.future.result(timeout=10)
+    store.record_result(job, artifacts={"plan": path, "video": rendered.video_path}, warnings=(),
+                        summary={"pending_edits": 0, "rendered_revision": revision(plan), "sound": rendered.sound})
+    fixtures._home(page, handle)
+    page.get_by_text("beat-fitted-soundtrack.mp4", exact=True).first.click()
+    page.get_by_role("tab", name="Sound", exact=True).click()
+    page.get_by_text("Separate voice and music tracks", exact=True).click()
+    tracks = page.get_by_role("region", name="Separate audio tracks", exact=True)
+    fixtures.playwright_api.expect(tracks.get_by_role("link", name="Download music WAV", exact=True)).to_be_visible()
+    fixtures.playwright_api.expect(page.locator(".notice-error")).to_have_count(0)
+    page.locator("#destination").select_option("podcast")
+    page.get_by_role("button", name="Apply to the video", exact=True).click()
+    page.locator(".studio-status").get_by_text("Updating your video").wait_for(timeout=30_000)
+    page.locator(".studio-status").get_by_text("Your video is ready").wait_for(timeout=120_000)
+    page.get_by_text("Separate voice and music tracks", exact=True).click()
+    fixtures.playwright_api.expect(tracks.get_by_role("link", name="Download music WAV", exact=True)).to_be_visible()
+    fixtures.playwright_api.expect(page.locator(".notice-error")).to_have_count(0)
+
+    replacement = folder / "another-steady-track.wav"
+    generated_track(replacement, bars=16)
+    page.get_by_label("Choose a music track", exact=True).set_input_files(str(replacement))
+    fixtures.playwright_api.expect(page.get_by_role("button", name="Your track: another-steady-track.wav", exact=True)).to_have_attribute("aria-pressed", "true")
+    page.get_by_role("button", name="Apply to the video", exact=True).click()
+    page.locator(".studio-status").get_by_text("Updating your video").wait_for(timeout=30_000)
+    page.locator(".studio-status").get_by_text("Your video is ready").wait_for(timeout=120_000)
+    page.get_by_text("Separate voice and music tracks", exact=True).click()
+    fixtures.playwright_api.expect(tracks.get_by_role("link", name="Download music WAV", exact=True)).to_be_visible()
+    fixtures.playwright_api.expect(page.locator(".notice-error")).to_have_count(0)
+    latest = Stems.load(stems_path(store.artifact_path(job.id, "video")))
+    assert latest.music.parent == work / "cache" / "music" / "beds"
+    assert latest.music != first_stems.music
+    with page.expect_download() as downloaded:
+        tracks.get_by_role("link", name="Download music WAV", exact=True).click()
+    destination = work / "beat-fitted-export.wav"
+    downloaded.value.save_as(str(destination))
+    assert destination.read_bytes() == latest.music.read_bytes()
+    assert sf.info(destination).duration == pytest.approx(7, abs=1 / 48000)
+    assert page._voxframe_errors == []

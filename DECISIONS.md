@@ -7148,9 +7148,10 @@ untimed captions; never discard their text silently. Preserve edit history
 and export duration constraints. Previews use the existing short draft renderer.
 
 Expose kept voice and music stems from a finished render as independent
-authenticated downloads and players. Permit the generated sound-cache folder
-for these routes only, including a containment check on that folder; keep
-other cache files and outside paths blocked. Convert score FLACs atomically
+authenticated downloads and players. Permit the generated sound cache and
+beat-fitted music beds in music/beds for these routes only, with containment
+checks on both folders. Keep decoded music, speech, analyses, other cache
+files and outside paths blocked. Convert score FLACs atomically
 to cached 48 kHz PCM WAVs. Describe pre-mix tracks and pending edits clearly.
 
 The music lane opens Sound. Existing music source, level and ducking controls

@@ -176,7 +176,7 @@ def test_applying_a_destination_remixes_to_its_loudness(made) -> None:  # type: 
         timeout=600_000
     )
 
-    assert made.locator(".notice-error").count() == 0
+    assert made.locator(".notice-error").count() == 0, made.locator(".notice-error").all_inner_texts()
     card = made.locator(".sound-panel")
     card.get_by_text("Sound checks passed").wait_for(timeout=15_000)
     assert "aiming for -16" in card.inner_text()
@@ -214,7 +214,7 @@ def test_a_track_of_your_own_is_added_heard_switched_and_removed(made, server) -
     made.get_by_text("Your video is ready").or_(made.locator(".notice-error")).first.wait_for(
         timeout=600_000
     )
-    assert made.locator(".notice-error").count() == 0
+    assert made.locator(".notice-error").count() == 0, made.locator(".notice-error").all_inner_texts()
     card = made.locator(".sound-panel")
     chip = card.get_by_role("button", name="Your track: second song.wav")
     chip.wait_for(timeout=15_000)

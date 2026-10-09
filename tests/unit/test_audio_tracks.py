@@ -102,3 +102,43 @@ def test_generated_score_flac_is_converted_to_a_real_wav(client, context, finish
     assert response.content[:4] == b"RIFF"
     info = sf.info(io.BytesIO(response.content))
     assert info.samplerate == 48000 and info.frames == 4800
+
+
+def test_directed_music_beds_are_downloadable_but_music_cache_inputs_are_not(client, context, finished_job):
+    from dataclasses import replace
+    saved, manifest = stems(context, finished_job)
+    directory = context.settings.cache_path / "music" / "beds"
+    directory.mkdir(parents=True)
+    bed = directory / "directed.wav"
+    bed.write_bytes(b"directed music bed")
+    replace(saved, music=bed).save(manifest)
+    url = f"/api/jobs/{finished_job}/mix/tracks"
+    assert client.get(url).status_code == 200
+    assert client.get(url + "/music").content == b"directed music bed"
+    for relative in ("music/decoded.wav", "music/speech/recording.wav", "music/analysis/private.wav"):
+        private = context.settings.cache_path / relative
+        private.parent.mkdir(parents=True, exist_ok=True)
+        private.write_bytes(b"private cache data")
+        replace(saved, music=private).save(manifest)
+        assert client.get(url + "/music").status_code == 403
+
+
+def test_directed_music_bed_folder_cannot_escape_through_a_symlink(client, context, finished_job, tmp_path):
+    from dataclasses import replace
+
+    import pytest
+    saved, manifest = stems(context, finished_job)
+    outside = tmp_path / "outside-beds"
+    outside.mkdir()
+    (outside / "private.wav").write_bytes(b"private audio")
+    parent = context.settings.cache_path / "music"
+    parent.mkdir(parents=True)
+    linked = parent / "beds"
+    try:
+        linked.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("directory symlinks unavailable")
+    replace(saved, music=linked / "private.wav").save(manifest)
+    response = client.get(f"/api/jobs/{finished_job}/mix/tracks/music")
+    assert response.status_code == 403
+    assert response.content != b"private audio"
