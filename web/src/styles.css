@@ -2850,3 +2850,9 @@ input[type="checkbox"], input[type="radio"] { flex: none; }
 .collection-finish-review video { display: block; margin-block: .75rem; background: var(--canvas); border-radius: 10px; }
 .collection-finish-review .finish-issue { padding-block: .9rem; border-top: 1px solid var(--line); }
 .collection-finish-review .check { margin-block: .75rem; }
+
+.manual-trim { margin-block: 1.25rem; padding: 1rem; border: 1px solid var(--line); border-radius: 12px; }
+.audio-tracks { margin-block: 1rem; padding: 1rem; border: 1px solid var(--line); border-radius: 12px; }
+.audio-tracks summary { cursor: pointer; font-weight: 600; }
+.audio-tracks .story-block { margin-block: .75rem; }
+.timeline-track-button { border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; padding: 2px 8px; }

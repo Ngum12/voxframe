@@ -1142,3 +1142,10 @@ export const reviewCollection = (id: string, clips: string[]) => request<Collect
 export const approveCollectionReview = (id: string, clips: string[], fingerprint: string, checked: string[], watched: string[]) => request<{review_id: string}>(`/api/jobs/${id}/shorts/batch/collections/review/approve`, {method: "POST", body: JSON.stringify({clips, fingerprint, checked, watched})});
 export interface ClipReviewTarget { jobId: string; parent: string; scene: number | null; action: FinishAction }
 export function openClipReview(target: ClipReviewTarget) { document.dispatchEvent(new CustomEvent("voxframe:review-clip", {detail: target})); }
+
+export interface ManualTrimChoice {revision: string; start_frame: number; end_frame: number; mode: "keep" | "remove"}
+export const saveTrim = (id: string, choice: ManualTrimChoice) => request<PlanEditResult>(`/api/jobs/${id}/trim`, {method: "PUT", body: JSON.stringify(choice)});
+export const previewTrim = (id: string, choice: ManualTrimChoice) => request<ShortPreview>(`/api/jobs/${id}/trim/preview`, {method: "POST", body: JSON.stringify(choice)});
+export interface AudioTrackState {tracks: {id: "voice" | "music"; name: string}[]; pending_edits: number; note: string}
+export const getAudioTracks = (id: string) => request<AudioTrackState>(`/api/jobs/${id}/mix/tracks`);
+export const audioTrackUrl = (id: string, kind: "voice" | "music") => `/api/jobs/${id}/mix/tracks/${kind}`;

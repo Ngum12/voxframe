@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "voxframe"
-version = "2.1.0"
+version = "2.2.0"
 description = "Turn audio into captioned, visually dynamic video. Offline, free, open source."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"

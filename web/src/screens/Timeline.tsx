@@ -38,7 +38,9 @@ export function Timeline({
   sceneLane,
   onSeek,
   onScene,
+  onSound,
 }: {
+  onSound?: () => void;
   jobId: string;
   plan: ScenePlan;
   words: TimedWord[];
@@ -197,13 +199,13 @@ export function Timeline({
           </div>
           <div className="timeline-lane timeline-music" aria-label="Music">
             <div className="timeline-music-lane">
-              <span>
+              <button className="timeline-track-button" aria-label="Edit music track" onClick={onSound}>
                 {plan.score
                   ? `Music: generated score, ${plan.score.style}`
                   : plan.music_path
                     ? "Music: your own track"
-                    : "No music"}
-              </span>
+                    : "No music · add a track"}
+              </button>
             </div>
           </div>
           <div className="timeline-playhead" style={{ left: time * zoom }} aria-hidden="true" />

@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -165,13 +166,25 @@ def smoke_test(wheel: Path) -> None:
         assert server.stdout is not None
         while time.monotonic() < deadline and not url:
             line = server.stdout.readline()
+            if not line and server.poll() is not None:
+                break
             match = re.search(r"(http://127\.0\.0\.1:\d+)/\?token=", line)
             if match:
                 url = match.group(1)
         if not url:
             sys.exit("voxframe web did not start from the installed wheel")
 
-        page = urllib.request.urlopen(f"{url}/").read().decode("utf-8")
+        # The CLI prints its URL before the listening socket is ready.
+        ready_deadline = time.monotonic() + 30
+        while True:
+            try:
+                with urllib.request.urlopen(f"{url}/", timeout=2) as response:
+                    page = response.read().decode("utf-8")
+                break
+            except (urllib.error.URLError, TimeoutError):
+                if server.poll() is not None or time.monotonic() >= ready_deadline:
+                    sys.exit("the installed web app did not become ready")
+                time.sleep(.1)
         script = re.search(r'src="\.?(/assets/[^"]+\.js)"', page)
         if script is None:
             sys.exit("the installed app served a page with no script")

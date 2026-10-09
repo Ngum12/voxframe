@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { getPacing, previewPacing, savePacing, type PacingControls, type PlanEditResult, type ScenePlan, type ShortPreview } from "../api";
+import { ManualTrim } from "./ManualTrim";
 import { Notice } from "../components";
 
 const GROUPS = [
   ["pause", "Review pauses"], ["filler", "Review hesitation words"], ["repeat", "Review repeated phrases"],
 ] as const;
 
-export function PacingStudio({ jobId, plan, canListen, onEdited, onSeek }: {
+export function PacingStudio({ jobId, plan, canListen, onEdited, onSeek, time = 0 }: {
+  time?: number;
   jobId: string; plan: ScenePlan; canListen: boolean; onEdited: (result: PlanEditResult) => void; onSeek: (seconds: number) => void;
 }) {
   const [data, setData] = useState<PacingControls | null>(null);
@@ -49,6 +51,7 @@ export function PacingStudio({ jobId, plan, canListen, onEdited, onSeek }: {
     {error && <Notice tone="error">{error}</Notice>}
     {!data && !error && <p role="status">Finding pacing suggestions…</p>}
     {data && <>
+      <ManualTrim key={data.revision} jobId={jobId} plan={plan} revision={data.revision} time={time} canListen={canListen} onEdited={onEdited} onSeek={onSeek} />
       <p role="status">{data.seconds.toFixed(1)} s → {(data.seconds - saved).toFixed(1)} s · {saved.toFixed(1)} s removed</p>
       {data.cuts.length === 0 && <p>No long pauses found. No clear hesitation or repetition cues found. Corrected captions are kept intact.</p>}
       {!canListen && <p className="hint">Update the video to listen on the current timeline.</p>}

@@ -739,7 +739,7 @@ export function Studio({
               jobId={jobId} plan={plan} sceneIndex={scene.index} onEdited={afterEdit} />}
 
             {tab === "pacing" && <PacingStudio key={`${jobId}-${planVersion}`} jobId={jobId}
-              plan={plan} canListen={pending === 0} onEdited={afterEdit} onSeek={seek} />}
+              plan={plan} canListen={pending === 0} onEdited={afterEdit} onSeek={seek} time={time} />}
 
             {tab === "shorts" && <ShortsStudio key={`${jobId}-${planVersion}`} jobId={jobId}
               plan={plan} canListen={pending === 0} onEdited={afterEdit} onSeek={seek} />}
@@ -829,6 +829,7 @@ export function Studio({
         currentScene={scene.index}
         changed={changed}
         onSeek={seek}
+        onSound={() => { setTab("sound"); setLayout(current => ({...current, panelOpen: true})); }}
         sceneLane={layout.timeline}
         onScene={(index) => {
           const target = plan.scenes.find((s) => s.index === index);

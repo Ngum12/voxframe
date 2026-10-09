@@ -83,11 +83,21 @@ def test_three_story_auditions_compare_save_undo_and_export(server, page, caps):
     undo = page.get_by_role("button", name="Undo", exact=True)
     fixtures.playwright_api.expect(undo).to_be_enabled()
     assert ScenePlan.load(path) == expected
-    undo.click()
-    fixtures.playwright_api.expect(panel.locator(".story-payoff").first).to_be_visible()
+    redo = page.get_by_role("button", name="Redo", exact=True)
+    # The Shorts controls were already visible; their visibility cannot signal undo completion.
+    with page.expect_response(lambda response: response.url.endswith(f"/jobs/{job.id}/plan/undo")
+                              and response.request.method == "POST") as undone:
+        undo.click()
+    assert undone.value.status == 200
+    fixtures.playwright_api.expect(redo).to_be_enabled()
     assert ScenePlan.load(path) == plan
-    page.get_by_role("button", name="Redo", exact=True).click()
+    with page.expect_response(lambda response: response.url.endswith(f"/jobs/{job.id}/plan/redo")
+                              and response.request.method == "POST") as redone:
+        redo.click()
+    assert redone.value.status == 200
+    fixtures.playwright_api.expect(redo).to_be_disabled()
     fixtures.playwright_api.expect(undo).to_be_enabled()
+    assert ScenePlan.load(path) == expected
     page.get_by_role("button", name="Update video", exact=True).click()
     page.locator(".studio-status").get_by_text("Your video is ready").wait_for(timeout=120_000)
     assert ScenePlan.load(path) == expected

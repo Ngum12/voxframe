@@ -23,6 +23,7 @@
  * removed. The preview always plays the music chosen in the card.
  */
 
+import { AudioTracks } from "./AudioTracks";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -322,6 +323,8 @@ export function SoundPanel({
           only the sound; the pictures are kept.
         </p>
       </header>
+
+      <AudioTracks key={JSON.stringify([state.music.choice, state.music.track_name, state.last_check])} jobId={jobId} />
 
       <div className="sound-polish" role="group" aria-labelledby="voice-polish-label">
         <span className="label" id="voice-polish-label">Voice</span>

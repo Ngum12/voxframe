@@ -7136,3 +7136,28 @@ finished clips, checks exclusive audible playback, follows a cue into Export
 and returns with the collection form intact, then verifies the actual ZIP
 receipt and phone layout. Existing Shorts and individual finishing review
 workflows remain covered.
+
+
+## D-230 — Manual section cuts reuse the source clock; audio exports stay separate
+
+A revision-bound frame range can be kept or removed. Reuse pacing's retained
+interval assembly, including original audio/footage positions, word clipping,
+emphasis remapping and explicit cuts at removed gaps. Removing a card does
+not subtract recorded voice time. Reject partial cuts into corrected or
+untimed captions; never discard their text silently. Preserve edit history
+and export duration constraints. Previews use the existing short draft renderer.
+
+Expose kept voice and music stems from a finished render as independent
+authenticated downloads and players. Permit the generated sound-cache folder
+for these routes only, including a containment check on that folder; keep
+other cache files and outside paths blocked. Convert score FLACs atomically
+to cached 48 kHz PCM WAVs. Describe pre-mix tracks and pending edits clearly.
+
+The music lane opens Sound. Existing music source, level and ducking controls
+continue to edit the soundtrack without changing the pictures. This feature
+does not perform source separation on music embedded in a recording.
+
+Prepare version 2.2.0 consistently across Python, web package and lockfile,
+with release notes covering the studio work since 2.1.0. Retain the existing
+version-tag-triggered installer workflow and maintainer-reviewed draft release.
+A version bump does not claim that new public installers already exist.

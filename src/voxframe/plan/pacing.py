@@ -126,9 +126,15 @@ def apply_cuts(plan: ScenePlan, ids: tuple[str, ...]) -> ScenePlan:
     candidates = {cut["id"]: cut for cut in review_cuts(plan)}
     if not ids or len(set(ids)) != len(ids) or any(key not in candidates for key in ids):
         raise EditError("These cut suggestions changed. Reload pacing and choose again.")
+    ranges = tuple((candidates[key]["start_frame"], candidates[key]["end_frame"]) for key in ids)
+    return remove_ranges(plan, ranges)
+
+
+def remove_ranges(plan: ScenePlan, ranges: tuple[tuple[int, int], ...]) -> ScenePlan:
+    """Remove explicit frame intervals, preserving each retained source clock."""
     by_scene: dict[int, list[dict]] = {}
-    for key in ids:
-        cut = candidates[key]
+    for first, last in ranges:
+        cut = {"start_frame": first, "end_frame": last}
         for scene in plan.scenes:
             first = max(cut["start_frame"], scene.start_frame)
             last = min(cut["end_frame"], scene.end_frame)
@@ -138,6 +144,7 @@ def apply_cuts(plan: ScenePlan, ids: tuple[str, ...]) -> ScenePlan:
     result: list[PlannedScene] = []
     cursor = 0
     removed = 0
+    previous_end: int | None = None
     for scene in plan.scenes:
         cuts = sorted(by_scene.get(scene.index, []), key=lambda cut: cut["start_frame"])
         intervals = []
@@ -148,7 +155,8 @@ def apply_cuts(plan: ScenePlan, ids: tuple[str, ...]) -> ScenePlan:
             if cut["start_frame"] > start:
                 intervals.append((start, cut["start_frame"]))
             start = cut["end_frame"]
-            removed += cut["end_frame"] - cut["start_frame"]
+            if not scene.is_card:
+                removed += cut["end_frame"] - cut["start_frame"]
         if start < scene.end_frame:
             intervals.append((start, scene.end_frame))
         source = scene.audio_start
@@ -185,9 +193,13 @@ def apply_cuts(plan: ScenePlan, ids: tuple[str, ...]) -> ScenePlan:
                 # A jump cut stays a cut even with a whole-video blend selected.
                 if part < len(intervals) - 1 or last < scene.end_frame:
                     changes["transition_after"] = TransitionTreatment(kind="cut")
+            if result and previous_end is not None and first > previous_end:
+                result[-1] = result[-1].model_copy(
+                    update={"transition_after": TransitionTreatment(kind="cut")})
             result.append(scene.model_copy(update=changes))
+            previous_end = last
             cursor += last - first
-    if not result:
+    if not result or not any(not scene.is_card for scene in result):
         raise EditError("Keep at least one part of the recording.")
     if plan.short_export and not 3 <= cursor / plan.fps <= 60 + 1e-7:
         raise EditError("Keep a 3-60 second story for this export preset.")

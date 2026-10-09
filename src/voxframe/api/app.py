@@ -491,6 +491,14 @@ class CollectionRequest(BaseModel):
     clips: list[CollectionItem] = Field(min_length=1, max_length=6)
 
 
+class ManualTrimEdit(BaseModel):
+    model_config = {"extra": "forbid"}
+    revision: str = Field(pattern=r"^[a-f0-9]{24}$")
+    start_frame: int = Field(ge=0, strict=True)
+    end_frame: int = Field(gt=0, strict=True)
+    mode: Literal["keep", "remove"]
+
+
 class PacingEdit(BaseModel):
     revision: str | None = Field(default=None, pattern=r"^[a-f0-9]{24}$")
     cuts: tuple[str, ...] = Field(min_length=1, max_length=100)
@@ -1650,6 +1658,83 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
         context.store.set_pending(job, saved.pending)
         return {"scene": edited.scenes[index].model_dump(mode="json"),
                 "pending_edits": job.summary.get("pending_edits", 0)}
+
+    def finished_tracks(job_id: str, context: ApiContext) -> tuple[Job, dict[str, Path]]:
+        from voxframe.render.audio.mixdown import Stems
+        from voxframe.render.compose.from_plan import stems_path
+        job = context.store.get(job_id)
+        if job is None:
+            raise HTTPException(404, "No such project.")
+        if job.state.value != "succeeded":
+            raise HTTPException(409, "Finish the video before exporting its audio tracks.")
+        video = context.store.artifact_path(job_id, "video")
+        if video is None:
+            return job, {}
+        manifest = stems_path(video)
+        _check_sandbox(context, manifest)
+        if not manifest.is_file():
+            return job, {}
+        try:
+            stems = Stems.load(manifest)
+            tracks = {"voice": stems.voice, **({"music": stems.music} if stems.music else {})}
+            for path in tracks.values():
+                # The renderer keeps stems here, outside the project output directory.
+                # Extend this route only, not the general artifact sandbox.
+                try:
+                    sound_cache = context.settings.cache_path / "sound"
+                    resolve_within(sound_cache, (context.settings.cache_path,))
+                    resolve_within(path, (*context.allowed_paths, sound_cache))
+                except PathOutsideSandbox as exc:
+                    raise HTTPException(403, "That audio file is outside "
+                                        "the allowed directories.") from exc
+                if not path.is_file():
+                    raise ValueError("Missing track")
+            return job, tracks
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            raise HTTPException(409, "Update video to rebuild its separate audio tracks.") from exc
+
+    @app.get("/api/jobs/{job_id}/mix/tracks")
+    def audio_tracks(job_id: str, context: ApiContext = Depends(ctx)) -> dict:
+        job, tracks = finished_tracks(job_id, context)
+        return {"tracks": [{"id": kind, "name": f"{kind}.wav"} for kind in tracks],
+                "pending_edits": int(job.summary.get("pending_edits", 0)),
+                "note": ("Tracks match the last finished video. Voice is the recorded audio; "
+                         "added music is separate, before mix levels and ducking.")}
+
+    @app.get("/api/jobs/{job_id}/mix/tracks/{kind}")
+    def audio_track(job_id: str, kind: Literal["voice", "music"],
+                    context: ApiContext = Depends(ctx)) -> FileResponse:
+        _, tracks = finished_tracks(job_id, context)
+        if kind not in tracks:
+            raise HTTPException(404, "That track is unavailable. Update video after adding music.")
+        source = tracks[kind]
+        if source.suffix.casefold() != ".wav":
+            import hashlib
+            from uuid import uuid4
+
+            from voxframe.render.encode.probe import probe_capabilities
+            from voxframe.render.ffpath import run_ffmpeg
+            stat = source.stat()
+            stamp = f"{source.resolve()}:{stat.st_size}:{stat.st_mtime_ns}"
+            key = hashlib.sha256(stamp.encode()).hexdigest()[:24]
+            folder = context.store.job_directory(job_id) / "audio-exports"
+            folder.mkdir(exist_ok=True)
+            output = folder / f"{kind}-{key}.wav"
+            if not output.is_file():
+                temporary = folder / f"{uuid4().hex}.wav"
+                try:
+                    run_ffmpeg(probe_capabilities().ffmpeg_path,
+                        ["-v", "error", "-i", str(source), "-vn", "-ar", "48000",
+                         "-c:a", "pcm_s24le", "-y", str(temporary)])
+                    temporary.replace(output)
+                except Exception as exc:
+                    raise HTTPException(409, "The audio track could not be exported. "
+                                        "Update video and try again.") from exc
+                finally:
+                    temporary.unlink(missing_ok=True)
+            source = output
+        return FileResponse(source, media_type="audio/wav", filename=f"voxframe-{kind}.wav",
+                            headers={"Cache-Control": "no-store"})
 
     @app.get("/api/jobs/{job_id}/mix")
     def get_mix(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
@@ -3194,6 +3279,32 @@ def _install_routes(app: FastAPI, context: ApiContext) -> None:
                        context: ApiContext = Depends(ctx)) -> dict[str, Any]:
         _, _, plan = _editable_plan(context, job_id)
         return direction_preview_result(job_id, visual_draft(plan, edit, index), context)
+
+    def trim_draft(plan: ScenePlan, edit: ManualTrimEdit) -> ScenePlan:
+        from voxframe.plan.editing import EditError
+        from voxframe.plan.shorts import revision
+        from voxframe.plan.trim import trim
+        if edit.revision != revision(plan):
+            raise HTTPException(409, "The timeline changed. Reload Pacing before trimming.")
+        try:
+            return trim(plan, edit.start_frame, edit.end_frame, edit.mode)
+        except EditError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.post("/api/jobs/{job_id}/trim/preview")
+    def trim_preview(job_id: str, edit: ManualTrimEdit, context: ApiContext = Depends(ctx)) -> dict:
+        _, _, plan = _editable_plan(context, job_id)
+        result = direction_preview_result(job_id, trim_draft(plan, edit), context)
+        return {**result, "note": ("Unsaved trim preview. Added music follows the new timeline "
+                                  "after Update video.")}
+
+    @app.put("/api/jobs/{job_id}/trim")
+    def trim_edit(job_id: str, edit: ManualTrimEdit, context: ApiContext = Depends(ctx)) -> dict:
+        job, path, plan = _editable_plan(context, job_id)
+        updated = trim_draft(plan, edit)
+        saved = _save_plan(updated, path, "manual trim")
+        context.store.set_pending(job, saved.pending)
+        return {"plan": updated.model_dump(mode="json"), "pending_edits": saved.pending}
 
     @app.get("/api/jobs/{job_id}/pacing")
     def pacing_controls(job_id: str, context: ApiContext = Depends(ctx)) -> dict[str, Any]:
