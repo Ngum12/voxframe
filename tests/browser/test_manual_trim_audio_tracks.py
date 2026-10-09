@@ -1,5 +1,6 @@
 """Manual cuts, real soundtrack stems and history work together in the studio."""
 import hashlib
+import time
 from pathlib import Path
 
 import numpy as np
@@ -103,3 +104,59 @@ def test_trim_preview_history_export_and_separate_audio_downloads(server, page, 
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     page.screenshot(path=str(work / "separate-audio-tracks-phone.png"), full_page=True)
     assert page._voxframe_errors == []
+
+    # Applying sound remounts the panel while the render is still running.
+    track_statuses = []
+    page.on("response", lambda response: track_statuses.append(response.status)
+            if response.url.endswith(f"/api/jobs/{job.id}/mix/tracks") else None)
+    delayed = False
+
+    def delay_panel_reload(route):
+        nonlocal delayed
+        if route.request.method != "GET" or delayed:
+            route.continue_()
+            return
+        delayed = True
+        response = route.fetch()
+        # A slow panel request can complete after the renderer has started.
+        deadline = time.monotonic() + 5
+        while store.get(job.id).state.value != "running" and time.monotonic() < deadline:
+            time.sleep(.01)
+        route.fulfill(response=response)
+
+    page.route(f"**/api/jobs/{job.id}/mix", delay_panel_reload)
+    page.locator("#destination").select_option("podcast")
+    page.get_by_role("button", name="Apply to the video", exact=True).click()
+    page.locator(".studio-status").get_by_text("Updating your video").wait_for(timeout=30_000)
+    page.locator(".studio-status").get_by_text("Your video is ready").wait_for(timeout=120_000)
+    fixtures.playwright_api.expect(page.locator(".notice-error")).to_have_count(0)
+    page.get_by_text("Separate voice and music tracks", exact=True).click()
+    fixtures.playwright_api.expect(tracks.get_by_role("link", name="Download music WAV", exact=True)).to_be_visible()
+    page.unroute(f"**/api/jobs/{job.id}/mix", delay_panel_reload)
+    assert track_statuses and all(status == 200 for status in track_statuses), track_statuses
+
+    # Replacing the music follows the same update lifecycle and refreshes the WAV.
+    replacement = folder / "replacement-music.wav"
+    sf.write(replacement, .15 * np.sin(2 * np.pi * 330 * times), 48000)
+    page.get_by_label("Choose a music track", exact=True).set_input_files(str(replacement))
+    fixtures.playwright_api.expect(page.get_by_role("button", name="Your track: replacement-music.wav", exact=True)).to_have_attribute("aria-pressed", "true")
+    delayed = False
+    page.route(f"**/api/jobs/{job.id}/mix", delay_panel_reload)
+    page.get_by_role("button", name="Apply to the video", exact=True).click()
+    page.locator(".studio-status").get_by_text("Updating your video").wait_for(timeout=30_000)
+    page.locator(".studio-status").get_by_text("Your video is ready").wait_for(timeout=120_000)
+    fixtures.playwright_api.expect(page.locator(".notice-error")).to_have_count(0)
+    page.get_by_text("Separate voice and music tracks", exact=True).click()
+    with page.expect_download() as downloaded:
+        tracks.get_by_role("link", name="Download music WAV", exact=True).click()
+    destination = work / "replacement-music-export.wav"
+    downloaded.value.save_as(str(destination))
+    data, rate = sf.read(destination)
+    if data.ndim > 1:
+        data = data[:, 0]
+    samples = data[rate:2 * rate]
+    peak = np.fft.rfftfreq(len(samples), 1 / rate)[np.argmax(np.abs(np.fft.rfft(samples)))]
+    assert peak == pytest.approx(330, abs=2)
+    assert track_statuses and all(status == 200 for status in track_statuses), track_statuses
+    assert page._voxframe_errors == []
+    page.unroute(f"**/api/jobs/{job.id}/mix", delay_panel_reload)

@@ -759,6 +759,7 @@ export function Studio({
               <SoundPanel
                 key={planVersion}
                 jobId={jobId}
+                updating={status.kind === "updating"}
                 playhead={() => video.current?.currentTime ?? 0}
                 onApply={async () => {
                   await reload();

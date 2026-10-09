@@ -7161,3 +7161,10 @@ Prepare version 2.2.0 consistently across Python, web package and lockfile,
 with release notes covering the studio work since 2.1.0. Retain the existing
 version-tag-triggered installer workflow and maintainer-reviewed draft release.
 A version bump does not claim that new public installers already exist.
+
+While Update video is running, Sound defers track discovery and hides download
+players until the finished files are available. Cancel stale discovery results
+on update-state changes and refresh on completion. A transient running-job 409
+is not a failed render. Browser coverage delays the panel reload to reproduce
+this race for destination changes and replacement music, and verifies that the
+replacement WAV contains the newly selected track.

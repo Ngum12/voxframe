@@ -146,11 +146,13 @@ export function SoundPanel({
   jobId,
   playhead,
   onApply,
+  updating = false,
 }: {
   jobId: string;
   /** Where the video is paused, so the preview plays the part being watched. */
   playhead: () => number;
   onApply: () => Promise<void>;
+  updating?: boolean;
 }) {
   const [state, setState] = useState<MixState | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -324,7 +326,7 @@ export function SoundPanel({
         </p>
       </header>
 
-      <AudioTracks key={JSON.stringify([state.music.choice, state.music.track_name, state.last_check])} jobId={jobId} />
+      <AudioTracks key={JSON.stringify([state.music.choice, state.music.track_name, state.last_check])} jobId={jobId} updating={updating} />
 
       <div className="sound-polish" role="group" aria-labelledby="voice-polish-label">
         <span className="label" id="voice-polish-label">Voice</span>
